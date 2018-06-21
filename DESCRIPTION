@@ -1,0 +1,13 @@
+Package: OpTop
+Type: Package
+Title: Optimal topic specification for topicmodels objects.
+Version: 0.1.0
+Authors@R: c( 
+    person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
+    role = c("cre", "aut", "cph") ), 
+    person("Craig", "Lewis", email = "craig.lewis@vanderbilt.edu", role = "aut" ) )
+Description: This packages does amazing things.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+URL: https://www.github.com/contefranz/optop
