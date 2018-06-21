@@ -10,4 +10,5 @@ Description: This packages does amazing things.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-URL: https://www.github.com/contefranz/optop
+URL: https://www.github.com/contefranz/OpTop
+BugReports: https://github.com/contefranz/OpTop/issues
