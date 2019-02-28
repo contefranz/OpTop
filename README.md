@@ -1,6 +1,4 @@
-[//]:# Find the optimal number of topics in a collection of LDA models
 # OpTop: detect the optimal number of topics from a LDA model.
-***
 
 ## Overview
 
