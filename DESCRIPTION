@@ -1,14 +1,19 @@
 Package: OpTop
 Type: Package
-Title: Optimal topic specification for topicmodels objects.
+Title: Optimal topic specification for latent dirichlet allocation models
 Version: 0.1.0
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
     role = c("cre", "aut", "cph") ), 
     person("Craig", "Lewis", email = "craig.lewis@vanderbilt.edu", role = "aut" ) )
-Description: This packages does amazing things.
+Description: A set of fast statistical rountines to detect the optimal number 
+    of topics from a pool of Latent Dirichlet Allocation models.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-URL: https://www.github.com/contefranz/OpTop
+URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
+RoxygenNote: 6.1.1
+Depends: R (>= 3.4)
+Imports: data.table (>= 1.11.4),
+    quanteda (>= 1.3.0)
