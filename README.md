@@ -1,4 +1,4 @@
-# OpTop: detect the optimal number of topics from a LDA model.
+# OpTop: detect the optimal number of topics from a pool of LDA models
 
 ## Overview
 
@@ -40,7 +40,7 @@ The package is in early alpha stage and contains two functions:
 * `word_proportions()`: computes word proportions from a `corpus` object created 
 by __quanteda__ [Benoit et al. (2018)];
 
-* `optimum_topic()`: implements _Test 1_ from the methodological paper 
+* `optimal_topic()`: implements _Test 1_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 More functions which implement the other tests are to come in future releases.
@@ -52,7 +52,7 @@ Bugs and issues can be reported at
 
 ## Bibliography
 
-1. Lewis, Craig and Grossetti, Francesco (2019 - forthcoming): _A Statistical Approach
+1. Lewis, C. and Grossetti, F. (2019 - forthcoming): _A Statistical Approach
 for Optimal Topic Model Identification_.
 2. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). _Latent Dirichlet Allocation_.
 Journal of Machine Learning Research, 3(Jan):993–1022.
