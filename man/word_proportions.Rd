@@ -4,7 +4,8 @@
 \alias{word_proportions}
 \title{Compute word proportions from a corpus object}
 \usage{
-word_proportions(corpus, remove_document = FALSE)
+word_proportions(corpus, remove_document = FALSE, language = "en",
+  source = "snowball")
 }
 \arguments{
 \item{corpus}{A \code{\link[quanteda]{corpus}} object as defined in
@@ -12,6 +13,15 @@ word_proportions(corpus, remove_document = FALSE)
 
 \item{remove_document}{Remove the \code{document} identification inherited
 from \code{\link[quanteda]{corpus}}. Default to \code{TRUE}.}
+
+\item{language}{A character specifying the language of stopwords according
+to ISO 639-1 code. It mimics the behavior of \code{\link[stopwords]{stopwords}}.
+Default to \code{"en"} for English.}
+
+\item{source}{A character specifying the stopwords source. It can be either
+\code{"snowball"}, \code{"snowball-iso"}, \code{"misc"}, or \code{"smart"}.
+Default to \code{"snowball"} for consistency with
+\code{\link[stopwords]{stopwords}}.}
 }
 \value{
 A \code{data.table} with the following columns:
@@ -28,11 +38,21 @@ Fast routine that computes word proportions from a
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-word_proportions = word_proportions( data_corpus_inaugural, remove_document = TRUE )
+word_proportions = word_proportions( corpus = data_corpus_inaugural,
+                                     remove_document = TRUE,
+                                     language = "en",
+                                     source = "snowball" )
 }
+}
+\references{
+Stopwords ISO: \url{https://github.com/stopwords-iso/stopwords-iso}.\cr
+
+Full list of stopwords:
+\url{https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md}.
 }
 \seealso{
 \code{\link[quanteda]{corpus}} \code{\link[data.table]{data.table}}
+\code{\link[stopwords]{stopwords}}
 }
 \author{
 Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.

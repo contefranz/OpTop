@@ -11,7 +11,13 @@ if ( getRversion() >= "2.15.1" ) {
 #' \code{quanteda}.
 #' @param remove_document Remove the \code{document} identification inherited
 #' from \code{\link[quanteda]{corpus}}. Default to \code{TRUE}.
-#'
+#' @param language A character specifying the language of stopwords according
+#' to ISO 639-1 code. It mimics the behavior of \code{\link[stopwords]{stopwords}}.
+#' Default to \code{"en"} for English.
+#' @param source A character specifying the stopwords source. It can be either
+#' \code{"snowball"}, \code{"snowball-iso"}, \code{"misc"}, or \code{"smart"}.
+#' Default to \code{"snowball"} for consistency with
+#' \code{\link[stopwords]{stopwords}}.
 #' @return A \code{data.table} with the following columns:
 #' \item{\code{id_doc}}{A sequential integer giving the identification of documents.}
 #' \item{\code{id_word}}{A sequential integer giving the identification of words.}
@@ -21,21 +27,44 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
-#' word_proportions = word_proportions( data_corpus_inaugural, remove_document = TRUE )
+#' word_proportions = word_proportions( corpus = data_corpus_inaugural,
+#'                                      remove_document = TRUE,
+#'                                      language = "en",
+#'                                      source = "snowball" )
 #' }
 #' @seealso \code{\link[quanteda]{corpus}} \code{\link[data.table]{data.table}}
+#' \code{\link[stopwords]{stopwords}}
+#' @references Stopwords ISO: \url{https://github.com/stopwords-iso/stopwords-iso}.\cr
+#'
+#' Full list of stopwords:
+#' \url{https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md}.
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @import data.table
+#' @importFrom quanteda is.corpus
 #' @importFrom quanteda dfm
+#' @importFrom quanteda stopwords
 #' @importFrom quanteda dfm_weight
 #' @importFrom quanteda convert
-#' @importFrom quanteda stopwords
 #' @export
 
-word_proportions = function( corpus, remove_document = FALSE ) {
+word_proportions = function( corpus, remove_document = FALSE,
+                             language = "en", source = "snowball" ) {
+
+  if ( !is.corpus( corpus ) ) {
+    stop( "corpus must be a corpus object as defined by quanteda")
+  }
+  if ( !is.logical( remove_document ) ) {
+    stop( "remove_document must be either TRUE or FALSE" )
+  }
+  if ( !is.character( language ) ) {
+    stop( "language must a character" )
+  }
+  if ( !is.character( source ) ) {
+    stop( "source must be a character" )
+  }
 
   mydfm = dfm( x = corpus,
-               remove = stopwords(),
+               remove = stopwords( language = language, source = source ),
                remove_punct = TRUE,
                remove_numbers = TRUE,
                remove_symbols = TRUE )

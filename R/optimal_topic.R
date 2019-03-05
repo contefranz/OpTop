@@ -13,12 +13,13 @@ if ( getRversion() >= "2.15.1" ) {
 #' \code{\link[topicmodels]{LDA}}.
 #' @param word_proportions A \code{data.table} giving the word proportions in a corpus
 #' as computed by \code{\link[OpTop]{word_proportions}}.
-#' @param threshold Relative importance of words. Default to 0.00075.
+#' @param threshold Set a cutoff for the relative importance of words.
+#' Default to 0.00075.
 #' @param alpha Probability at which compute the quantiles of the chi-square test.
 #' Default to 0.01.
 #' @param q_type Select the quantile algorithm as in \code{\link[stats]{quantile}}.
-#' Default to 5 to mimic Matlab behavior. In later releases, it will be
-#' replaced with the R default 7.
+#' Default to 5 for consistency with Matlab. In later releases, it will be
+#' replaced with 7, which is the \code{R} default.
 #' @param convert Convert the output to a \code{data.frame}.
 #' Default to \code{FALSE}.
 #' @details The function implements a Pearson chi-square statistic that exploits
@@ -36,11 +37,16 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
-#' word_proportions = word_proportions( data_corpus_inaugural, remove_document = TRUE )
+#' word_proportions = word_proportions( corpus = data_corpus_inaugural,
+#'                                      remove_document = TRUE,
+#'                                      language = "en",
+#'                                      source = "snowball" )
 #'
 #' test1 = optimal_topic( lda_models = lda_list,
 #'                        word_proportions = word_proportions,
-#'                        threshold = 0.00075, alpha = 0.01, q_type = 5 )
+#'                        threshold = 0.00075,
+#'                        alpha = 0.01,
+#'                        q_type = 5 )
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
@@ -73,6 +79,9 @@ optimal_topic = function( lda_models, word_proportions,
   }
   if ( !is.numeric( q_type ) || q_type < 1 || q_type > 9 ) {
     stop( "q_type must be an integer between 1 and 9" )
+  }
+  if ( !is.logical( convert ) ) {
+    stop( "convert must be either TRUE or FALSE" )
   }
 
   tic = proc.time()
@@ -138,7 +147,7 @@ optimal_topic = function( lda_models, word_proportions,
       AggBestPair = BestPair[ 1L:icut ]
       lowest_estimates = BestPair[ (icut + 1L):n_BP, lapply( .SD, sum ) ]
       AggBestPair = rbindlist( list( AggBestPair, lowest_estimates ) )
-      numerator = ( AggBestPair[ , word_prop ] - AggBestPair[ , word_sum ] )^2
+      numerator = ( AggBestPair[ , word_prop ] - AggBestPair[ , word_sum ] )^2L
       denominator = AggBestPair[ , word_sum ]
       chi_sq_fit = icut * sum( numerator / denominator )
 

@@ -14,14 +14,15 @@ optimal_topic(lda_models, word_proportions, threshold = 0.00075,
 \item{word_proportions}{A \code{data.table} giving the word proportions in a corpus
 as computed by \code{\link[OpTop]{word_proportions}}.}
 
-\item{threshold}{Relative importance of words. Default to 0.00075.}
+\item{threshold}{Set a cutoff for the relative importance of words.
+Default to 0.00075.}
 
 \item{alpha}{Probability at which compute the quantiles of the chi-square test.
 Default to 0.01.}
 
 \item{q_type}{Select the quantile algorithm as in \code{\link[stats]{quantile}}.
-Default to 5 to mimic Matlab behavior. In later releases, it will be
-replaced with the R default 7.}
+Default to 5 for consistency with Matlab. In later releases, it will be
+replaced with 7, which is the \code{R} default.}
 
 \item{convert}{Convert the output to a \code{data.frame}.
 Default to \code{FALSE}.}
@@ -49,11 +50,16 @@ observed and estimated word vectors are statistically indistinct.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-word_proportions = word_proportions( data_corpus_inaugural, remove_document = TRUE )
+word_proportions = word_proportions( corpus = data_corpus_inaugural,
+                                     remove_document = TRUE,
+                                     language = "en",
+                                     source = "snowball" )
 
 test1 = optimal_topic( lda_models = lda_list,
                        word_proportions = word_proportions,
-                       threshold = 0.00075, alpha = 0.01, q_type = 5 )
+                       threshold = 0.00075,
+                       alpha = 0.01,
+                       q_type = 5 )
 }
 }
 \references{
