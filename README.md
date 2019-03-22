@@ -43,6 +43,9 @@ by __quanteda__ [Benoit et al. (2018)];
 * `optimal_topic()`: implements _Test 1_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
+* `topic_stability()`: implements _Test 2_ from the methodological paper 
+[Lewis and Grossetti (2019)].
+
 More functions which implement the other tests are to come in future releases.
 
 ## Bug Reporting

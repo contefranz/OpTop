@@ -8,8 +8,9 @@ optimal_topic(lda_models, word_proportions, threshold = 0.00075,
   alpha = 0.01, q_type = 5L, convert = FALSE)
 }
 \arguments{
-\item{lda_models}{A list of LDA models as computed by
-\code{\link[topicmodels]{LDA}}.}
+\item{lda_models}{A list of ordered LDA models as computed by
+\code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
+according to the number of topics.}
 
 \item{word_proportions}{A \code{data.table} giving the word proportions in a corpus
 as computed by \code{\link[OpTop]{word_proportions}}.}
@@ -50,12 +51,12 @@ observed and estimated word vectors are statistically indistinct.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-word_proportions = word_proportions( corpus = data_corpus_inaugural,
+word_proportions <- word_proportions( corpus = data_corpus_inaugural,
                                      remove_document = TRUE,
                                      language = "en",
                                      source = "snowball" )
 
-test1 = optimal_topic( lda_models = lda_list,
+test1 <- optimal_topic( lda_models = lda_list,
                        word_proportions = word_proportions,
                        threshold = 0.00075,
                        alpha = 0.01,
