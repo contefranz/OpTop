@@ -37,6 +37,9 @@ devtools::install_github( "contefranz/OpTop" )
 All the procedures described in the paper will be implemented in this package.
 The package is in early alpha stage and contains two functions:
 
+* `get_topic_models()`: handy function to immediately get the list of topic models
+the user wants to process from a specified environment;
+
 * `word_proportions()`: computes word proportions from a `corpus` object created 
 by __quanteda__ [Benoit et al. (2018)];
 

@@ -9,7 +9,7 @@
 #' \code{\link[topicmodels]{TopicModel-class}}.
 #' @param envir The environment where to search for topic models. Default to
 #' \code{\link[base]{globalenv}}.
-#' @return A character vector containing the names of the requsted objects.
+#' @return A named list containing the objects of specified class.
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @export
 
@@ -35,7 +35,8 @@ get_topic_models = function( object_type, pattern, envir = globalenv() ) {
     pos = sapply( ls( pattern = pattern, envir = envir ),
                   function( x ) class( get( x ) ) == object_type )
   }
-  models_list = ls( envir = envir )[ pos ]
+  models_names = ls( envir = envir )[ pos ]
+  models_list = mget( models_names, envir = envir )
   return( models_list )
 }
 
