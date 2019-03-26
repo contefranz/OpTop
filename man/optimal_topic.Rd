@@ -18,8 +18,8 @@ as computed by \code{\link[OpTop]{word_proportions}}.}
 \item{threshold}{Set a cutoff for the relative importance of words.
 Default to 0.00075.}
 
-\item{alpha}{Probability at which compute the quantiles of the chi-square test.
-Default to 0.01.}
+\item{alpha}{Probability at which compute the quantiles of the chi-square test
+and adjust its values. Default to 0.01.}
 
 \item{q_type}{Select the quantile algorithm as in \code{\link[stats]{quantile}}.
 Default to 5 for consistency with Matlab. In later releases, it will be

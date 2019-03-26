@@ -2,10 +2,11 @@
 % Please edit documentation in R/topic_stability.R
 \name{topic_stability}
 \alias{topic_stability}
-\title{Compute the stability of above optimum topics}
+\title{Compute topic stability for over-optimal topic specifications}
 \usage{
 topic_stability(lda_models, best_k, threshold = 0.00075, alpha = 0.05,
-  compute_res = FALSE, convert = FALSE)
+  test = c("aggregated", "single", "both"), compute_res = FALSE,
+  convert = FALSE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
@@ -21,7 +22,16 @@ function automatically finds the optimal model.}
 \item{threshold}{Set a cutoff for the relative importance of words.
 Default to 0.00075.}
 
-\item{alpha}{Alpha level to identify informative words. Default to 0.05.}
+\item{alpha}{Alpha level to identify informative words from the Cumulative
+Distribution Function over the cosine similarities in the Topic Word Weights
+matrix. Default to 0.05.}
+
+\item{test}{A character specifying what the function returns. By default,
+\code{"aggregated"} is chosen so that the aggregated chi-square statistics 
+as specified in Test 3 of the paper is returned. Other specifications include
+\code{"single"} for point-wise chi-square statistics as given by Test 2 and 
+\code{"both"} to get both Tests 2 and 3.
+See 'Details' for more information.}
 
 \item{compute_res}{Determines whether or not the function has to compute
 cosine similarities for unmatched topic.}
@@ -29,9 +39,35 @@ cosine similarities for unmatched topic.}
 \item{convert}{Convert the output to a \code{data.frame}.
 Default to \code{FALSE}.}
 }
+\value{
+Either a data.table, a matrix or a list as specified by argument 
+
+If \code{test = "aggregated"}, a data.table representing Test 3 
+is returned with the following columns:
+\item{\code{dfs}}{An integer giving the degrees of freedom.}
+\item{\code{chisq_std}}{A numeric giving the standardized chi-square statistics.}
+
+---
+
+If \code{test = "single"}, a matrix of size 
+\code{[max{k} - best_k] X [best_k]} representing Test 2 is returned.
+
+---
+
+If \code{test = "both"}, a named list with both Tests 2 and 3 is returned.
+}
 \description{
-Implements a fast chi-square like test to evaluate the stability of redundant
-topics.
+Implements fast chi-square like tests to evaluate the stability of redundant
+topics. Both point-wise chi-square statistics and aggregated one can be 
+selected.
+}
+\details{
+This function implements both Tests 2 and 3 as defined in 
+Lewis and Grossetti (2019). Test 2 evaluates the point-wise chi-square statistics
+for every over-optimal topic specifications. Test 3 evaluates the aggregated 
+stability of over-optimal topic specifications by summing each 
+point-wise contribution. See 'Value' to understand how \code{topic_stability} 
+returns the results.
 }
 \examples{
 \dontrun{

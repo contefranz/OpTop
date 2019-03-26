@@ -19,7 +19,7 @@ Default to \code{LDA_VEM} as given by the virtual class
 \code{\link[base]{globalenv}}.}
 }
 \value{
-A character vector containing the names of the requsted objects.
+A named list containing the objects of specified class.
 }
 \description{
 Easily get the list of topic models from a specific class. This is a handy
