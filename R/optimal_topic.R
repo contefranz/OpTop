@@ -16,8 +16,8 @@ if ( getRversion() >= "2.15.1" ) {
 #' as computed by \code{\link[OpTop]{word_proportions}}.
 #' @param threshold Set a cutoff for the relative importance of words.
 #' Default to 0.00075.
-#' @param alpha Probability at which compute the quantiles of the chi-square test.
-#' Default to 0.01.
+#' @param alpha Probability at which compute the quantiles of the chi-square test
+#' and adjust its values. Default to 0.01.
 #' @param q_type Select the quantile algorithm as in \code{\link[stats]{quantile}}.
 #' Default to 5 for consistency with Matlab. In later releases, it will be
 #' replaced with 7, which is the \code{R} default.

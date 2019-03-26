@@ -1,3 +1,6 @@
+if ( getRversion() >= "2.15.1" ) {
+  utils::globalVariables( c( "chi_std", "topic", "pchisq" ) )
+}
 #' Compute the stability of above optimum topics
 #'
 #' Implements a fast chi-square like test to evaluate the stability of redundant
@@ -23,6 +26,7 @@
 #' A Statistical Approach for Optimal Topic Model Identification.
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @import data.table
+#' @importFrom stats pchisq
 #' @export
 
 topic_stability <- function( lda_models, best_k,
