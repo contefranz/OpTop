@@ -1,3 +1,5 @@
+MacOS/Linux: [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
+
 # OpTop: detect the optimal number of topics from a pool of LDA models
 
 ## Overview
