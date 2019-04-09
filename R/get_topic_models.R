@@ -13,7 +13,7 @@
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @export
 
-get_topic_models = function( object_type, pattern, envir = globalenv() ) {
+get_topic_models <- function( object_type, pattern, envir = globalenv() ) {
 
   if( !missing( object_type ) && !is.character( object_type ) ) {
     stop( "object_type must be a character" )

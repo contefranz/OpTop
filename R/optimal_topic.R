@@ -57,7 +57,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @importFrom stats quantile
 #' @export
 
-optimal_topic = function( lda_models, word_proportions,
+optimal_topic <- function( lda_models, word_proportions,
                           threshold = 0.00075, alpha = 0.01,
                           q_type = 5L, convert = FALSE ) {
 

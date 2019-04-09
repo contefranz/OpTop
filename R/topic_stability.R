@@ -126,9 +126,8 @@ topic_stability <- function( lda_models, best_k,
   }
 
   # Normalizing by scaling by vector norms
-  norms <- apply( tww_best, 2L, function( x ) sqrt( sum( abs( x )^2L ) ) )
-  tww_best_norm <- scale( tww_best, center = FALSE, scale = norms )
-
+  tww_best_norm <- norm_tww( tww_best )
+  
   # pre-allocating required objects
   BestTopics    <- matrix( 0, nrow = (k_end - best_k), ncol = best_k )
   Chi_k         <- matrix( 0, nrow = (k_end - best_k), ncol = (p_best + 1L) )
@@ -154,9 +153,8 @@ topic_stability <- function( lda_models, best_k,
     cat( "# # # Processing LDA with k =", current_k, "\n" )
 
     # Normalizing by scaling by vector norms
-    norms <- apply( tww, 2L, function( x ) sqrt( sum( abs( x )^2L ) ) )
-    tww_norm <- scale( tww, center = FALSE, scale = norms )
-
+    tww_norm <- norm_tww( tww )
+    
     # this is the matrix multiplication to get the Cosine Similarities
     # between the best set of topics and the targe ones
     CosSim <- t( tww_best_norm ) %*% tww_norm

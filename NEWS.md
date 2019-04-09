@@ -1,3 +1,21 @@
+# OpTop 0.4.0
+
+### New Functions
+
+Since we have two more functions, I feel like this deserves a jump in 
+package version. 
+
+* `topic_match()`: detect and extract informative and uninformative components.
+
+* `agg_topic_stability()`: implements _Test 4_ from the methodological paper 
+[Lewis and Grossetti (2019)].
+
+### Other Changes
+
+* Improved documentation for some functions.
+
+---
+
 # OpTop 0.2.0
 
 ### New Functions
@@ -20,6 +38,7 @@ the user wants to process from a specified environment;
 
 * Choice of quantile algorithms is now fully supported.
 
+---
 
 # OpTop 0.1.0
 
