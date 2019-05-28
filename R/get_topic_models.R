@@ -28,15 +28,21 @@ get_topic_models <- function( object_type, pattern, envir = globalenv() ) {
     pattern = ""
   }
 
-  if ( missing( object_type ) ) {
-    pos = sapply( ls( pattern = pattern, envir = envir ),
-                  function( x ) is.LDA_VEM( get( x ) ) )
-  } else {
-    pos = sapply( ls( pattern = pattern, envir = envir ),
-                  function( x ) class( get( x ) ) == object_type )
-  }
-  models_names = ls( envir = envir )[ pos ]
-  models_list = mget( models_names, envir = envir )
+  obj = objects( pattern = pattern, envir = envir )
+  # if ( missing( object_type ) ) {
+  #   # pos = sapply( ls( pattern = pattern, envir = envir ),
+  #   #               function( x ) is.LDA_VEM( get( x ) ) )
+  # } else {
+  #   pos = sapply( ls( pattern = pattern, envir = envir ),
+  #                 function( x ) class( get( x ) ) == object_type )
+  # }
+  # 
+  # models_names = ls( envir = envir )[ pos ]
+  models_list = mget( x = obj, envir = envir )
+  # if ( missing( object_type ) ) {
+  #   all( sapply( models_list, is.LDA_VEM ) )
+  # }
+  
   return( models_list )
 }
 

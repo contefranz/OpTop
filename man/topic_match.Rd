@@ -4,18 +4,20 @@
 \alias{topic_match}
 \title{Define informative and uninformative components}
 \usage{
-topic_match(lda_models, best_k, var_correction = TRUE)
+topic_match(lda_models, optimal_model, var_correction = TRUE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{best_k}{The optical topic model. It can be either an integer giving
+\item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a
 \code{\link[data.table]{data.table}}/\code{\link[base]{data.frame}} as
 returned by \code{\link[OpTop]{optimal_topic}}. In the latter case, the
-function automatically finds the optimal model.}
+function automatically finds the optimal model. This argument can also be
+a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
+returned by \code{\link[topicmodels]{LDA}}.}
 
 \item{var_correction}{Use the unbiased estimator of the co-variance for 
 i.i.d. observations by applying n - 1 in the denominator. Default is \code{TRUE}.}
@@ -31,7 +33,7 @@ components in terms of cosine similarities with the optimal topic model.
 \examples{
 \dontrun{
 out3 <- topic_match( lda_models = lda_list, 
-                     best_k = test1, 
+                     optimal_model = test1, 
                      var_correction = TRUE )
 }
 }
@@ -43,5 +45,7 @@ A Statistical Approach for Optimal Topic Model Identification.
 \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 }
 \author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
+
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
 }

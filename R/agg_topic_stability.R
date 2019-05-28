@@ -13,20 +13,21 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param least_match A data.table as computed by \code{\link[OpTop]{topic_match}}.
 #' This contains the models with lowest cosine similarity.
 #' @examples
- #'\dontrun{
+#'\dontrun{
 #' test4 <- agg_topic_stability( lda_models = lda_list,
-#'                               best_k = test1,
+#'                               optimal_model = test1,
 #'                               best_match = BestMatch,
 #'                               least_match = LeastMatch )
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
 #' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
+#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
+#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table
 #' @export
 
-agg_topic_stability <- function( lda_models, best_k, 
+agg_topic_stability <- function( lda_models, optimal_model, 
                                  best_match, least_match,
                                  threshold = 0.00075, convert = FALSE ) {
   
@@ -42,54 +43,61 @@ agg_topic_stability <- function( lda_models, best_k,
     stop( paste( "lda_models must contain LDA_VEM obects as computed",
                  "by topicmodels::LDA()" ) )
   }
-  if ( ( !is.data.frame( best_k ) || !is.data.table( best_k ) ) &&
-       !is.numeric( best_k ) ) {
-    stop( paste( "best_k must be either an integer identifying",
+  if ( ( !is.data.frame( optimal_model ) || !is.data.table( optimal_model ) ) &&
+       !is.numeric( optimal_model ) && !is.LDA_VEM( optimal_model ) ) {
+    stop( paste( "optimal_model must be either 1. an integer identifying",
                  "the number of topics which best fits the corpus",
-                 "or a data.table/data.frame as returned by",
-                 "optimal_topic()" ) )
+                 "2. a data.table/data.frame as returned by .optimal_model()",
+                 "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
   }
-  if ( !is.numeric( best_k ) ) {
-    cat( "best_k is a data.table or a data.frame. Extracting best model...\n" )
-    best_k <- best_k[ which.min( chi_std ), topic ]
-    cat( "best model has", best_k, "topics\n" )
+  if ( !is.numeric( threshold ) ) {
+    stop( "threshold must be either a numeric or an integer" )
   }
+  if ( !is.logical( convert ) ) {
+    stop( "convert must be either TRUE or FALSE" )
+  }
+  if ( is.numeric( optimal_model ) ) {
+    .optimal_model <- optimal_model
+  } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
+    cat( "optimal_model is a data.table or a data.frame.",
+         "Extracting information about optimal model...\n" )
+    .optimal_model <- optimal_model[ which.min( chi_std ), topic ]
+  } else if ( is.LDA_VEM( optimal_model ) ) {
+    cat( "optimal_model is a LDA_VEM object.", 
+         "Extracting information about the optimal model...\n" )
+    dtw_best <- optimal_model@gamma
+    tww_best <- t( exp( optimal_model@beta ) )
+    .optimal_model <- ncol( dtw_best )
+  }
+  cat( "best model has", .optimal_model, "topics\n" )
   
   tic <- proc.time()
   
-  n_topics <- length( lda_models )
   k_end <- max( sapply( lda_models, function( x ) x@k ) )
+  best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
   
-  # find the element corresponding to the best topic
-  best_pos <- which( sapply( lda_models, function( x ) x@k ) == best_k )
   if ( length( best_pos ) == 0 ) {
     stop( paste( "There is no optimal model in lda_models.",
                  "This could be either due to a wrong specification of",
-                 "argument best_k or",
-                 "if best_k is a data.table, the optimal model cannot be found",
+                 "argument optimal_model or",
+                 "if optimal_model is a data.table, the optimal model cannot be found",
                  "in the list lda_models." ) )
   }
-  # extracting information from best model
-  dww_best <- lda_models[[ best_pos ]]@gamma
-  n_doc <- nrow( dww_best )
-  tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
-  n_best <- nrow( tww_best )
-  p_best <- ncol( tww_best )
-  if ( p_best != best_k ) {
-    stop( "Wrong identification of optimal topic model!" )
+  if ( !is.LDA_VEM( optimal_model ) ) {
+    # extracting information from best model
+    dtw_best <- lda_models[[ best_pos ]]@gamma
+    tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
   }
-  
-  loop_sequence <- (best_pos + 1L):length( lda_models )
-  l_loop <- length( loop_sequence )
+  n_doc <- nrow( dtw_best )
+  loop_sequence <- (best_pos + 1L):length( lda_models )  
   k = 1L
   out <- data.table()
   cat( "---\n" )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( i_mod in loop_sequence ) {
-    i_pos <- i_mod - best_k + 1L
-    
-    dww <- lda_models[[ i_mod ]]@gamma
+    i_pos <- i_mod - .optimal_model + 1L
+    dtw <- lda_models[[ i_mod ]]@gamma
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     current_k <- ncol( tww )
     n_tww <- nrow( tww )
@@ -97,33 +105,36 @@ agg_topic_stability <- function( lda_models, best_k,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    i <- current_k - best_k
+    i <- current_k - .optimal_model
     MostSim <- intersect( 1L:current_k, best_match[ i, ] )
-    MostSimDWW <- dww[ , MostSim ]
+    MostSimDTW <- dtw[ , MostSim ]
     MostSimTWW <- tww[ , MostSim ]
     
     out_in <- data.table()
     cat( "--> Processing documents\n" )
     for ( j_doc in 1L:n_doc ) {
-      DWW_best <- matrix( dww_best[ j_doc, ], 
+      DTW_best <- matrix( dtw_best[ j_doc, ], 
                           nrow = n_tww,
-                          ncol = p_best )
-      DWW_most <- matrix( MostSimDWW[ k, ], 
+                          ncol = .optimal_model )
+      DTW_most <- matrix( MostSimDTW[ k, ], 
                           nrow = n_tww,
-                          ncol = ncol( MostSimDWW ) )
-      tww_dww_best <- DWW_best * tww_best
-      totprob_best <- sum( tww_dww_best %*% rep( 1L, ncol( tww_dww_best ) ) )
-      tww_dww_best2 <- tww_dww_best %*% rep( 1L, ncol( tww_dww_best ) ) / totprob_best
+                          ncol = ncol( MostSimDTW ) )
       
-      tww_dww <- DWW_most * MostSimTWW
-      totprob <- sum( tww_dww %*% rep( 1L, ncol( tww_dww ) ) )
-      tww_dww2 <- tww_dww %*% rep( 1L, ncol( tww_dww ) ) / totprob
+      tww_dtw_best <- DTW_best * tww_best
+      ones_tww_dtw_best <- matrix( 1., nrow = ncol( tww_dtw_best ), ncol = 1L )
+      # totprob_best <- sum( tww_dtw_best %*% rep( 1L, ncol( tww_dtw_best ) ) )
+      totprob_best <- sum( tww_dtw_best %*% ones_tww_dtw_best, na.rm = TRUE )
+      tww_dtw_best2 <- tww_dtw_best %*% rep( 1L, ncol( tww_dtw_best ) ) / totprob_best
       
-      X <- cbind( tww_dww_best2, tww_dww2 )
+      tww_dtw <- DTW_most * MostSimTWW
+      totprob <- sum( tww_dtw %*% rep( 1L, ncol( tww_dtw ) ) )
+      tww_dtw2 <- tww_dtw %*% rep( 1L, ncol( tww_dtw ) ) / totprob
+      
+      X <- cbind( tww_dtw_best2, tww_dtw2 )
       BestPair <- apply( X, 2L, function( x ) sort( x, decreasing = TRUE ) )
       icut <- base::which.min( abs( BestPair[ , 1L ] - threshold ) )
       if ( icut > 250 ) {
-        sum_overbest <- apply( BestPair[ (icut + 1L):n_doc, ], 2L, sum )
+        sum_overbest <- apply( BestPair[ (icut + 1L):nrow( BestPair ), ], 2L, sum )
         AggBestPair <- rbind( BestPair[ 1L:icut, ], unname( sum_overbest ) )
         
         numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L

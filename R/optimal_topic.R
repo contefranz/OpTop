@@ -21,6 +21,8 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param q_type Select the quantile algorithm as in \code{\link[stats]{quantile}}.
 #' Default to 5 for consistency with Matlab. In later releases, it will be
 #' replaced with 7, which is the \code{R} default.
+#' @param do_plot Plot the chi-square statistic as a function of the number of 
+#' topics. Default is \code{TRUE}.
 #' @param convert Convert the output to a \code{data.frame}.
 #' Default to \code{FALSE}.
 #' @details The function implements a Pearson chi-square statistic that exploits
@@ -52,15 +54,16 @@ if ( getRversion() >= "2.15.1" ) {
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
 #' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
-#' @import data.table
+#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
+#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
+#' @import data.table ggplot2
 #' @importFrom stats quantile
 #' @export
 
 optimal_topic <- function( lda_models, word_proportions,
-                          threshold = 0.00075, alpha = 0.01,
-                          q_type = 5L, convert = FALSE ) {
-
+                           threshold = 0.00075, alpha = 0.01,
+                           q_type = 5L, do_plot = TRUE, convert = FALSE ) {
+  
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }
@@ -88,13 +91,13 @@ optimal_topic <- function( lda_models, word_proportions,
   if ( !is.logical( convert ) ) {
     stop( "convert must be either TRUE or FALSE" )
   }
-
+  
   tic <- proc.time()
   # compute the size of vocabulary detected in each document as:
   size_corpus <- nrow( word_proportions )
   size_vocabulary <- nrow( word_proportions[ , .N, by = id_word ] )
   n_docs <- nrow( word_proportions[ , .N, by = id_doc ] )
-
+  
   # final output table
   regstats <- data.table()
   Chi_K <- data.table()
@@ -112,7 +115,7 @@ optimal_topic <- function( lda_models, word_proportions,
     # adding row position to both objects
     dww[ , id_doc := .I ]
     tww[ , id_word := .I ]
-
+    
     # looping over each document (k) in each model (j)
     # this is the loop that needs to be parallelized
     cat( "--> Processing documents\n" )
@@ -121,22 +124,22 @@ optimal_topic <- function( lda_models, word_proportions,
       prop <- word_proportions[ id_doc == j_doc ]
       # subsetting dww according to id_doc
       dwwj_doc <- as.matrix( dww[ j_doc ] )
-
+      
       # casting N x K matrix
       dww_j_doc <- matrix( data = dwwj_doc,
-                      ncol = ncol( dwwj_doc ),
-                      nrow = size_vocabulary,
-                      byrow = TRUE )
-
+                           ncol = ncol( dwwj_doc ),
+                           nrow = size_vocabulary,
+                           byrow = TRUE )
+      
       # this avoids the use of j index which does not match with matlab code
       # in matlab j loops over k_start -> k_end
       # here starts from 1 up to the latest model
       sub_dww_j_doc <- dww_j_doc[ , 1L:( ncol(dww_j_doc) - 1L ) ]
       sub_tww <- as.matrix( tww[ , 1L:( ncol(tww) - 1L ) ] )
-
+      
       # dot product --> element-wise multiplication
       tww_dww <- sub_dww_j_doc * sub_tww
-
+      
       # this returns a vector...maybe we want a matrix
       X <- base::rowSums( tww_dww )
       BestPair <- data.table( prop[ , .( word_prop ) ], word_sum = X )
@@ -155,38 +158,38 @@ optimal_topic <- function( lda_models, word_proportions,
       numerator <- ( AggBestPair[ , word_prop ] - AggBestPair[ , word_sum ] )^2L
       denominator <- AggBestPair[ , word_sum ]
       chi_sq_fit <- icut * sum( numerator / denominator )
-
+      
       # column chisquare_mod is just a placeholder here
       # this is to avoid the duplication of regstats in the outer loop
       regout <- data.table( topics = current_k,
-                           id_doc = j_doc,
-                           chisquare = chi_sq_fit,
-                           row_cut = icut )
+                            id_doc = j_doc,
+                            chisquare = chi_sq_fit,
+                            row_cut = icut )
       regstats <- rbind( regstats, regout )
-
+      
     }
-
+    
     chi_out <- regstats[ topics == current_k ]
     # NOTE: Matlab uses quantile type = 5 ?!?!
     # R by default uses type = 7
     data_min <- stats::quantile( chi_out[ , chisquare ],
-                                probs = alpha,
-                                type = q_type )
+                                 probs = alpha,
+                                 type = q_type )
     data_max <- stats::quantile( chi_out[ , chisquare ],
-                                probs = 1L - alpha,
-                                type = q_type )
-
+                                 probs = 1L - alpha,
+                                 type = q_type )
+    
     # update chisquare with quantiles but keep trace of the original one
     chi_out[ , chisquare_mod := chisquare ]
     chi_out[ chisquare < data_min, chisquare_mod := data_min ]
     chi_out[ chisquare > data_max, chisquare_mod := data_max  ]
     sum_i_mod <- chi_out[ , .( chi_sum = sum( chisquare ), cut = sum( row_cut ) ) ]
     temp <- data.table( topic = current_k,
-                       sum_i_mod,
-                       chi_std = sum_i_mod[ 1L, chi_sum ] / sum_i_mod[ 1L, cut ],
-                       chi_stdw = chi_out[ , sum( chisquare_mod ) ] / sum_i_mod[ 1L, cut ] )
+                        sum_i_mod,
+                        chi_std = sum_i_mod[ 1L, chi_sum ] / sum_i_mod[ 1L, cut ],
+                        chi_stdw = chi_out[ , sum( chisquare_mod ) ] / sum_i_mod[ 1L, cut ] )
     Chi_K <- rbind( Chi_K, temp )
-
+    
   }
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
@@ -194,11 +197,28 @@ optimal_topic <- function( lda_models, word_proportions,
     cat( "Converting to data.frame\n" )
     setDF( Chi_K )
   }
-
+  
+  best_topic <- Chi_K[ , .SD[ which.min( chi_std ) ] ]
+  cat( "---\n" )
+  cat( "Optimal model has", best_topic$topic, "topics\n" )
+  if ( do_plot ) {
+    cat( "Plotting...\n" )
+    x_min <- best_topic$topic
+    y_min <- best_topic$chi_std
+    p1 <- ggplot( Chi_K ) +
+      geom_line( aes( x = topic, y = chi_std ), size = 0.8, color = "royalblue" ) +
+      geom_hline( yintercept = y_min, color = "black", linetype = 2 ) +
+      geom_vline( xintercept = x_min, color = "black", linetype = 2 ) +
+      geom_point( aes( x = x_min, y_min ), color = "red", shape = 4, size = 4 ) +
+      # scale_x_continuous( breaks = seq( 0, current_k, 10 ) ) +
+      xlab( "Topics" ) + ylab( expression(chi^2) )
+    print( p1 )
+  }
+  
   toc <- proc.time()
   runtime <- toc - tic
   cat( "---\n" )
   cat( "Function took:", runtime[ 3L ], "sec.\n" )
   cat( "---\n" )
-  return( Chi_K )
+  return( Chi_K[] )
 }

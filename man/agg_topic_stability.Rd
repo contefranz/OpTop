@@ -4,7 +4,7 @@
 \alias{agg_topic_stability}
 \title{Compute aggregate topic stability}
 \usage{
-agg_topic_stability(lda_models, best_k, best_match, least_match,
+agg_topic_stability(lda_models, optimal_model, best_match, least_match,
   threshold = 0.00075, convert = FALSE)
 }
 \arguments{
@@ -12,11 +12,13 @@ agg_topic_stability(lda_models, best_k, best_match, least_match,
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{best_k}{The optical topic model. It can be either an integer giving
+\item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a
 \code{\link[data.table]{data.table}}/\code{\link[base]{data.frame}} as
 returned by \code{\link[OpTop]{optimal_topic}}. In the latter case, the
-function automatically finds the optimal model.}
+function automatically finds the optimal model. This argument can also be
+a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
+returned by \code{\link[topicmodels]{LDA}}.}
 
 \item{best_match}{A data.table as computed by \code{\link[OpTop]{topic_match}}.
 This contains the models with highest cosine similarity.}
@@ -37,7 +39,7 @@ stability.
 \examples{
 \dontrun{
 test4 <- agg_topic_stability( lda_models = lda_list,
-                              best_k = test1,
+                              optimal_model = test1,
                               best_match = BestMatch,
                               least_match = LeastMatch )
 }
@@ -51,4 +53,6 @@ A Statistical Approach for Optimal Topic Model Identification.
 }
 \author{
 Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}.
 }

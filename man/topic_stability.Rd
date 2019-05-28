@@ -4,20 +4,21 @@
 \alias{topic_stability}
 \title{Compute topic stability for over-optimal topic specifications}
 \usage{
-topic_stability(lda_models, best_k, threshold = 0.00075, alpha = 0.05,
-  test = c("aggregated", "single", "both"), compute_res = FALSE,
-  convert = FALSE)
+topic_stability(lda_models, optimal_model, threshold = 0.00075,
+  alpha = 0.05, do_plot = TRUE, convert = FALSE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{best_k}{The optical topic model. It can be either an integer giving
+\item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a
 \code{\link[data.table]{data.table}}/\code{\link[base]{data.frame}} as
 returned by \code{\link[OpTop]{optimal_topic}}. In the latter case, the
-function automatically finds the optimal model.}
+function automatically finds the optimal model. This argument can also be
+a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
+returned by \code{\link[topicmodels]{LDA}}.}
 
 \item{threshold}{Set a cutoff for the relative importance of words.
 Default to 0.00075.}
@@ -26,45 +27,27 @@ Default to 0.00075.}
 Distribution Function over the cosine similarities in the Topic Word Weights
 matrix. Default to 0.05.}
 
-\item{test}{A character specifying what the function returns. By default,
-\code{"aggregated"} is chosen so that the aggregated chi-square statistics 
-as specified in Test 3 of the paper is returned. Other specifications include
-\code{"single"} for point-wise chi-square statistics as given by Test 2 and 
-\code{"both"} to get both Tests 2 and 3.
-See 'Details' for more information.}
-
-\item{compute_res}{Determines whether or not the function has to compute
-cosine similarities for unmatched topic.}
+\item{do_plot}{Plot the chi-square statistic as a function of the number of 
+topics. Default is \code{TRUE}.}
 
 \item{convert}{Convert the output to a \code{data.frame}.
 Default to \code{FALSE}.}
 }
 \value{
-Either a data.table, a matrix or a list as specified by argument 
+A \code{data.table} containing the following columns:
 
-If \code{test = "aggregated"}, a data.table representing Test 3 
-is returned with the following columns:
+\item{\code{topic}}{An integer giving the number of topics.}
 \item{\code{dfs}}{An integer giving the degrees of freedom.}
-\item{\code{chisq_std}}{A numeric giving the standardized chi-square statistics.}
-
----
-
-If \code{test = "single"}, a matrix of size 
-\code{[max{k} - best_k] X [best_k]} representing Test 2 is returned.
-
----
-
-If \code{test = "both"}, a named list with both Tests 2 and 3 is returned.
+\item{\code{chisq}}{A numeric giving the chi-square statistic.}
+\item{\code{chisq_std}}{A numeric giving the standardized chi-square statistic.}
 }
 \description{
-Implements fast chi-square like tests to evaluate the stability of redundant
-topics. Both point-wise chi-square statistics and aggregated one can be 
-selected.
+Implements fast chi-square like test to evaluate the stability of redundant
+topics.
 }
 \details{
-This function implements both Tests 2 and 3 as defined in 
-Lewis and Grossetti (2019). Test 2 evaluates the point-wise chi-square statistics
-for every over-optimal topic specifications. Test 3 evaluates the aggregated 
+This function implements Test 3 as defined in 
+Lewis and Grossetti (2019). Test 3 evaluates the aggregated 
 stability of over-optimal topic specifications by summing each 
 point-wise contribution. See 'Value' to understand how \code{topic_stability} 
 returns the results.
@@ -72,7 +55,7 @@ returns the results.
 \examples{
 \dontrun{
 test2 <- topic_stability( lda_models = lda_list,
-                          best_k = test1,
+                          optimal_model = out,
                           threshold = 0.00075,
                           alpha = 0.05 )
 }
@@ -86,4 +69,6 @@ A Statistical Approach for Optimal Topic Model Identification.
 }
 \author{
 Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}.
 }

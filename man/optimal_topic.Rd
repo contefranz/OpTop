@@ -5,7 +5,7 @@
 \title{Find the optimal number of topics from a pool of LDA models}
 \usage{
 optimal_topic(lda_models, word_proportions, threshold = 0.00075,
-  alpha = 0.01, q_type = 5L, convert = FALSE)
+  alpha = 0.01, q_type = 5L, do_plot = TRUE, convert = FALSE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
@@ -24,6 +24,9 @@ and adjust its values. Default to 0.01.}
 \item{q_type}{Select the quantile algorithm as in \code{\link[stats]{quantile}}.
 Default to 5 for consistency with Matlab. In later releases, it will be
 replaced with 7, which is the \code{R} default.}
+
+\item{do_plot}{Plot the chi-square statistic as a function of the number of 
+topics. Default is \code{TRUE}.}
 
 \item{convert}{Convert the output to a \code{data.frame}.
 Default to \code{FALSE}.}
@@ -71,5 +74,7 @@ A Statistical Approach for Optimal Topic Model Identification.
 \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 }
 \author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
+
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
 }
