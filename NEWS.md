@@ -1,3 +1,26 @@
+# OpTop 0.5.0
+
+### Major Changes
+
+* Function `agg_topic_stability()` has been widely improved.
+
+* All functions which return a test now gain the new argument `do_plot`. This
+plot the test statistic as a function of the numnber of topics.
+
+* The argument `test` has been removed from `topic_stability()` which now 
+returns only the aggregate statistic. 
+
+* The argument `compute_res` has been finally removed from `topic_stability()`.
+
+* `topic_stability()` now returns either a data.frame or a data.table with 
+the LDA specifiction associated to each statistic (i.e. column `topic`).
+
+### Other Changes
+
+* Improved documentation for some functions.
+
+---
+
 # OpTop 0.4.0
 
 ### New Functions

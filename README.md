@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.4.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.4.0)
+[![release](https://img.shields.io/badge/release-v0.5.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.5.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 MacOS/Linux: [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 Windows: [![Build Status](https://ci.appveyor.com/api/projects/status/contefranz/OpTop/branch/master?svg=true)](https://ci.appveyor.com/api/projects/status/contefranz/OpTop/branch/master)
@@ -52,7 +52,7 @@ by __quanteda__ [Benoit et al. (2018)];
 * `optimal_topic()`: implements _Test 1_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
-* `topic_stability()`: implements both _Tests 2_ and _3_ from the methodological paper 
+* `topic_stability()`: implements _Test _3_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 * `topic_match()`: detect and extract informative and uninformative components.

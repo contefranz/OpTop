@@ -17,18 +17,19 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' out3 <- topic_match( lda_models = lda_list, 
-#'                      best_k = test1, 
+#'                      optimal_model = test1, 
 #'                      var_correction = TRUE )
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
 #' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
+#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
+#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table
 #' @export
 
 
-topic_match <- function( lda_models, best_k, var_correction = TRUE ) {
+topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
@@ -42,42 +43,44 @@ topic_match <- function( lda_models, best_k, var_correction = TRUE ) {
     stop( paste( "lda_models must contain LDA_VEM obects as computed",
                  "by topicmodels::LDA()" ) )
   }
-  if ( ( !is.data.frame( best_k ) || !is.data.table( best_k ) ) &&
-       !is.numeric( best_k ) ) {
-    stop( paste( "best_k must be either an integer identifying",
+  if ( ( !is.data.frame( optimal_model ) || !is.data.table( optimal_model ) ) &&
+       !is.numeric( optimal_model ) && !is.LDA_VEM( optimal_model ) ) {
+    stop( paste( "optimal_model must be either 1. an integer identifying",
                  "the number of topics which best fits the corpus",
-                 "or a data.table/data.frame as returned by",
-                 "optimal_topic()" ) )
+                 "2. a data.table/data.frame as returned by optimal_topic()",
+                 "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
   }
-  
-  if ( !is.numeric( best_k ) ) {
-    cat( "best_k is a data.table or a data.frame. Extracting best model...\n" )
-    best_k <- best_k[ which.min( chi_std ), topic ]
-    cat( "best model has", best_k, "topics\n" )
+  if ( is.numeric( optimal_model ) ) {
+    .optimal_model <- optimal_model
+  } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
+    cat( "optimal_model is a data.table or a data.frame.",
+         "Extracting information about optimal model...\n" )
+    .optimal_model <- optimal_model[ which.min( chi_std ), topic ]
+  } else if ( is.LDA_VEM( optimal_model ) ) {
+    cat( "optimal_model is a LDA_VEM object.", 
+         "Extracting information about the optimal model...\n" )
+    dtw_best <- optimal_model@gamma
+    tww_best <- t( exp( optimal_model@beta ) )
+    .optimal_model <- ncol( dtw_best )
   }
-  
+  cat( "best model has", .optimal_model, "topics\n" )  
   tic <- proc.time()
   
-  n_topics <- length( lda_models )
   k_end <- max( sapply( lda_models, function( x ) x@k ) )
-  
   # find the element corresponding to the best topic
-  best_pos <- which( sapply( lda_models, function( x ) x@k ) == best_k )
+  best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
+  
   if ( length( best_pos ) == 0 ) {
     stop( paste( "There is no optimal model in lda_models.",
                  "This could be either due to a wrong specification of",
-                 "argument best_k or",
-                 "if best_k is a data.table, the optimal model cannot be found",
+                 "argument optimal_model or",
+                 "if optimal_model is a data.table, the optimal model cannot be found",
                  "in the list lda_models." ) )
   }
-  # extracting information from best model
-  tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
-  n_best <- nrow( tww_best )
-  p_best <- ncol( tww_best )
-  if ( p_best != best_k ) {
-    stop( "Wrong identification of optimal topic model!" )
+  if ( !is.LDA_VEM( optimal_model ) ) {
+    # extracting information from best model
+    tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
   }
-  
   # Normalizing by scaling by vector norms
   tww_best_norm <- norm_tww( tww_best )
   
@@ -90,13 +93,13 @@ topic_match <- function( lda_models, best_k, var_correction = TRUE ) {
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( i_mod in loop_sequence ) {
-    i_pos <- i_mod - best_k + 1L
+    i_pos <- i_mod - .optimal_model + 1L
     
     # reading tww
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     current_k <- ncol( tww )
-    n_tww <- nrow( tww )
-    p_tww <- ncol( tww )
+    # n_tww <- nrow( tww )
+    # p_tww <- ncol( tww )
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     # Normalizing by scaling by vector norms
@@ -127,10 +130,10 @@ topic_match <- function( lda_models, best_k, var_correction = TRUE ) {
     tops <- 1L:current_k
     # pre-allocate object
     above_thresh <- matrix( as.integer( CosSim > thresh ), 
-                            nrow = best_k, 
+                            nrow = .optimal_model, 
                             ncol = current_k )
-    top_mat      <- matrix( rep( 1L:current_k, each = best_k ), 
-                            nrow = best_k, 
+    top_mat      <- matrix( rep( 1L:current_k, each = .optimal_model ), 
+                            nrow = .optimal_model, 
                             ncol = current_k )
     
     # Identify factors that are highly similar to at least one base model factor

@@ -68,7 +68,7 @@ A Statistical Approach for Optimal Topic Model Identification.
 \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 }
 \author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
 
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}.
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
 }
