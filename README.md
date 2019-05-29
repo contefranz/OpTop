@@ -1,8 +1,7 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
 [![release](https://img.shields.io/badge/release-v0.5.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.5.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
-MacOS/Linux: [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
-Windows: [![Build Status](https://ci.appveyor.com/api/projects/status/contefranz/OpTop/branch/master?svg=true)](https://ci.appveyor.com/api/projects/status/contefranz/OpTop/branch/master)
+[![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 
 # OpTop: detect the optimal number of topics from a pool of LDA models
 
