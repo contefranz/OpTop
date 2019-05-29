@@ -29,7 +29,8 @@ if ( getRversion() >= "2.15.1" ) {
 
 agg_topic_stability <- function( lda_models, optimal_model, 
                                  best_match, least_match,
-                                 threshold = 0.00075, convert = FALSE ) {
+                                 threshold = 0.00075, 
+                                 do_plot = TRUE, convert = FALSE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
@@ -158,6 +159,16 @@ agg_topic_stability <- function( lda_models, optimal_model,
     cat( "Converting to data.frame\n" )
     setDF( out )
   }
+  if ( do_plot ) {
+    cat( "Plotting...\n" )
+    p1 = ggplot( out ) +
+      geom_hline( yintercept = 1.4, linetype = 4 ) +
+      geom_smooth( aes( x = topic, y = chi_sq_std ) ) +
+      ylim( 0, 1.5 ) + 
+      xlab( "Topics" ) + ylab( expression(chi^2) )
+    print( p1 )
+  }
+  
   toc <- proc.time()
   runtime <- toc - tic
   cat( "---\n" )

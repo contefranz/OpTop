@@ -5,7 +5,7 @@
 \title{Compute aggregate topic stability}
 \usage{
 agg_topic_stability(lda_models, optimal_model, best_match, least_match,
-  threshold = 0.00075, convert = FALSE)
+  threshold = 0.00075, do_plot = TRUE, convert = FALSE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
@@ -28,6 +28,9 @@ This contains the models with lowest cosine similarity.}
 
 \item{threshold}{Set a cutoff for the relative importance of words.
 Default to 0.00075.}
+
+\item{do_plot}{Plot the chi-square statistic as a function of the number of 
+topics. Default is \code{TRUE}.}
 
 \item{convert}{Convert the output to a \code{data.frame}.
 Default to \code{FALSE}.}
