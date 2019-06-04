@@ -55,7 +55,7 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chi_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )
@@ -85,6 +85,7 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   tww_best_norm <- norm_tww( tww_best )
   
   loop_sequence <- (best_pos + 1L):length( lda_models )
+  min_loop <- min( loop_sequence )
   l_loop <- length( loop_sequence )
   BestMatch  <- LeastMatch <- vector( "list", length = l_loop )
   # initialize topic position for BestMatch and LeastMatch
@@ -93,7 +94,8 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( i_mod in loop_sequence ) {
-    i_pos <- i_mod - .optimal_model + 1L
+    # i_pos <- i_mod - .optimal_model + 1L
+    i_pos <- i_mod - min_loop + 1L
     
     # reading tww
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )

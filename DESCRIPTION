@@ -1,12 +1,12 @@
 Package: OpTop
 Type: Package
 Title: Optimal topic specification for latent dirichlet allocation models
-Version: 0.5.0
+Version: 0.7.0
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c( ORCID = "0000-0002-5130-7745" ) ), 
-    person("Craig", "Lewis", email = "craig.lewis@vanderbilt.edu", role = "aut" ) )
-Description: A set of fast statistical rountines to detect the optimal number 
+    person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = "aut" ) )
+Description: A set of fast parametric tests to detect the optimal number 
     of topics from a pool of Latent Dirichlet Allocation models.
 License: GPL-3
 Encoding: UTF-8
@@ -17,4 +17,5 @@ RoxygenNote: 6.1.1
 Depends: R (>= 3.1)
 Imports: data.table (>= 1.11.4),
     quanteda (>= 1.3.0),
+    tibble (>= 2.1.1),
     ggplot2 (>= 3.1.1)

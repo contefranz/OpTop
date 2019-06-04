@@ -1,3 +1,37 @@
+# OpTop 0.6.0
+
+### Minor Changes
+
+* `agg_topic_stability()` can now compute smoothed tests and plot the results
+accordingly.
+
+* Support for final convertion to a `tibble` table spreaded out to all
+functions,
+
+* All eligible functions get better plots.
+
+
+---
+
+# OpTop 0.6.0
+
+### Major Changes
+
+* `optimal_topic()` gains the parameter `q` which allows to select the quantile
+of the cumulative probability of word weights to consider as relevant.
+
+* `optimal_topic()` now finds the optimal number of topics either by significance
+levels or by forcing the algorithm to reach the global minimum. This is 
+controlled by the new parameter `alpha`. 
+
+### Minor Changes
+
+* `optimal_topic()` drops both `threshold` and `q_type`.
+
+* In `optimal_topic()`, `convert` now supports `tibble` structure.
+
+---
+
 # OpTop 0.5.0
 
 ### Major Changes
@@ -5,7 +39,7 @@
 * Function `agg_topic_stability()` has been widely improved.
 
 * All functions which return a test now gain the new argument `do_plot`. This
-plot the test statistic as a function of the numnber of topics.
+plot the test statistic as a function of the number of topics.
 
 * The argument `test` has been removed from `topic_stability()` which now 
 returns only the aggregate statistic. 

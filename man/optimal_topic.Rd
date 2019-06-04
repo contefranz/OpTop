@@ -4,66 +4,70 @@
 \alias{optimal_topic}
 \title{Find the optimal number of topics from a pool of LDA models}
 \usage{
-optimal_topic(lda_models, word_proportions, threshold = 0.00075,
-  alpha = 0.01, q_type = 5L, do_plot = TRUE, convert = FALSE)
+optimal_topic(lda_models, word_proportions, q = 0.8, alpha = 0.05,
+  do_plot = TRUE, convert = NULL)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{word_proportions}{A \code{data.table} giving the word proportions in a corpus
+\item{word_proportions}{A \code{\link[data.table]{data.table}} giving the 
+word proportions in a corpus
 as computed by \code{\link[OpTop]{word_proportions}}.}
 
-\item{threshold}{Set a cutoff for the relative importance of words.
-Default to 0.00075.}
+\item{q}{Set a cutoff for important words as the quantile of the expected
+cumulative probability of word weights. Default to 0.80, meaning that the 
+function reaches 80\% of the distribution mass and leaves out the remaining
+20\%.}
 
-\item{alpha}{Probability at which compute the quantiles of the chi-square test
-and adjust its values. Default to 0.01.}
-
-\item{q_type}{Select the quantile algorithm as in \code{\link[stats]{quantile}}.
-Default to 5 for consistency with Matlab. In later releases, it will be
-replaced with 7, which is the \code{R} default.}
+\item{alpha}{The confidence level of test acceptance. Default to 0.05. 
+See 'Details'.}
 
 \item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default is \code{TRUE}.}
+topics. Default to \code{TRUE}.}
 
-\item{convert}{Convert the output to a \code{data.frame}.
-Default to \code{FALSE}.}
+\item{convert}{Target convertion format. This version of \code{OpTop} supports
+\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
+Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 }
 \value{
 A \code{data.table} containing the following columns:
 
 \item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{chi_sum}}{A numeric giving the overall sum of the chi-square.}
-\item{\code{cut}}{An integer giving the row position of minimum word
-importance.}
-\item{\code{chi_std}}{A numeric giving the standardized chi-square.}
-\item{\code{chi_stdw}}{A numeric giving the standardized and weighted chi-square.}
+\item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
+\item{\code{pval}}{A numeric giving the p-value of the test.}
 }
 \description{
 Implements a fast chi-square like test to detect the number of topics
-that best describes the corpus.
+that best describes the corpus estimated via Latent Dirichelet Allocation.
 }
 \details{
 The function implements a Pearson chi-square statistic that exploits
 the assumption that the distribution of words is multinomial. The test studies
 the stability of a K-topic model which fully characterizes the corpus if the
 observed and estimated word vectors are statistically indistinct.
+
+The parameter \code{alpha} controls the confidence of the chi-square test. The
+optimal model is selected the first time the chi-square statistic reaches
+a p-value equal to \code{alpha}. In the event that the chi-square statistic
+fails to reach \code{alpha}, the minimum chi-square statistic
+is selected. A higher \code{alpha} resolves in selecting a model with less 
+topics. You can force the algorithm to find the minimum chi-square statistic
+by setting \code{alpha} equal to zero.
 }
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
 word_proportions <- word_proportions( corpus = data_corpus_inaugural,
-                                     remove_document = TRUE,
-                                     language = "en",
-                                     source = "snowball" )
+                                      remove_document = TRUE,
+                                      language = "en",
+                                      source = "snowball" )
 
 test1 <- optimal_topic( lda_models = lda_list,
-                       word_proportions = word_proportions,
-                       threshold = 0.00075,
-                       alpha = 0.01,
-                       q_type = 5 )
+                        word_proportions = word_proportions,
+                        q = 0.80,
+                        alpha = 0.05 )
 }
 }
 \references{

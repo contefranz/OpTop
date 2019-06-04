@@ -5,7 +5,8 @@
 \title{Compute aggregate topic stability}
 \usage{
 agg_topic_stability(lda_models, optimal_model, best_match, least_match,
-  threshold = 0.00075, do_plot = TRUE, convert = FALSE)
+  q = 0.8, alpha = 0.05, smoothed = TRUE, do_plot = TRUE,
+  convert = NULL)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
@@ -26,18 +27,39 @@ This contains the models with highest cosine similarity.}
 \item{least_match}{A data.table as computed by \code{\link[OpTop]{topic_match}}.
 This contains the models with lowest cosine similarity.}
 
-\item{threshold}{Set a cutoff for the relative importance of words.
-Default to 0.00075.}
+\item{q}{Set a cutoff for important words as the quantile of the expected
+cumulative probability of word weights. Default to 0.80, meaning that the 
+function reaches 80\% of the distribution mass and leaves out the remaining
+20\%.}
+
+\item{alpha}{Alpha level to identify informative words from the Cumulative
+Distribution Function over the cosine similarities in the Topic Word Weights
+matrix. Default to 0.05.}
+
+\item{smoothed}{A logical to control whether the test is perfomed on each 
+document for each LDA model or on the smoothed chi-square statistic. 
+This is the aggregated version which gives the overall behavior across all
+documents in the corpus. Default is \code{TRUE}.}
 
 \item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default is \code{TRUE}.}
+topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
+the significance level according to \code{alpha}.}
 
-\item{convert}{Convert the output to a \code{data.frame}.
-Default to \code{FALSE}.}
+\item{convert}{Target convertion format. This version of \code{OpTop} supports
+\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
+Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
+}
+\value{
+A \code{data.table} containing the following columns:
+
+\item{\code{topic}}{An integer giving the number of topics.}
+\item{\code{id_doc}}{An integer document id as given in the original corpus.}
+\item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
+\item{\code{pval}}{A numeric giving the p-value of the test.}
 }
 \description{
 Detects informative and uninformative components to compute aggregate topic
-stability.
+stability for above optimal models.
 }
 \examples{
 \dontrun{

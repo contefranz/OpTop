@@ -17,6 +17,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param alpha Alpha level to identify informative words from the Cumulative
 #' Distribution Function over the cosine similarities in the Topic Word Weights
 #' matrix. Default to 0.05.
+#' @param do_plot Plot the chi-square statistic as a function of the number of 
+#' topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
+#' the significance level according to \code{alpha}.
 #' @details This function implements Test 3 as defined in 
 #' Lewis and Grossetti (2019). Test 3 evaluates the aggregated 
 #' stability of over-optimal topic specifications by summing each 
@@ -25,14 +28,14 @@ if ( getRversion() >= "2.15.1" ) {
 #' @return A \code{data.table} containing the following columns:
 #'
 #' \item{\code{topic}}{An integer giving the number of topics.}
-#' \item{\code{dfs}}{An integer giving the degrees of freedom.}
+#' \item{\code{df}}{An integer giving the degrees of freedom.}
 #' \item{\code{chisq}}{A numeric giving the chi-square statistic.}
 #' \item{\code{chisq_std}}{A numeric giving the standardized chi-square statistic.}
 #' @examples
 #' \dontrun{
 #' test2 <- topic_stability( lda_models = lda_list,
 #'                           optimal_model = out,
-#'                           threshold = 0.00075,
+#'                           q = 0.00075,
 #'                           alpha = 0.05 )
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
@@ -42,11 +45,12 @@ if ( getRversion() >= "2.15.1" ) {
 #' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table ggplot2
 #' @importFrom stats pchisq
+#' @importFrom tibble as_tibble
 #' @export
 
 topic_stability <- function( lda_models, optimal_model,
-                             threshold = 0.00075, alpha = 0.05,
-                             do_plot = TRUE, convert = FALSE ) {
+                             q = 0.80, alpha = 0.05,
+                             do_plot = TRUE, convert = NULL ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
@@ -67,18 +71,21 @@ topic_stability <- function( lda_models, optimal_model,
                  "2. a data.table/data.frame as returned by optimal_topic()",
                  "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
   }
-  if ( !is.numeric( threshold ) ) {
-    stop( "threshold must be either a numeric or an integer" )
+  if ( !is.numeric( q ) ) {
+    stop( "q must be a numeric" )
   }
   if ( !is.numeric( alpha ) ) {
     stop( "alpha must be a numeric" )
+  }
+  if ( !is.null( convert ) && !is.character( convert ) ) {
+    stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
   }
   if ( is.numeric( optimal_model ) ) {
     .optimal_model <- optimal_model
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chi_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )
@@ -113,24 +120,35 @@ topic_stability <- function( lda_models, optimal_model,
   }
   # Normalizing by scaling by vector norms
   tww_best_norm <- norm_tww( tww_best )
-  
+  l_models = length( lda_models )
   # pre-allocating required objects
-  BestTopics    <- matrix( 0, nrow = (k_end - .optimal_model), ncol = .optimal_model )
-  Chi_k         <- matrix( 0, nrow = (k_end - .optimal_model), ncol = (.optimal_model + 1L) )
-  Chi_k[ , 1L ] <- (.optimal_model + 1L):k_end
-  Chi_K         <- matrix( 0, nrow = (k_end - .optimal_model), ncol = 3L )
+  BestTopics    <- matrix( 0, nrow = (l_models - best_pos), ncol = .optimal_model )
+  Chi_k         <- matrix( 0, nrow = (l_models - best_pos), ncol = (.optimal_model + 1L) )
+  model_list    <- unname( sapply( lda_models, function(x) x@k ) )
+  Chi_k[ , 1L ] <- model_list[ model_list > .optimal_model ]
+  Chi_K         <- matrix( 0, nrow = (l_models - best_pos), ncol = 3L )
   Chi_K[ , 1L ] <- 1L:nrow( Chi_K )
-  p             <- matrix( 0, nrow = (k_end - .optimal_model), ncol = (.optimal_model + 1L) )
+  p             <- matrix( 0, nrow = (l_models - best_pos), ncol = (.optimal_model + 1L) )
   CosSimHold    <- NULL
+
+  # BestTopics    <- matrix( 0, nrow = (k_end - .optimal_model), ncol = .optimal_model )
+  # Chi_k         <- matrix( 0, nrow = (k_end - .optimal_model), ncol = (.optimal_model + 1L) )
+  # Chi_k[ , 1L ] <- (.optimal_model + 1L):k_end
+  # Chi_K         <- matrix( 0, nrow = (k_end - .optimal_model), ncol = 3L )
+  # Chi_K[ , 1L ] <- 1L:nrow( Chi_K )
+  # p             <- matrix( 0, nrow = (k_end - .optimal_model), ncol = (.optimal_model + 1L) )
+  # CosSimHold    <- NULL
   
   # this loops over the list of models which have to be sorted
   # the loops starts right after the best model
   loop_sequence <- (best_pos + 1L):length( lda_models )
+  min_loop <- min( loop_sequence )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( i_mod in loop_sequence ) {
     # for ( i_mod in seq_along( lda_models ) ) {
-    i_pos <- i_mod - .optimal_model + 1L
+    # i_pos <- i_mod - .optimal_model + 1L
+    i_pos <- i_mod - min_loop + 1L
     # reading tww
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     current_k <- ncol( tww )
@@ -156,7 +174,8 @@ topic_stability <- function( lda_models, optimal_model,
       # find the max cosine similarity and return the value and its index
       maxval <- max( CosSim[ j, ] )
       maxsim <- which.max( CosSim[ j, ] )
-      BestTopics[ (current_k - .optimal_model), j ] <- maxsim
+      BestTopics[ i_pos, j ] <- maxsim
+      # BestTopics[ (current_k - .optimal_model), j ] <- maxsim
       BestPair <- matrix( data = c( tww_best[ , j ],
                                     tww[ , maxsim ] ),
                           ncol = 2L )
@@ -167,16 +186,30 @@ topic_stability <- function( lda_models, optimal_model,
       # as first element of CumProb and kill last element
       CumProb <- c( 1, CumProb[ -length( CumProb ) ] )
       BestPair <- cbind( BestPair, unname( CumProb ) )
+      n_BP <- nrow( BestPair )
+      p_BP <- ncol( BestPair )
       
-      icut <- base::which.min( abs( BestPair[ , 1L ] - threshold ) )
-      ibin <- base::which.min( abs( BestPair[ , 3L ] - alpha ) )
-      ibestcut <- min( icut, ibin )
-      sum_overbest <- apply( BestPair[ (ibestcut + 1L):n_tww, ], 2L, sum )
-      AggBestPair <- rbind( BestPair[ 1L:ibestcut, ], unname( sum_overbest ) )
+      # stop when you reach q
+      AggBestPair <- BestPair[ BestPair[ , 3L ] >= 1L - q, ]
+      icut <- nrow( AggBestPair )
+      lowest_estimates <- apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
+      
+      AggBestPair <- rbind( BestPair[ 1L:icut, ], unname( lowest_estimates ) )
       numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
       denominator <- AggBestPair[ , 1L ]
-      Chi_k[ i_pos, j + 1L ] <- ibestcut * sum( numerator / denominator )
-      p[ i_pos, j ] <- 1 - pchisq( Chi_k[ i_pos, j + 1L ], ibestcut )
+      Chi_k[ i_pos, j + 1L ] <- icut * sum( numerator / denominator )
+      p[ i_pos, j ] <- pchisq( Chi_k[ i_pos, j + 1L ], icut )
+      
+      # old way
+      # icut <- base::which.min( abs( BestPair[ , 1L ] - q ) )
+      # ibin <- base::which.min( abs( BestPair[ , 3L ] - alpha ) )
+      # ibestcut <- min( icut, ibin )
+      # sum_overbest <- apply( BestPair[ (ibestcut + 1L):n_tww, ], 2L, sum )
+      # AggBestPair <- rbind( BestPair[ 1L:ibestcut, ], unname( sum_overbest ) )
+      # numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
+      # denominator <- AggBestPair[ , 1L ]
+      # Chi_k[ i_pos, j + 1L ] <- ibestcut * sum( numerator / denominator )
+      # p[ i_pos, j ] <- 1 - pchisq( Chi_k[ i_pos, j + 1L ], ibestcut )
       
     }
   }
@@ -184,26 +217,48 @@ topic_stability <- function( lda_models, optimal_model,
   Chi_K[ , 2L ] <- apply( Chi_k, 1L, sum ) / .optimal_model
   # not sure if we want to divide by 1:108 or by the real k given
   # by topics over optimal
-  Chi_K[ , 3L ] <- Chi_K[ , 2L ] / Chi_K[ , 1L ]
-  colnames( Chi_K ) <- c( "dfs", "chisq", "chisq_std" )
+  # Chi_K[ , 3L ] <- Chi_K[ , 2L ] / Chi_K[ , 1L ]
+  Chi_K[ , 3L ] <- Chi_K[ , 2L ] / .optimal_model
   
+  Chi_K <- cbind( model_list[ model_list > .optimal_model ],
+                  Chi_K[ , 3L ], 
+                  pchisq( Chi_K[ , 3L ], df = 1L ) )
+  colnames( Chi_K ) <- c( "topic", "chisq_std", "pval" )
+  Chi_K <- as.data.table( Chi_K )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
-  if ( convert ) {
-    Chi_K <- as.data.frame( Chi_K )
-    Chi_K$topic <- Chi_K$dfs + .optimal_model
-    Chi_K[ , c( 4L, 1L:3L ) ]
+  
+  cat( "# # # # # # # # # # # # # # # # # # # #\n" )
+  prop_H0 = nrow( Chi_K[ pval >= alpha ] ) / nrow( Chi_K )
+  if ( prop_H0 == 1 ) {
+    cat( "Null hypothesis is always accepted at a level of", alpha, "\n" )
   } else {
-    Chi_K <- as.data.table( Chi_K )
-    Chi_K[ , topic := dfs + .optimal_model ]
-    setcolorder( Chi_K, c( 4L, 1L:3L ) )
+    reject = Chi_K[ pval < alpha ]
+    cat( "Null hypothesis is rejected at a level of", alpha, 
+         "for the following models\n" )
+    cat( "Number of topics:", 
+         paste0( reject[ , topic ], collapse = ", " ), "\n" )
+    cat( "Overall, topic stability is achieved for ", 
+         round( prop_H0 * 100, 2 ), "% of the models\n", sep = "" )
   }
+  
+  if ( !is.null( convert ) ) {
+    cat( "Converting to", convert, "\n" )
+    if ( convert == "data.frame" ) {
+      setDF( Chi_K )
+    } else if ( convert == "tibble" ) {
+      Chi_K <- as_tibble( Chi_K )
+    }
+  }
+  
   if ( do_plot ) {
     cat( "---\n" )
     cat( "Plotting...\n" )
     p1 <- ggplot( Chi_K ) +
+      geom_hline( yintercept = qchisq( alpha, 1L ), linetype = 4 ) +
       geom_line( aes( x = topic, y = chisq_std ), size = 0.8, color = "royalblue" ) +
-      xlab( "Topics" ) + ylab( expression( paste( "TWW - ", chi^2 ) ) )
+      xlab( "Topics" ) + ylab( expression( paste( "TWW - ", chi^2 ) ) ) +
+      theme_OpTop
     print( p1 )
   }
   

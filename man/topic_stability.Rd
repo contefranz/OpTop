@@ -4,8 +4,8 @@
 \alias{topic_stability}
 \title{Compute topic stability for over-optimal topic specifications}
 \usage{
-topic_stability(lda_models, optimal_model, threshold = 0.00075,
-  alpha = 0.05, do_plot = TRUE, convert = FALSE)
+topic_stability(lda_models, optimal_model, q = 0.8, alpha = 0.05,
+  do_plot = TRUE, convert = NULL)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
@@ -20,24 +20,28 @@ function automatically finds the optimal model. This argument can also be
 a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
 returned by \code{\link[topicmodels]{LDA}}.}
 
-\item{threshold}{Set a cutoff for the relative importance of words.
-Default to 0.00075.}
+\item{q}{Set a cutoff for important words as the quantile of the expected
+cumulative probability of word weights. Default to 0.80, meaning that the 
+function reaches 80\% of the distribution mass and leaves out the remaining
+20\%.}
 
 \item{alpha}{Alpha level to identify informative words from the Cumulative
 Distribution Function over the cosine similarities in the Topic Word Weights
 matrix. Default to 0.05.}
 
 \item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default is \code{TRUE}.}
+topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
+the significance level according to \code{alpha}.}
 
-\item{convert}{Convert the output to a \code{data.frame}.
-Default to \code{FALSE}.}
+\item{convert}{Target convertion format. This version of \code{OpTop} supports
+\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
+Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 }
 \value{
 A \code{data.table} containing the following columns:
 
 \item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{dfs}}{An integer giving the degrees of freedom.}
+\item{\code{df}}{An integer giving the degrees of freedom.}
 \item{\code{chisq}}{A numeric giving the chi-square statistic.}
 \item{\code{chisq_std}}{A numeric giving the standardized chi-square statistic.}
 }
@@ -56,7 +60,7 @@ returns the results.
 \dontrun{
 test2 <- topic_stability( lda_models = lda_list,
                           optimal_model = out,
-                          threshold = 0.00075,
+                          q = 0.00075,
                           alpha = 0.05 )
 }
 }
