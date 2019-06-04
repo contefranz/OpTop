@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.0)
+[![release](https://img.shields.io/badge/release-v0.9.1-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.1)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 
@@ -51,7 +51,7 @@ by __quanteda__ [Benoit et al. (2018)];
 * `optimal_topic()`: implements _Test 1_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
-* `topic_stability()`: implements _Test _3_ from the methodological paper 
+* `topic_stability()`: implements _Test 3_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 * `topic_match()`: detect and extract informative and uninformative components.
@@ -62,19 +62,26 @@ by __quanteda__ [Benoit et al. (2018)];
 * `agg_document_stability()`: implements _Test 5_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
-
 More functions which implement the other tests are to come in future releases.
-
-## Data
-
-__OpTop__ comes with a set of 14 pre-run LDA models with k = 2, 5, 10, 20, 30,
-40, 50, 60, 70 80, 90, 100, 150, 200. Data can be found by calling 
-`data(lda_models_inaugural)`.
 
 ## Bug Reporting
 
 Bugs and issues can be reported at
 [https://github.com/contefranz/OpTop/issues](https://github.com/contefranz/OpTop/issues).
+
+## Authors
+
+* [Francesco Grossetti](http://faculty.unibocconi.eu/francescogiovannigrossetti/) 
+
+  Assistant Professor of Data Science and Accounting Information Systems  
+  Accounting Department, Bocconi University.  
+  Contact Francesco at: francesco.grossetti@unibocconi.it.  
+
+* [Craig M. Lewis](https://business.vanderbilt.edu/bio/craig-lewis/)
+
+  Madison S. Wigginton Professor of Finance  
+  Owen Business School, Vanderbilt University.  
+  Contact Craig at: craig.lewis@owen.vanderbilt.edu.  
 
 ## Bibliography
 

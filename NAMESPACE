@@ -2,6 +2,7 @@
 
 export(agg_document_stability)
 export(agg_topic_stability)
+export(get_OpTopData)
 export(get_topic_models)
 export(optimal_topic)
 export(topic_match)
@@ -23,4 +24,5 @@ importFrom(stats,pf)
 importFrom(stats,qchisq)
 importFrom(stats,qf)
 importFrom(tibble,as_tibble)
+importFrom(utils,download.file)
 importFrom(utils,packageVersion)
