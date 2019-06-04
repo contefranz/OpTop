@@ -1,3 +1,9 @@
+# OpTop 0.9.3
+
+* Fixing tiny minor things
+
+---
+
 # OpTop 0.9.1
 
 * Just kidding! No more data here...we'll figure out something later on...
