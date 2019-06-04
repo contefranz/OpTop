@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.7.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.7.0)
+[![release](https://img.shields.io/badge/release-v0.8.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.8.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 
@@ -57,6 +57,9 @@ by __quanteda__ [Benoit et al. (2018)];
 * `topic_match()`: detect and extract informative and uninformative components.
 
 * `agg_topic_stability()`: implements _Test 4_ from the methodological paper 
+[Lewis and Grossetti (2019)].
+
+* `agg_topic_stability()`: implements _Test 5_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 

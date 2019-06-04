@@ -3,7 +3,7 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Compute aggregate topic stability
 #'
-#' Detects informative and uninformative components to compute aggregate topic
+#' Compute aggregate topic and perform a chi-square test to evaluate topic
 #' stability for above optimal models.
 #' 
 #' @inheritParams topic_stability
@@ -243,7 +243,8 @@ agg_topic_stability <- function( lda_models, optimal_model,
     p1 = ggplot( Chi_K ) +
       geom_hline( yintercept = qchisq( alpha, 1L ), linetype = 4 ) +
       geom_line( aes( x = topic, y = chisq_std, color = as.factor(id_doc) ) ) +
-      xlab( "Topics" ) + ylab( expression(chi^2) ) +
+      xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
+      ggtitle( "Point-wise Aggregated Topic Stability Plot" ) +
       theme_OpTop +
       theme( legend.position = "none" )
     print( p1 )
@@ -251,7 +252,8 @@ agg_topic_stability <- function( lda_models, optimal_model,
       p1 = ggplot( Chi_K ) +
         geom_hline( yintercept = pchisq( alpha, 1L ), linetype = 4 ) +
         geom_smooth( aes( x = topic, y = chisq_std ) ) +
-        xlab( "Topics" ) + ylab( expression(chi^2) ) +
+        xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
+        ggtitle( "Smoothed Aggregated Topic Stability Plot" ) +
         theme_OpTop +
         theme( legend.position = "none" )
       print( p1 )

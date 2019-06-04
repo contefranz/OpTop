@@ -58,7 +58,7 @@ A \code{data.table} containing the following columns:
 \item{\code{pval}}{A numeric giving the p-value of the test.}
 }
 \description{
-Detects informative and uninformative components to compute aggregate topic
+Compute aggregate topic and perform a chi-square test to evaluate topic
 stability for above optimal models.
 }
 \examples{

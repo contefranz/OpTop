@@ -14,8 +14,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 #' according to the number of topics.
 #' @param word_proportions A \code{\link[data.table]{data.table}} giving the 
-#' word proportions in a corpus
-#' as computed by \code{\link[OpTop]{word_proportions}}.
+#' word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.
 #' @param q Set a cutoff for important words as the quantile of the expected
 #' cumulative probability of word weights. Default to 0.80, meaning that the 
 #' function reaches 80\% of the distribution mass and leaves out the remaining
@@ -215,7 +214,8 @@ optimal_topic <- function( lda_models, word_proportions,
       geom_vline( xintercept = x_min, color = "black", linetype = 2L ) +
       geom_point( aes( x = x_min, y_min ), color = "red", shape = 4L, size = 4L ) +
       scale_y_continuous( breaks = seq( 0, max( Chi_K$chisq_std ), by = 0.5 ) ) +
-      xlab( "Topics" ) + ylab( expression(chi^2) ) +
+      xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
+      ggtitle( "Optimal Topic Plot" ) +
       theme_OpTop
     print( p1 )
   }

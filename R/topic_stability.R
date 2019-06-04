@@ -257,7 +257,8 @@ topic_stability <- function( lda_models, optimal_model,
     p1 <- ggplot( Chi_K ) +
       geom_hline( yintercept = qchisq( alpha, 1L ), linetype = 4 ) +
       geom_line( aes( x = topic, y = chisq_std ), size = 0.8, color = "royalblue" ) +
-      xlab( "Topics" ) + ylab( expression( paste( "TWW - ", chi^2 ) ) ) +
+      xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
+      ggtitle( "Topic Stability Plot" ) +
       theme_OpTop
     print( p1 )
   }

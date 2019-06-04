@@ -1,4 +1,22 @@
-# OpTop 0.6.0
+# OpTop 0.8.0
+
+### Major Changes
+
+* `agg_document_stability()` has been fully implemented. The function returns
+both the Aggregated Document Stability test and the F-test on informative
+and uninformative components.
+
+### Minor Changes
+
+* General improvements in plots.
+
+* Better documentation.
+
+* Slighty faster functions.
+
+---
+
+# OpTop 0.7.0
 
 ### Minor Changes
 

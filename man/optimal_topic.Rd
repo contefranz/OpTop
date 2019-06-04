@@ -13,8 +13,7 @@ optimal_topic(lda_models, word_proportions, q = 0.8, alpha = 0.05,
 according to the number of topics.}
 
 \item{word_proportions}{A \code{\link[data.table]{data.table}} giving the 
-word proportions in a corpus
-as computed by \code{\link[OpTop]{word_proportions}}.}
+word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.}
 
 \item{q}{Set a cutoff for important words as the quantile of the expected
 cumulative probability of word weights. Default to 0.80, meaning that the 

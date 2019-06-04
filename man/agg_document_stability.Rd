@@ -2,18 +2,19 @@
 % Please edit documentation in R/agg_document_stability.R
 \name{agg_document_stability}
 \alias{agg_document_stability}
-\title{Compute aggregate document stability}
+\title{Compute aggregate document stability and F-test}
 \usage{
 agg_document_stability(lda_models, word_proportions, optimal_model,
-  threshold = 0.00075, convert = FALSE)
+  q = 0.8, alpha = 0.05, smoothed = TRUE, do_plot = TRUE,
+  convert = NULL)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{word_proportions}{A \code{data.table} giving the word proportions in a corpus
-as computed by \code{\link[OpTop]{word_proportions}}.}
+\item{word_proportions}{A \code{\link[data.table]{data.table}} giving the 
+word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.}
 
 \item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a
@@ -23,22 +24,56 @@ function automatically finds the optimal model. This argument can also be
 a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
 returned by \code{\link[topicmodels]{LDA}}.}
 
-\item{threshold}{Set a cutoff for the relative importance of words.
-Default to 0.00075.}
+\item{q}{Set a cutoff for important words as the quantile of the expected
+cumulative probability of word weights. Default to 0.80, meaning that the 
+function reaches 80\% of the distribution mass and leaves out the remaining
+20\%.}
 
-\item{convert}{Convert the output to a \code{data.frame}.
-Default to \code{FALSE}.}
+\item{alpha}{Alpha level to identify informative words from the Cumulative
+Distribution Function over the cosine similarities in the Topic Word Weights
+matrix. Default to 0.05.}
+
+\item{smoothed}{A logical to control whether the test is perfomed on each 
+document for each LDA model or on the smoothed chi-square statistic. 
+This is the aggregated version which gives the overall behavior across all
+documents in the corpus. Default is \code{TRUE}.}
+
+\item{do_plot}{Plot the chi-square statistic as a function of the number of 
+topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
+the significance level according to \code{alpha}.}
+
+\item{convert}{Target convertion format. This version of \code{OpTop} supports
+\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
+Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
+}
+\value{
+A \code{data.table} containing the following columns:
+
+\item{\code{topic}}{An integer giving the number of topics.}
+\item{\code{id_doc}}{An integer document id as given in the original corpus.}
+\item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
+for the informative component.}
+\item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
+for the uninformative component.}
+\item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
+over the informative component.}
+\item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
+over the uninformative component.}
+\item{\code{Fstat}}{A numeric giving the standardized F statistic
+of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
+\item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
 }
 \description{
 Detects informative and uninformative components to compute aggregate document
-stability.
+stability. Performs a chi-square test to evaluate document stability, 
+Also, computes a F-test to further evaluate deviation from optimal model.
 }
 \examples{
 \dontrun{
 test4 <- agg_topic_stability( lda_models = lda_list,
-                              best_k = test1,
-                              best_match = BestMatch,
-                              least_match = LeastMatch )
+                              optimal_model = test1,
+                              q = 0.80, alpha = 0.05,
+                              smoothed = TRUE, do_plot = TRUE )
 }
 }
 \references{
@@ -50,4 +85,6 @@ A Statistical Approach for Optimal Topic Model Identification.
 }
 \author{
 Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
+
+Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
 }
