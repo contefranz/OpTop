@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.1-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.1)
+[![release](https://img.shields.io/badge/release-v0.9.2-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.2)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 
@@ -7,8 +7,8 @@
 
 ## Overview
 
-**OpTop** is the direct consequence of the paper by Lewis and Grossetti (2019). 
-The paper is in an advanced draft and is about to be submitted to a journal.
+**OpTop** is the direct consequence of the paper _A Statistical Approach for 
+Optimal Topic Model Identification_ by Lewis and Grossetti (2019). 
 
 Latent Dirichelet Allocation (LDA) was developed by Blei, Ng, and Jordan in 2003
 [Blei et al., (2003)] and is based on 
