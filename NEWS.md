@@ -1,3 +1,9 @@
+# OpTop 0.9.0
+
+### Major Changes
+
+* A set of pre-run LDA models are now available.
+
 # OpTop 0.8.0
 
 ### Major Changes

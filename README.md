@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.8.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.8.0)
+[![release](https://img.shields.io/badge/release-v0.9.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 
@@ -59,11 +59,17 @@ by __quanteda__ [Benoit et al. (2018)];
 * `agg_topic_stability()`: implements _Test 4_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
-* `agg_topic_stability()`: implements _Test 5_ from the methodological paper 
+* `agg_document_stability()`: implements _Test 5_ from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 
 More functions which implement the other tests are to come in future releases.
+
+## Data
+
+__OpTop__ comes with a set of 14 pre-run LDA models with k = 2, 5, 10, 20, 30,
+40, 50, 60, 70 80, 90, 100, 150, 200. Data can be found by calling 
+`data(lda_models_inaugural)`.
 
 ## Bug Reporting
 
