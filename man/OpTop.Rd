@@ -4,7 +4,14 @@
 \name{OpTop}
 \alias{OpTop}
 \alias{OpTop-package}
-\title{Amazing things}
+\title{OpTop: detect the optimal number of topics from a pool of LDA models}
 \description{
-Amazing things
+OpTop is an `R` package that implements the testing approach described in 
+the paper A Statistical Approach for Optimal Topic Model Identification
+by Lewis and Grossetti (2019).
+}
+\details{
+OpTop introduces a set of parametric tests to identify the optimal number 
+of topics in a collection of LDA models. OpTop also includes several 
+tests to explore topic stability and redundancy.
 }
