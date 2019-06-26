@@ -4,27 +4,25 @@
 \alias{word_proportions}
 \title{Compute word proportions from a corpus object}
 \usage{
-word_proportions(corpus, remove_document = FALSE, language = "en",
-  source = "snowball")
+word_proportions(x, remove_document = TRUE, remove_nonASCII = TRUE,
+  ...)
 }
 \arguments{
-\item{corpus}{A \code{\link[quanteda]{corpus}} object as defined in
-\code{quanteda}.}
+\item{x}{Either a \code{\link[quanteda]{corpus}} or 
+\code{\link[quanteda]{dfm}} object as defined in \code{quanteda}.}
 
 \item{remove_document}{Remove the \code{document} identification inherited
-from \code{\link[quanteda]{corpus}}. Default to \code{TRUE}.}
+from \code{x}. Default to \code{TRUE}.}
 
-\item{language}{A character specifying the language of stopwords according
-to ISO 639-1 code. It mimics the behavior of \code{\link[stopwords]{stopwords}}.
-Default to \code{"en"} for English.}
+\item{remove_nonASCII}{A logical to remove non-ASCII characters from the 
+\code{x}. Default to \code{TRUE}.}
 
-\item{source}{A character specifying the stopwords source. It can be either
-\code{"snowball"}, \code{"snowball-iso"}, \code{"misc"}, or \code{"smart"}.
-Default to \code{"snowball"} for consistency with
-\code{\link[stopwords]{stopwords}}.}
+\item{...}{When \code{x} is a corpus, additional arguments passed 
+to \code{\link[quanteda]{tokens}} and \code{\link[quanteda]{dfm}} to allow
+for precision in tokens removal.}
 }
 \value{
-A \code{data.table} with the following columns:
+A \code{data.table} with the following columns: 
 \item{\code{id_doc}}{A sequential integer giving the identification of documents.}
 \item{\code{id_word}}{A sequential integer giving the identification of words.}
 \item{\code{word}}{A character identifying the word.}
@@ -33,15 +31,22 @@ A \code{data.table} with the following columns:
 }
 \description{
 Fast routine that computes word proportions from a
-\code{\link[quanteda]{corpus}}.
+\code{\link[quanteda]{corpus}} or \code{\link[quanteda]{dfm}} object.
+}
+\details{
+The function only applies preprocessing when \code{x} is a 
+\code{\link[quanteda]{corpus}}. You can pass the usual parameters to \code{...}.
+This includes the two parameters \code{remove_document} and \code{remove_nonASCII}.
+If \code{x} is \code{\link[quanteda]{dfm}}, then the function directly
+computes the word proportions as expected.
 }
 \examples{
 \dontrun{
-# Compute word proportions from a corpus objects
-word_proportions = word_proportions( corpus = data_corpus_inaugural,
-                                     remove_document = TRUE,
-                                     language = "en",
-                                     source = "snowball" )
+# Compute word proportions from a corpus object
+word_proportions <- word_proportions( x = data_corpus_inaugural,
+                                      remove = stopwords(), tolower = TRUE )
+# Compute word proportions from a dfm object
+word_proportions <- word_proportions( x = data_dfm_lbgexample )
 }
 }
 \references{
