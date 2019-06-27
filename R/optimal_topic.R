@@ -1,5 +1,5 @@
 if ( getRversion() >= "2.15.1" ) {
-  utils::globalVariables( c( "id_word", "id_doc", "word_prop",
+  utils::globalVariables( c( "id_word", "id_doc", "word_proportions",
                              "word_sum", "check", "topics",
                              ".", "chisquare", "chisquare_mod",
                              "row_cut", "chi_sum", "word_prop_hat",
@@ -95,35 +95,45 @@ optimal_topic <- function( lda_models, word_proportions,
     stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
   }
   
-  
   tic <- proc.time()
   # compute the size of vocabulary detected in each document as:
   size_corpus <- nrow( word_proportions )
-  # size_vocabulary <- nrow( word_proportions[ , .N, by = id_word ] )
   size_vocabulary <- word_proportions[ , max( id_word ) ]
-  n_docs <- word_proportions[ , max( id_doc ) ]
+
   
   # final output table
-  # regstats <- data.table()
   regstats <- matrix( NA_real_, nrow = 0, ncol = 4 )
   Chi_K <- data.table()
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   # we enter in looping over each model (j)
   for ( i_mod in seq_along( lda_models ) ) {
+    
     # getting the document word weights --> gamma
-    # dww <- as.data.table( lda_models[[ i_mod ]]@gamma )
     dww <- lda_models[[ i_mod ]]@gamma
     current_k <- ncol( dww )
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
+    
+    if ( "document" %in% names( word_proportions ) ) {
+      cat( "Checking which documents have been estimated by LDA\n" )
+      docs <- unique( word_proportions$document )
+      doc_check <- docs %in% 
+        lda_models[[ i_mod ]]@documents
+      setkey( word_proportions, document )
+      word_proportions <- word_proportions[ !.( docs[ !doc_check ] ) ]
+      n_docs <- uniqueN( word_proportions$id_doc )
+    } else {
+      message( "document is not in word_proportions. ", 
+      "Assuming that there a complete overlap between documents in ",
+      "the corpus/dfm and those estimated by LDA()." )
+      n_docs <- uniqueN( word_proportions$id_doc )
+    }
+    setkey( word_proportions, id_doc )
     # getting the term word weights --> beta
-    # tww <- as.data.table( t( exp( lda_models[[ i_mod ]]@beta ) ) )
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     # adding row position to both objects
-    # dww[ , id_doc := .I ]
     dww <- cbind( dww, 1L:nrow(dww) )
-    # tww[ , id_word := .I ]
     tww <- cbind( tww, 1L:nrow(tww) )
     
     # looping over each document (k) in each model (j)
@@ -131,17 +141,11 @@ optimal_topic <- function( lda_models, word_proportions,
     cat( "--> Processing documents\n" )
     for ( j_doc in 1L:n_docs ) {
       # subsetting word proportions based on id_doc
-      # prop <- word_proportions[ id_doc == j_doc ]
       prop <- word_proportions[ .(j_doc) ]
       # subsetting dww according to id_doc
-      # dwwj_doc <- as.matrix( dww[ j_doc ] )
       dwwj_doc <- dww[ j_doc, ]
       
       # casting N x K matrix
-      # dww_j_doc <- matrix( data = dwwj_doc,
-      #                      ncol = ncol( dwwj_doc ),
-      #                      nrow = size_vocabulary,
-      #                      byrow = TRUE )
       dww_j_doc <- matrix( data = dwwj_doc,
                            ncol = length( dwwj_doc ),
                            nrow = size_vocabulary,
@@ -151,7 +155,6 @@ optimal_topic <- function( lda_models, word_proportions,
       # in matlab j loops over k_start -> k_end
       # here starts from 1 up to the latest model
       sub_dww_j_doc <- dww_j_doc[ , 1L:( ncol(dww_j_doc) - 1L ) ]
-      # sub_tww <- as.matrix( tww[ , 1L:( ncol(tww) - 1L ) ] )
       sub_tww <- tww[ , 1L:( ncol(tww) - 1L ) ]
       
       # dot product --> element-wise multiplication
@@ -159,53 +162,31 @@ optimal_topic <- function( lda_models, word_proportions,
       
       # this returns a vector...maybe we want a matrix
       X <- base::rowSums( tww_dww )
-      # BestPair <- data.table( prop[ , .( word_prop ) ],
-      #                         word_prop_hat = X )
-      BestPair <- cbind( prop[ , word_prop ],
-                         X )
-      # setorder( BestPair, -word_prop_hat )
+      BestPair <- cbind( prop[ , word_prop ], X )
       BestPair <- BestPair[ order(-BestPair[ , 2L ] ), ]
       # compute the cumlative probability over estimations
-      # BestPair[ , word_prop_hat_cum := cumsum( word_prop_hat ) ]
       BestPair <- cbind( BestPair, cumsum( BestPair[ , 2L ] ) )
       n_BP <- nrow( BestPair )
       p_BP <- ncol( BestPair )
       # stop when you reach q
-      # AggBestPair <- BestPair[ round( word_prop_hat_cum, 4L ) <= q ]
       AggBestPair <- BestPair[ which( round(BestPair[ , 3L ], 4L) <= q ), ]
       icut <- nrow( AggBestPair )
-      # lowest_estimates <- BestPair[ (icut + 1L):n_BP, lapply( .SD, sum ) ]
       lowest_estimates <- apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
-      # AggBestPair <- rbindlist( list( AggBestPair, lowest_estimates ) )
       AggBestPair <- rbind( AggBestPair, lowest_estimates )
-      # numerator <- ( AggBestPair[ , word_prop ] - AggBestPair[ , word_prop_hat ] )^2L
-      # denominator <- AggBestPair[ , word_prop_hat ]
       numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
       denominator <- AggBestPair[ , 2L ]
       chi_sq_fit <- icut * sum( numerator / denominator )
       
       # column chisquare_mod is just a placeholder here
       # this is to avoid the duplication of regstats in the outer loop
-      # regout <- data.table( topics = current_k,
-      #                       id_doc = j_doc,
-      #                       chisquare = chi_sq_fit,
-      #                       row_cut = icut )
       regout <- cbind( current_k, j_doc, chi_sq_fit, icut )
       regstats <- rbind( regstats, regout )
       
     }
     
-    # chi_out <- regstats[ topics == current_k ]
     chi_out <- regstats[ which( regstats[ , 1L ] == current_k ) , ]
-    # sum_i_mod <- chi_out[ , .( chi_sum = sum( chisquare ), cut = sum( row_cut ) ) ]
     sum_i_mod <- cbind( sum( chi_out[ , 3L ] ), sum( chi_out[ , 4L ] ) )
-    # temp <- data.table( topic = current_k,
-    #                     chisq_std = sum_i_mod[ 1L, chi_sum ] / sum_i_mod[ 1L, cut ],
-    #                     pval = NA_real_
-    # )
     temp <- cbind( current_k, sum_i_mod[ , 1L ] / sum_i_mod[ , 2L ] )
-    
-    # temp[ , pval := pchisq( chisq_std, df = 1L ) ]
     temp <- cbind( temp, pchisq( temp[ , 2L ], df = 1L ) )
     Chi_K <- rbind( Chi_K, temp )
     

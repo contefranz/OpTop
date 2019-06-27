@@ -2,9 +2,9 @@
 % Please edit documentation in R/word_proportions.R
 \name{word_proportions}
 \alias{word_proportions}
-\title{Compute word proportions from a corpus object}
+\title{Compute word proportions from a corpus or a dfm object}
 \usage{
-word_proportions(x, remove_document = TRUE, remove_nonASCII = TRUE,
+word_proportions(x, remove_document = FALSE, remove_nonASCII = TRUE,
   ...)
 }
 \arguments{
@@ -12,7 +12,7 @@ word_proportions(x, remove_document = TRUE, remove_nonASCII = TRUE,
 \code{\link[quanteda]{dfm}} object as defined in \code{quanteda}.}
 
 \item{remove_document}{Remove the \code{document} identification inherited
-from \code{x}. Default to \code{TRUE}.}
+from \code{x}. Default to \code{FALSE} (See 'Details').}
 
 \item{remove_nonASCII}{A logical to remove non-ASCII characters from the 
 \code{x}. Default to \code{TRUE}.}
@@ -22,8 +22,11 @@ to \code{\link[quanteda]{tokens}} and \code{\link[quanteda]{dfm}} to allow
 for precision in tokens removal.}
 }
 \value{
-A \code{data.table} with the following columns: 
-\item{\code{id_doc}}{A sequential integer giving the identification of documents.}
+A \code{data.table} with the following columns:
+\item{\code{document}}{A character giving the original document identification
+as inherited from the corpus or the dfm. This column is only retained when 
+\code{remove_document = FALSE}.} 
+\item{\code{id_doc}}{A sequential integer giving the document identification.}
 \item{\code{id_word}}{A sequential integer giving the identification of words.}
 \item{\code{word}}{A character identifying the word.}
 \item{\code{word_count}}{An integer giving the word count.}
@@ -34,7 +37,11 @@ Fast routine that computes word proportions from a
 \code{\link[quanteda]{corpus}} or \code{\link[quanteda]{dfm}} object.
 }
 \details{
-The function only applies preprocessing when \code{x} is a 
+We recommend to keep \code{remove_document = FALSE} since
+this triggers further controls before estimating the optimal model specification.
+We refer the user to the inline help of \code{\link[OpTop]{optimal_topic}}.
+
+\code{word_proportions} only applies preprocessing when \code{x} is a 
 \code{\link[quanteda]{corpus}}. You can pass the usual parameters to \code{...}.
 This includes the two parameters \code{remove_document} and \code{remove_nonASCII}.
 If \code{x} is \code{\link[quanteda]{dfm}}, then the function directly

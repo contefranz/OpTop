@@ -2,7 +2,7 @@ if ( getRversion() >= "2.15.1" ) {
   utils::globalVariables( c( "stopwords", "document", "id_doc",
                              "id_word", "word" ) )
 }
-#' Compute word proportions from a corpus object
+#' Compute word proportions from a corpus or a dfm object
 #'
 #' Fast routine that computes word proportions from a
 #' \code{\link[quanteda]{corpus}} or \code{\link[quanteda]{dfm}} object.
@@ -10,19 +10,26 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param x Either a \code{\link[quanteda]{corpus}} or 
 #' \code{\link[quanteda]{dfm}} object as defined in \code{quanteda}.
 #' @param remove_document Remove the \code{document} identification inherited
-#' from \code{x}. Default to \code{TRUE}.
+#' from \code{x}. Default to \code{FALSE} (See 'Details').
 #' @param remove_nonASCII A logical to remove non-ASCII characters from the 
 #' \code{x}. Default to \code{TRUE}.
 #' @param ... When \code{x} is a corpus, additional arguments passed 
 #' to \code{\link[quanteda]{tokens}} and \code{\link[quanteda]{dfm}} to allow
 #' for precision in tokens removal.
-#' @details The function only applies preprocessing when \code{x} is a 
+#' @details We recommend to keep \code{remove_document = FALSE} since
+#' this triggers further controls before estimating the optimal model specification.
+#' We refer the user to the inline help of \code{\link[OpTop]{optimal_topic}}.
+#' 
+#' \code{word_proportions} only applies preprocessing when \code{x} is a 
 #' \code{\link[quanteda]{corpus}}. You can pass the usual parameters to \code{...}.
 #' This includes the two parameters \code{remove_document} and \code{remove_nonASCII}.
 #' If \code{x} is \code{\link[quanteda]{dfm}}, then the function directly
 #' computes the word proportions as expected. 
-#' @return A \code{data.table} with the following columns: 
-#' \item{\code{id_doc}}{A sequential integer giving the identification of documents.}
+#' @return A \code{data.table} with the following columns:
+#' \item{\code{document}}{A character giving the original document identification
+#' as inherited from the corpus or the dfm. This column is only retained when 
+#' \code{remove_document = FALSE}.} 
+#' \item{\code{id_doc}}{A sequential integer giving the document identification.}
 #' \item{\code{id_word}}{A sequential integer giving the identification of words.}
 #' \item{\code{word}}{A character identifying the word.}
 #' \item{\code{word_count}}{An integer giving the word count.}
@@ -50,7 +57,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @importFrom quanteda convert
 #' @export
 
-word_proportions = function( x, remove_document = TRUE, 
+word_proportions = function( x, remove_document = FALSE, 
                              remove_nonASCII = TRUE, ... ) {
 
   if ( !is.corpus( x ) && !is.dfm( x ) ) {
@@ -111,6 +118,6 @@ word_proportions = function( x, remove_document = TRUE,
     setcolorder( out, c( "document", "id_doc", "id_word", "word",
                          "word_count", "word_prop" ) )
   }
-  setkey( out, id_doc )
+  setkey( out, NULL )
   return( out[] )
 }
