@@ -1,3 +1,24 @@
+# OpTop 0.9.4
+
+### Major Changes
+
+* `word_proportions()` is much general now and can carry out complex 
+preprocessing routines. 
+* `optimal_topic()` is much faster now due to matrix implementation. Now it checks
+for the presence of documents in both the `corpus`/`dfm` and the estimates by `LDA()`.
+
+### Minor Changes
+
+* The argument `remove_documents` in `word_proportions()` is now set to `FALSE`
+by default. This automatically triggers document check in `optimal_topic()`. 
+* Preprocessing in `word_proportions()` is achieved by the new general argument
+`...`.
+* `word_proportion()` can now work on a `corpus` and `dfm` objects as defined
+in __quanteda__.
+* Improved documentation 
+
+---
+
 # OpTop 0.9.3
 
 * Fixing tiny minor things

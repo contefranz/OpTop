@@ -1,5 +1,6 @@
 if ( getRversion() >= "2.15.1" ) {
-  utils::globalVariables( c( "id_word", "id_doc", "word_proportions",
+  utils::globalVariables( c( "id_word", "id_doc", "word_proportions", 
+                             "word_prop",
                              "word_sum", "check", "topics",
                              ".", "chisquare", "chisquare_mod",
                              "row_cut", "chi_sum", "word_prop_hat",
@@ -123,6 +124,9 @@ optimal_topic <- function( lda_models, word_proportions,
       setkey( word_proportions, document )
       word_proportions <- word_proportions[ !.( docs[ !doc_check ] ) ]
       n_docs <- uniqueN( word_proportions$id_doc )
+      if ( length( which( doc_check == FALSE ) ) > 0 ) {
+        word_proportions[ , id_doc := .GRP, by = document ]
+      } 
     } else {
       message( "document is not in word_proportions. ", 
       "Assuming that there a complete overlap between documents in ",
@@ -224,7 +228,7 @@ optimal_topic <- function( lda_models, word_proportions,
       geom_hline( yintercept = y_min, color = "black", linetype = 2L ) +
       geom_vline( xintercept = x_min, color = "black", linetype = 2L ) +
       geom_point( aes( x = x_min, y_min ), color = "red", shape = 4L, size = 4L ) +
-      scale_y_continuous( breaks = seq( 0, max( Chi_K$chisq_std ), by = 0.5 ) ) +
+      # scale_y_continuous( breaks = seq( 0, max( Chi_K$chisq_std ), by = 0.5 ) ) +
       xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
       ggtitle( "Optimal Topic Plot" ) +
       theme_OpTop

@@ -1,5 +1,5 @@
 [![lifecycle](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.3-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.3)
+[![release](https://img.shields.io/badge/release-v0.9.4-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.4)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 [![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 [![DOI](https://zenodo.org/badge/138142794.svg)](https://zenodo.org/badge/latestdoi/138142794)
@@ -47,8 +47,8 @@ The package is in early alpha stage and contains seven functions:
 * `get_topic_models()`: handy function to immediately get the list of topic models
 the user wants to process from a specified environment;
 
-* `word_proportions()`: computes word proportions from a `corpus` object created 
-by __quanteda__ [Benoit et al. (2018)];
+* `word_proportions()`: computes word proportions from either `corpus` or a `dfm` 
+object created by __quanteda__ [Benoit et al. (2018)];
 
 * `optimal_topic()`: implements _Test 1_ from the methodological paper 
 [Lewis and Grossetti (2019)].
