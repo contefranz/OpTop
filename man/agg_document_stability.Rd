@@ -4,9 +4,16 @@
 \alias{agg_document_stability}
 \title{Compute aggregate document stability and F-test}
 \usage{
-agg_document_stability(lda_models, word_proportions, optimal_model,
-  q = 0.8, alpha = 0.05, smoothed = TRUE, do_plot = TRUE,
-  convert = NULL)
+agg_document_stability(
+  lda_models,
+  word_proportions,
+  optimal_model,
+  q = 0.8,
+  alpha = 0.05,
+  smoothed = TRUE,
+  do_plot = TRUE,
+  convert = NULL
+)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by

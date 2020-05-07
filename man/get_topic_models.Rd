@@ -11,7 +11,7 @@ get_topic_models(object_type, pattern, envir = globalenv())
 Default to \code{LDA_VEM} as given by the virtual class
 \code{\link[topicmodels]{TopicModel-class}}.}
 
-\item{pattern}{an optional \link{regular expression}.  Only names
+\item{pattern}{an optional \link[base]{regular expression}.  Only names
     matching \code{pattern} are returned.  \code{\link{glob2rx}} can be
     used to convert wildcard patterns to regular expressions.}
 

@@ -3,7 +3,6 @@
 \docType{package}
 \name{OpTop}
 \alias{OpTop}
-\alias{OpTop-package}
 \title{OpTop: detect the optimal number of topics from a pool of LDA models}
 \description{
 OpTop is an `R` package that implements the testing approach described in 

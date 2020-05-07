@@ -4,8 +4,14 @@
 \alias{optimal_topic}
 \title{Find the optimal number of topics from a pool of LDA models}
 \usage{
-optimal_topic(lda_models, word_proportions, q = 0.8, alpha = 0.05,
-  do_plot = TRUE, convert = NULL)
+optimal_topic(
+  lda_models,
+  word_proportions,
+  q = 0.8,
+  alpha = 0.05,
+  do_plot = TRUE,
+  convert = NULL
+)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by

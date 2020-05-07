@@ -4,8 +4,14 @@
 \alias{topic_stability}
 \title{Compute topic stability for over-optimal topic specifications}
 \usage{
-topic_stability(lda_models, optimal_model, q = 0.8, alpha = 0.05,
-  do_plot = TRUE, convert = NULL)
+topic_stability(
+  lda_models,
+  optimal_model,
+  q = 0.8,
+  alpha = 0.05,
+  do_plot = TRUE,
+  convert = NULL
+)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by

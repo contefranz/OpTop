@@ -4,8 +4,7 @@
 \alias{word_proportions}
 \title{Compute word proportions from a corpus or a dfm object}
 \usage{
-word_proportions(x, remove_document = FALSE, remove_nonASCII = TRUE,
-  ...)
+word_proportions(x, remove_document = FALSE, remove_nonASCII = TRUE, ...)
 }
 \arguments{
 \item{x}{Either a \code{\link[quanteda]{corpus}} or 

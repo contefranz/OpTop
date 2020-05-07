@@ -50,18 +50,19 @@ the user wants to process from a specified environment;
 * `word_proportions()`: computes word proportions from either `corpus` or a `dfm` 
 object created by __quanteda__ [Benoit et al. (2018)];
 
-* `optimal_topic()`: implements _Test 1_ from the methodological paper 
-[Lewis and Grossetti (2019)].
+* `optimal_topic()`: implements _Test 1_ of optimality from the methodological 
+paper [Lewis and Grossetti (2019)].
 
-* `topic_stability()`: implements _Test 3_ from the methodological paper 
-[Lewis and Grossetti (2019)].
+* `topic_stability()`: implements _Test 2_ of topic stability from the 
+methodological paper [Lewis and Grossetti (2019)].
 
 * `topic_match()`: detect and extract informative and uninformative components.
 
-* `agg_topic_stability()`: implements _Test 4_ from the methodological paper 
-[Lewis and Grossetti (2019)].
+* `agg_topic_stability()`: implements _Test 3_ of aggregate topic stability 
+from the methodological paper [Lewis and Grossetti (2019)].
 
-* `agg_document_stability()`: implements _Test 5_ from the methodological paper 
+* `agg_document_stability()`: implements _Test 4_ of overall topic stability and
+_Test 5_ of relative topic importance from the methodological paper 
 [Lewis and Grossetti (2019)].
 
 

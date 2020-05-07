@@ -4,9 +4,17 @@
 \alias{agg_topic_stability}
 \title{Compute aggregate topic stability}
 \usage{
-agg_topic_stability(lda_models, optimal_model, best_match, least_match,
-  q = 0.8, alpha = 0.05, smoothed = TRUE, do_plot = TRUE,
-  convert = NULL)
+agg_topic_stability(
+  lda_models,
+  optimal_model,
+  best_match,
+  least_match,
+  q = 0.8,
+  alpha = 0.05,
+  smoothed = TRUE,
+  do_plot = TRUE,
+  convert = NULL
+)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as computed by
