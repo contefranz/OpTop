@@ -13,11 +13,12 @@ Encoding: UTF-8
 LazyData: true
 URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.1
 Depends: R (>= 3.1)
 Imports: data.table (>= 1.11.0),
-    quanteda (>= 1.3.0),
+    quanteda (>= 2.0.0),
     tibble (>= 2.1.0),
+    LDATS (>= 0.2.7),
     ggplot2 (>= 3.1.0),
     grid (>= 3.4.0),
     gridExtra (>= 2.3.0)

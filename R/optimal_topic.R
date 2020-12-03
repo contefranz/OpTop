@@ -1,6 +1,6 @@
 if ( getRversion() >= "2.15.1" ) {
   utils::globalVariables( c( "id_word", "id_doc", "word_proportions", 
-                             "word_prop",
+                             "word_prop", "document",
                              "word_sum", "check", "topics",
                              ".", "chisquare", "chisquare_mod",
                              "row_cut", "chi_sum", "word_prop_hat",

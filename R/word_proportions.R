@@ -1,5 +1,5 @@
 if ( getRversion() >= "2.15.1" ) {
-  utils::globalVariables( c( "stopwords", "document", "id_doc",
+  utils::globalVariables( c( "stopwords", "doc_id", "id_doc",
                              "id_word", "word" ) )
 }
 #' Compute word proportions from a corpus or a dfm object
@@ -75,47 +75,36 @@ word_proportions = function( x, remove_document = FALSE,
     if ( remove_nonASCII ) {
       mydfm <- dfm( mydfm, remove = "[^ -~]", valuetype = "regex" )
     }
-    # word_prop <- dfm_weight( mydfm, "count" )
     word_count <- dfm_weight( mydfm, "count" )
     word_prop <- dfm_weight( mydfm, "prop" )
   } else if ( is.dfm( x ) ) {
-    # word_prop <- dfm_weight( x, "count" )
     word_count <- dfm_weight( x, "count" )
     word_prop <- dfm_weight( x, "prop" )
   }
   
-  # word_prop <- convert( word_prop, "data.frame" )
-  # setDT( word_prop )
   word_count <- convert( word_count, "data.frame" )
   word_prop <- convert( word_prop, "data.frame" )
   setDT( word_count )
   setDT( word_prop )
   
-  # word_prop = word_prop
-  temp_count <- melt( word_count, id.vars = "document" )
-  setorder( temp_count, document )
-  setnames( temp_count, "variable", "word" )
-  setnames( temp_count, "value", "word_count" )
-  temp_count[ , id_doc := .GRP, by = document ]
-  temp_count[ , id_word := 1L:.N, by = document ]
-  # word_prop <- dfm_weight( mydfm, "prop" )
-  # word_prop <- convert( word_prop, "data.frame" )
-  # setDT( word_prop )
-  # word_prop <- word_prop
-  temp_prop <- melt( word_prop, id.vars = "document" )
-  setorder( temp_prop, document )
-  setnames( temp_prop, "variable", "word" )
-  setnames( temp_prop, "value", "word_prop" )
-  setkey( temp_count, document, word )
-  setkey( temp_prop, document, word )
+  temp_count <- melt( word_count, id.vars = "doc_id", 
+                      variable.name = "word", value.name = "word_count" )
+  setorder( temp_count, doc_id )
+  temp_count[ , id_doc := .GRP, by = doc_id ]
+  temp_count[ , id_word := 1L:.N, by = doc_id ]
+  temp_prop <- melt( word_prop, id.vars = "doc_id",
+                     variable.name = "word", value.name = "word_prop")
+  setorder( temp_prop, doc_id )
+  setkey( temp_count, doc_id, word )
+  setkey( temp_prop, doc_id, word )
   out <- temp_count[ temp_prop, nomatch = 0L ]
   
   if ( remove_document ) {
-    out[ , document := NULL ]
+    out[ , doc_id := NULL ]
     setcolorder( out, c( "id_doc", "id_word", "word",
                          "word_count", "word_prop" ) )
   } else {
-    setcolorder( out, c( "document", "id_doc", "id_word", "word",
+    setcolorder( out, c( "id_doc", "doc_id", "id_word", "word",
                          "word_count", "word_prop" ) )
   }
   setkey( out, NULL )
