@@ -116,19 +116,19 @@ optimal_topic <- function( lda_models, word_proportions,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    if ( "document" %in% names( word_proportions ) ) {
+    if ( "doc_id" %in% names( word_proportions ) ) {
       cat( "Checking which documents have been estimated by LDA\n" )
-      docs <- unique( word_proportions$document )
+      docs <- unique( word_proportions$doc_id )
       doc_check <- docs %in% 
         lda_models[[ i_mod ]]@documents
-      setkey( word_proportions, document )
+      setkey( word_proportions, doc_id )
       word_proportions <- word_proportions[ !.( docs[ !doc_check ] ) ]
       n_docs <- uniqueN( word_proportions$id_doc )
       if ( length( which( doc_check == FALSE ) ) > 0 ) {
-        word_proportions[ , id_doc := .GRP, by = document ]
+        word_proportions[ , id_doc := .GRP, by = doc_id ]
       } 
     } else {
-      message( "document is not in word_proportions. ", 
+      message( "doc_id is not in word_proportions. ", 
       "Assuming that there a complete overlap between documents in ",
       "the corpus/dfm and those estimated by LDA()." )
       n_docs <- uniqueN( word_proportions$id_doc )
