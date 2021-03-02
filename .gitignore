@@ -3,6 +3,7 @@
 *.Rproj.user
 .Rhistory
 .RData
+.rda
 .Ruserdata
 test*.R
 .Rproj.user
