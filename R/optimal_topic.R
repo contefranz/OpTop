@@ -15,8 +15,8 @@ if ( getRversion() >= "2.15.1" ) {
 #' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 #' according to the number of topics.
 #' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-#' It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
-#' "doc_id" with original document names. See 'Details'.
+#' It is recommended that \code{weighted_dfm} has element names consistent with the ones detected
+#' by \code{\link[topicmodels]{LDA}}. See 'Details'.
 #' @param q Set a cutoff for important words as the quantile of the expected
 #' cumulative probability of word weights. Default to 0.80, meaning that the 
 #' function reaches 80\% of the distribution mass and leaves out the remaining
@@ -35,14 +35,19 @@ if ( getRversion() >= "2.15.1" ) {
 #' 
 #' To ensure a complete matching between the set of LDA models specified 
 #' through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
-#' has a specific \code{docvar} indicating the original names of the documents as defined
-#' in the \code{corpus}. If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
-#' to estimate the requested \code{k} topics, then \code{optimal_topic} takes care of that 
-#' by ensuring that there is a perfect overlap between the documents found in \code{weighted_dfm}
-#' and the ones contained in \code{lda_models}. If \code{weighted_dfm} does not contain such 
-#' \code{docvar}, then \code{optimal_topic} throws a warning and assumes a complete match between
-#' the documents and those estimated by \code{\link[topicmodels]{LDA}}.
-#' 
+#' has specific element names indicating the original names of the documents as defined
+#' in the \code{\link[quanteda]{corpus}}. These element names can be extracted with 
+#' \code{\link[quanteda]{docid}}\code{(weighted_dfm)}. 
+#' If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
+#' to estimate the requested \code{k} topics over certain documents, then \code{optimal_topic} 
+#' takes care of that by ensuring that there is a perfect match between the documents found in 
+#' \code{weighted_dfm} and the ones contained in \code{lda_models}. 
+#' If \code{weighted_dfm} does not contain any meaningful name to be matched with \code{lda_models}, 
+#' for instance if the whole vector is full of \code{FALSE}, then \code{optimal_topic} stops 
+#' with an error because most likely there is something wrong. If \code{optimal_topic} finds
+#' few documents that are not present in \code{lda_models}, then it removes them from the input
+#' \code{weighted_dfm} in order to achieve a perfect match. 
+#'  
 #' The parameter \code{alpha} controls the confidence of the chi-square test. The
 #' optimal model is selected the first time the chi-square statistic reaches
 #' a p-value equal to \code{alpha}. In the event that the chi-square statistic
@@ -59,11 +64,6 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
-#' weighted_dfm <- weighted_dfm( corpus = data_corpus_inaugural,
-#'                                       remove_document = TRUE,
-#'                                       language = "en",
-#'                                       source = "snowball" )
-#'
 #' test1 <- optimal_topic( lda_models = lda_list,
 #'                         weighted_dfm = weighted_dfm,
 #'                         q = 0.80,
@@ -128,24 +128,19 @@ optimal_topic <- function( lda_models, weighted_dfm,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    # if ( "doc_id" %in% names( weighted_dfm ) ) {
-    #   cat( "Checking which documents have been estimated by LDA\n" )
-    #   docs <- unique( weighted_dfm$doc_id )
-    #   doc_check <- docs %in%
-    #     lda_models[[ i_mod ]]@documents
-    #   setkey( weighted_dfm, doc_id )
-    #   weighted_dfm <- weighted_dfm[ !.( docs[ !doc_check ] ) ]
-    #   n_docs <- uniqueN( weighted_dfm$id_doc )
-    #   if ( length( which( doc_check == FALSE ) ) > 0 ) {
-    #     weighted_dfm[ , id_doc := .GRP, by = doc_id ]
-    #   }
-    # } else {
-    #   warning( "doc_id is not in weighted_dfm. ",
-    #   "Assuming that there is a complete overlap between documents in ",
-    #   "the corpus/dfm and those estimated by LDA()." )
-    #   n_docs <- uniqueN( weighted_dfm$id_doc )
-    # }
-    
+    docs <- as.character( docid( weighted_dfm ) )
+    doc_check <- docs %in% lda_models[[ i_mod ]]@documents
+    if ( !all(doc_check) ) {
+      stop("All documents are missing in lda_models. Something is wrong...")
+    } else if ( !all(doc_check) ) {
+      cat("Found perfect match between LDA-documents and weighted_dfm\n" )
+    } else {
+      cat("Removing unmatched documents\n" )
+      id_toremove <- which( doc_check == FALSE )
+      toremove <- docs[ id_toremove ]
+      weighted_dfm <- weighted_dfm[ -id_toremove, ]
+    }
+
     # getting the term word weights --> beta
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     # adding row position to both objects

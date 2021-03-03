@@ -64,7 +64,7 @@ returns the results.
 \examples{
 \dontrun{
 test2 <- topic_stability( lda_models = lda_list,
-                          optimal_model = out,
+                          optimal_model = test1,
                           q = 0.00075,
                           alpha = 0.05 )
 }

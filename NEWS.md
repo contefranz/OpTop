@@ -11,6 +11,10 @@ a LDA specification. This is useful for simulating corpora for testing.
 
 ### Minor Changes
 
+* Document matching between input LDAs and `weighted_dfm` has been improved. Now the check does not
+rely on a specific `docvar` anymore but rather on the internal document naming convention as
+defined in the `corpus`.
+
 * Small tweaks in the computation speed for certain operations.
 
 * Improved documentation.
@@ -20,6 +24,7 @@ a LDA specification. This is useful for simulating corpora for testing.
 * If the optimal model is the last in the list of LDA objects passed to `optimal_topic()`, now all the 
 other functions devoted to testing return `NULL` with a message. This is because there is nothing
 to test in terms of topic stability above the optimal model.
+
 
 ---
 

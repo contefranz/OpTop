@@ -19,8 +19,8 @@ optimal_topic(
 according to the number of topics.}
 
 \item{weighted_dfm}{A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
-"doc_id" with original document names. See 'Details'.}
+It is recommended that \code{weighted_dfm} has element names consistent with the ones detected
+by \code{\link[topicmodels]{LDA}}. See 'Details'.}
 
 \item{q}{Set a cutoff for important words as the quantile of the expected
 cumulative probability of word weights. Default to 0.80, meaning that the 
@@ -57,14 +57,19 @@ observed and estimated word vectors are statistically indistinct.
 
 To ensure a complete matching between the set of LDA models specified 
 through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
-has a specific \code{docvar} indicating the original names of the documents as defined
-in the \code{corpus}. If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
-to estimate the requested \code{k} topics, then \code{optimal_topic} takes care of that 
-by ensuring that there is a perfect overlap between the documents found in \code{weighted_dfm}
-and the ones contained in \code{lda_models}. If \code{weighted_dfm} does not contain such 
-\code{docvar}, then \code{optimal_topic} throws a warning and assumes a complete match between
-the documents and those estimated by \code{\link[topicmodels]{LDA}}.
-
+has specific element names indicating the original names of the documents as defined
+in the \code{\link[quanteda]{corpus}}. These element names can be extracted with 
+\code{\link[quanteda]{docid}}\code{(weighted_dfm)}. 
+If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
+to estimate the requested \code{k} topics over certain documents, then \code{optimal_topic} 
+takes care of that by ensuring that there is a perfect match between the documents found in 
+\code{weighted_dfm} and the ones contained in \code{lda_models}. 
+If \code{weighted_dfm} does not contain any meaningful name to be matched with \code{lda_models}, 
+for instance if the whole vector is full of \code{FALSE}, then \code{optimal_topic} stops 
+with an error because most likely there is something wrong. If \code{optimal_topic} finds
+few documents that are not present in \code{lda_models}, then it removes them from the input
+\code{weighted_dfm} in order to achieve a perfect match. 
+ 
 The parameter \code{alpha} controls the confidence of the chi-square test. The
 optimal model is selected the first time the chi-square statistic reaches
 a p-value equal to \code{alpha}. In the event that the chi-square statistic
@@ -76,11 +81,6 @@ by setting \code{alpha} equal to zero.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-weighted_dfm <- weighted_dfm( corpus = data_corpus_inaugural,
-                                      remove_document = TRUE,
-                                      language = "en",
-                                      source = "snowball" )
-
 test1 <- optimal_topic( lda_models = lda_list,
                         weighted_dfm = weighted_dfm,
                         q = 0.80,
