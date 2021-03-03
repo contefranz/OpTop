@@ -6,33 +6,35 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Compute aggregate document stability and F-test
 #'
+#' @description 
 #' Detects informative and uninformative components to compute aggregate document
 #' stability. Performs a chi-square test to evaluate document stability, 
 #' Also, computes a F-test to further evaluate deviation from optimal model.
+#' 
 #' @inheritParams agg_topic_stability
-#' @param word_proportions A \code{\link[data.table]{data.table}} giving the 
-#' word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.
+#' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
+#' It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
+#' "doc_id" with original document names. See ?\code{\link[OpTop]{optimal_topic}} for more details.
 #' @return A \code{data.table} containing the following columns:
 #'
-#' \item{\code{topic}}{An integer giving the number of topics.}
-#' \item{\code{id_doc}}{An integer document id as given in the original corpus.}
-#' \item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
-#' for the informative component.}
-#' \item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
-#' for the uninformative component.}
-#' \item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
-#' over the informative component.}
-#' \item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
-#' over the uninformative component.}
-#' \item{\code{Fstat}}{A numeric giving the standardized F statistic
-#' of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
-#' \item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
+#' * \code{topic} An integer giving the number of topics.
+#' * \code{id_doc} An integer document id as given in the original corpus.
+#' * \code{chisq_inform_std} A numeric giving the standardized chi-square statistic
+#' for the informative component.
+#' * \code{chisq_uninform_std} A numeric giving the standardized chi-square statistic
+#' for the uninformative component.
+#' * \code{pval_inform} A numeric giving the p-value of the chi-square test
+#' over the informative component.
+#' * \code{pval_uninform} A numeric giving the p-value of the chi-square test
+#' over the uninformative component.
+#' * \code{Fstat} A numeric giving the standardized F statistic
+#' of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.
+#' * \code{pval_Fstat} A numeric giving the p-value of the F test.
 #' @examples
 #'\dontrun{
-#' test4 <- agg_topic_stability( lda_models = lda_list,
-#'                               optimal_model = test1,
-#'                               q = 0.80, alpha = 0.05,
-#'                               smoothed = TRUE, do_plot = TRUE )
+#' test4 <- agg_document_stability( lda_models = lda_list,
+#'                                  weighted_dfm = weighted_dfm,
+#'                                  smoothed = TRUE, do_plot = TRUE )
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
@@ -41,11 +43,12 @@ if ( getRversion() >= "2.15.1" ) {
 #' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table
 #' @import grid
+#' @importFrom quanteda ndoc nfeat is.dfm
 #' @importFrom gridExtra marrangeGrob
 #' @importFrom stats pf qf qchisq pchisq loess fitted.values
 #' @export
 
-agg_document_stability <- function( lda_models, word_proportions, 
+agg_document_stability <- function( lda_models, weighted_dfm, 
                                     optimal_model, 
                                     q = 0.80, alpha = 0.05, 
                                     smoothed = TRUE, do_plot = TRUE,
@@ -70,8 +73,8 @@ agg_document_stability <- function( lda_models, word_proportions,
                  "2. a data.table/data.frame as returned by .optimal_model()",
                  "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
   }
-  if( !is.data.table( word_proportions ) ) {
-    stop( "word_proportions must be a data.table" )
+  if( !is.dfm( weighted_dfm ) ) {
+    stop( "weighted_dfm must be a dfm" )
   }
   if ( !is.numeric( q ) ) {
     stop( "q must be a numeric" )
@@ -90,7 +93,7 @@ agg_document_stability <- function( lda_models, word_proportions,
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )
@@ -101,9 +104,9 @@ agg_document_stability <- function( lda_models, word_proportions,
   cat( "best model has", .optimal_model, "topics\n" )
   
   tic <- proc.time()
-  # compute the size of vocabulary detected in each document as:
-  size_vocabulary <- nrow( word_proportions[ , .N, by = id_word ] )
-  n_docs <- nrow( word_proportions[ , .N, by = id_doc ] )
+  # compute the number of docs and features in the vocabulary
+  n_docs <- ndoc( weighted_dfm )
+  n_features <- nfeat( weighted_dfm )
   
   k_end <- max( sapply( lda_models, function( x ) x@k ) )
   best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
@@ -119,18 +122,19 @@ agg_document_stability <- function( lda_models, word_proportions,
     dtw_best <- lda_models[[ best_pos ]]@gamma
     tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
   }
-  K_fitval <- matrix( data = 0, nrow = size_vocabulary, ncol = n_docs )
+  K_fitval <- matrix( data = 0, nrow = n_features, ncol = n_docs )
   cat( "---\n" )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( j_doc in 1L:n_docs ) {
-    prop <- word_proportions[ id_doc == j_doc ]
+    
+    prop <- matrix(weighted_dfm[ j_doc, ])
     # subsetting dtw according to id_doc
     dtwj_doc <- dtw_best[ j_doc, ]
     # casting N x K matrix
     dtw_j_doc <- matrix( data = dtwj_doc,
                          ncol = .optimal_model,
-                         nrow = size_vocabulary,
+                         nrow = n_features,
                          byrow = TRUE )
     fitval <- (dtw_j_doc * tww_best) %*% matrix( data = 1L, 
                                                  nrow = .optimal_model,
@@ -162,7 +166,7 @@ agg_document_stability <- function( lda_models, word_proportions,
       # casting N x K matrix
       dtw_j_doc <- matrix( data = dtwj_doc,
                            ncol = p_tww,
-                           nrow = size_vocabulary,
+                           nrow = n_features,
                            byrow = TRUE )
       inform <- dtw_j_doc[ , 1L:.optimal_model ] * tww[ , 1L:.optimal_model ]
       inform_norm <- ( inform %*% matrix( data = 1L, 

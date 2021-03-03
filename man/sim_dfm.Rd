@@ -4,14 +4,14 @@
 \alias{sim_dfm}
 \title{Simulate a document-feature-matrix from a LDA specification}
 \usage{
-sim_dfm(DTW, TWW, doc_lenght, alpha = NULL, seed = NULL)
+sim_dfm(DTW, TWW, doc_length, alpha = NULL, seed = NULL)
 }
 \arguments{
 \item{DTW}{A matrix or data.frame with Document-Topic-Weights.}
 
 \item{TWW}{A matrix or data.frame with Topic-Word-Weights.}
 
-\item{doc_lenght}{A vector containing the desired document length as total number of word counts.}
+\item{doc_length}{A vector containing the desired document length as total number of word counts.}
 
 \item{alpha}{Parameter of the Dirichlet distribution for topics over documents.}
 

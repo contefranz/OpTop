@@ -1,3 +1,20 @@
+# OpTop 0.9.5
+
+### Major Changes
+
+* `word_proportions()`: after careful testing, we decided to deprecate this function. 
+The main reason is the lack of support for high-dimensional `dfm` inputs. Now all the
+functions that require word proportions take advantage of the class `dfm` from **quanteda**.
+
+* `sim_dfm()`: we introduced a new function to easily simulate a document-feature-matrix from
+a LDA specification. This is useful for simulating corpora for testing.
+
+### Minor Changes
+
+* Small tweaks in the computation speed for certain operations
+
+---
+
 # OpTop 0.9.4
 
 ### Major Changes

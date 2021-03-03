@@ -5,10 +5,10 @@
 #' to process.
 #' @inheritParams base::ls
 #' @param object_type A character specifying the class of objects to extract.
-#' Default to \code{LDA_VEM} as given by the virtual class
-#' \code{\link[topicmodels]{TopicModel-class}}.
+#' Default to `LDA_VEM` as given by the virtual class
+#' [topicmodels::TopicModel-class()].
 #' @param envir The environment where to search for topic models. Default to
-#' \code{\link[base]{globalenv}}.
+#' [base::globalenv()].
 #' @return A named list containing the objects of specified class.
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @export

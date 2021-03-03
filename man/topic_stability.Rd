@@ -44,7 +44,7 @@ the significance level according to \code{alpha}.}
 Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 }
 \value{
-A \code{data.table} containing the following columns:
+A `data.table` containing the following columns:
 
 \item{\code{topic}}{An integer giving the number of topics.}
 \item{\code{df}}{An integer giving the degrees of freedom.}

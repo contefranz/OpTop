@@ -1,7 +1,7 @@
 Package: OpTop
 Type: Package
 Title: Optimal topic specification for latent dirichlet allocation models
-Version: 0.9.4
+Version: 0.9.5
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c( ORCID = "0000-0002-5130-7745" ) ), 
@@ -15,10 +15,12 @@ URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
 RoxygenNote: 7.1.1
 Depends: R (>= 3.1)
-Imports: data.table (>= 1.11.0),
+Imports: 
+    data.table (>= 1.11.0),
     quanteda (>= 2.0.0),
     tibble (>= 2.1.0),
     LDATS (>= 0.2.7),
     ggplot2 (>= 3.1.0),
     grid (>= 3.4.0),
-    gridExtra (>= 2.3.0)
+    gridExtra (>= 2.3.0),
+    lifecycle

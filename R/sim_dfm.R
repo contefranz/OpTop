@@ -1,11 +1,3 @@
-# if ( getRversion() >= "2.15.1" ) {
-#   utils::globalVariables( c( "id_word", "id_doc", "word_proportions", 
-#                              "word_prop",
-#                              "word_sum", "check", "topics",
-#                              ".", "chisquare", "chisquare_mod",
-#                              "row_cut", "chi_sum", "word_prop_hat",
-#                              "word_prop_hat_cum", "pval" ) )
-# }
 #' Simulate a document-feature-matrix from a LDA specification
 #'
 #' Simulate a document-feature-matrix from estimated DTW and TWW. The number of topics as well as 
