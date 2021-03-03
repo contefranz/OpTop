@@ -3,6 +3,11 @@ if ( getRversion() >= "2.15.1" ) {
                              "id_word", "word" ) )
 }
 #' Compute word proportions from a corpus or a dfm object
+#' 
+#' @description 
+#' 
+#' \bold{* * * This function is deprecated because we now exploit \code{\link[quanteda]{dfm}} 
+#' objects directly. * * *}
 #'
 #' Fast routine that computes word proportions from a
 #' \code{\link[quanteda]{corpus}} or \code{\link[quanteda]{dfm}} object.
@@ -10,7 +15,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param x Either a \code{\link[quanteda]{corpus}} or 
 #' \code{\link[quanteda]{dfm}} object as defined in \code{quanteda}.
 #' @param remove_document Remove the \code{document} identification inherited
-#' from \code{x}. Default to \code{FALSE} (See 'Details').
+#' from \code{x}. Default to \code{FALSE}. See 'Details'.
 #' @param remove_nonASCII A logical to remove non-ASCII characters from the 
 #' \code{x}. Default to \code{TRUE}.
 #' @param ... When \code{x} is a corpus, additional arguments passed 
@@ -44,10 +49,10 @@ if ( getRversion() >= "2.15.1" ) {
 #' }
 #' @seealso \code{\link[quanteda]{corpus}} \code{\link[data.table]{data.table}}
 #' \code{\link[stopwords]{stopwords}}
-#' @references Stopwords ISO: \url{https://github.com/stopwords-iso/stopwords-iso}.\cr
+#' @references Stopwords ISO: <https://github.com/stopwords-iso/stopwords-iso>.\cr
 #'
 #' Full list of stopwords:
-#' \url{https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md}.
+#' <https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md>.
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @import data.table
 #' @importFrom quanteda is.corpus 
@@ -56,9 +61,14 @@ if ( getRversion() >= "2.15.1" ) {
 #' @importFrom quanteda dfm_weight
 #' @importFrom quanteda convert
 #' @export
+#' @keywords internal
 
 word_proportions = function( x, remove_document = FALSE, 
                              remove_nonASCII = TRUE, ... ) {
+  lifecycle::deprecate_warn(when = "0.9.4",
+                            what = "word_proportions()",
+                            details = "Word proportions are now extracted directly from quanteda::dfm_weight()"
+                            )
 
   if ( !is.corpus( x ) && !is.dfm( x ) ) {
     stop( "x must be a corpus or a dfm object as defined by quanteda")

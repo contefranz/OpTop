@@ -55,7 +55,7 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )

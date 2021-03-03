@@ -11,7 +11,7 @@ word_proportions(x, remove_document = FALSE, remove_nonASCII = TRUE, ...)
 \code{\link[quanteda]{dfm}} object as defined in \code{quanteda}.}
 
 \item{remove_document}{Remove the \code{document} identification inherited
-from \code{x}. Default to \code{FALSE} (See 'Details').}
+from \code{x}. Default to \code{FALSE}. See 'Details'.}
 
 \item{remove_nonASCII}{A logical to remove non-ASCII characters from the 
 \code{x}. Default to \code{TRUE}.}
@@ -32,6 +32,9 @@ as inherited from the corpus or the dfm. This column is only retained when
 \item{\code{word_prop}}{A numeric giving the word proportion.}
 }
 \description{
+\bold{* * * This function is deprecated because we now exploit \code{\link[quanteda]{dfm}} 
+objects directly. * * *}
+
 Fast routine that computes word proportions from a
 \code{\link[quanteda]{corpus}} or \code{\link[quanteda]{dfm}} object.
 }
@@ -56,10 +59,10 @@ word_proportions <- word_proportions( x = data_dfm_lbgexample )
 }
 }
 \references{
-Stopwords ISO: \url{https://github.com/stopwords-iso/stopwords-iso}.\cr
+Stopwords ISO: <https://github.com/stopwords-iso/stopwords-iso>.\cr
 
 Full list of stopwords:
-\url{https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md}.
+<https://github.com/stopwords-iso/stopwords-iso/blob/master/CREDITS.md>.
 }
 \seealso{
 \code{\link[quanteda]{corpus}} \code{\link[data.table]{data.table}}
@@ -68,3 +71,4 @@ Full list of stopwords:
 \author{
 Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
 }
+\keyword{internal}

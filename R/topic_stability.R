@@ -25,7 +25,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' stability of over-optimal topic specifications by summing each 
 #' point-wise contribution. See 'Value' to understand how \code{topic_stability} 
 #' returns the results.
-#' @return A \code{data.table} containing the following columns:
+#' @return A `data.table` containing the following columns:
 #'
 #' \item{\code{topic}}{An integer giving the number of topics.}
 #' \item{\code{df}}{An integer giving the degrees of freedom.}
@@ -85,7 +85,7 @@ topic_stability <- function( lda_models, optimal_model,
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )
@@ -223,7 +223,7 @@ topic_stability <- function( lda_models, optimal_model,
   Chi_K <- cbind( model_list[ model_list > .optimal_model ],
                   Chi_K[ , 3L ], 
                   pchisq( Chi_K[ , 3L ], df = 1L ) )
-  colnames( Chi_K ) <- c( "topic", "chisq_std", "pval" )
+  colnames( Chi_K ) <- c( "topic", "chisq", "pval" )
   Chi_K <- as.data.table( Chi_K )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
@@ -256,7 +256,7 @@ topic_stability <- function( lda_models, optimal_model,
     cat( "Plotting...\n" )
     p1 <- ggplot( Chi_K ) +
       geom_hline( yintercept = qchisq( alpha, 1L ), linetype = 4 ) +
-      geom_line( aes( x = topic, y = chisq_std ), size = 0.8, color = "royalblue" ) +
+      geom_line( aes( x = topic, y = chisq ), size = 0.8, color = "royalblue" ) +
       xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
       ggtitle( "Topic Stability Plot" ) +
       theme_OpTop

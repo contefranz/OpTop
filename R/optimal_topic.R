@@ -1,5 +1,5 @@
 if ( getRversion() >= "2.15.1" ) {
-  utils::globalVariables( c( "id_word", "id_doc", "word_proportions", 
+  utils::globalVariables( c( "id_word", "id_doc", "weighted_dfm", 
                              "word_prop", "document",
                              "word_sum", "check", "topics",
                              ".", "chisquare", "chisquare_mod",
@@ -14,8 +14,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' @param lda_models A list of ordered LDA models as computed by
 #' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 #' according to the number of topics.
-#' @param word_proportions A \code{\link[data.table]{data.table}} giving the 
-#' word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.
+#' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
+#' It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
+#' "doc_id" with original document names. See 'Details'.
 #' @param q Set a cutoff for important words as the quantile of the expected
 #' cumulative probability of word weights. Default to 0.80, meaning that the 
 #' function reaches 80\% of the distribution mass and leaves out the remaining
@@ -32,6 +33,16 @@ if ( getRversion() >= "2.15.1" ) {
 #' the stability of a K-topic model which fully characterizes the corpus if the
 #' observed and estimated word vectors are statistically indistinct.
 #' 
+#' To ensure a complete matching between the set of LDA models specified 
+#' through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
+#' has a specific \code{docvar} indicating the original names of the documents as defined
+#' in the \code{corpus}. If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
+#' to estimate the requested \code{k} topics, then \code{optimal_topic} takes care of that 
+#' by ensuring that there is a perfect overlap between the documents found in \code{weighted_dfm}
+#' and the ones contained in \code{lda_models}. If \code{weighted_dfm} does not contain such 
+#' \code{docvar}, then \code{optimal_topic} throws a warning and assumes a complete match between
+#' the documents and those estimated by \code{\link[topicmodels]{LDA}}.
+#' 
 #' The parameter \code{alpha} controls the confidence of the chi-square test. The
 #' optimal model is selected the first time the chi-square statistic reaches
 #' a p-value equal to \code{alpha}. In the event that the chi-square statistic
@@ -40,6 +51,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' topics. You can force the algorithm to find the minimum chi-square statistic
 #' by setting \code{alpha} equal to zero.
 #' @return A \code{data.table} containing the following columns:
+#' 
 #'
 #' \item{\code{topic}}{An integer giving the number of topics.}
 #' \item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
@@ -47,13 +59,13 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
-#' word_proportions <- word_proportions( corpus = data_corpus_inaugural,
+#' weighted_dfm <- weighted_dfm( corpus = data_corpus_inaugural,
 #'                                       remove_document = TRUE,
 #'                                       language = "en",
 #'                                       source = "snowball" )
 #'
 #' test1 <- optimal_topic( lda_models = lda_list,
-#'                         word_proportions = word_proportions,
+#'                         weighted_dfm = weighted_dfm,
 #'                         q = 0.80,
 #'                         alpha = 0.05 )
 #' }
@@ -64,9 +76,10 @@ if ( getRversion() >= "2.15.1" ) {
 #' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table ggplot2
 #' @importFrom tibble as_tibble
+#' @importFrom quanteda ndoc nfeat is.dfm
 #' @export
 
-optimal_topic <- function( lda_models, word_proportions,
+optimal_topic <- function( lda_models, weighted_dfm,
                            q = 0.80, alpha = 0.05, 
                            do_plot = TRUE, 
                            convert = NULL ) {
@@ -83,8 +96,8 @@ optimal_topic <- function( lda_models, word_proportions,
     stop( paste( "lda_models must contain LDA_VEM obects as computed",
                  "by topicmodels::LDA()" ) )
   }
-  if( !is.data.table( word_proportions ) ) {
-    stop( "word_proportions must be a data.table" )
+  if( !is.dfm( weighted_dfm ) ) {
+    stop( "weighted_dfm must be a dfm" )
   }
   if ( !is.numeric( q ) ) {
     stop( "q must be a numeric" )
@@ -97,10 +110,9 @@ optimal_topic <- function( lda_models, word_proportions,
   }
   
   tic <- proc.time()
-  # compute the size of vocabulary detected in each document as:
-  size_corpus <- nrow( word_proportions )
-  size_vocabulary <- word_proportions[ , max( id_word ) ]
-
+  # compute the number of docs and features in the vocabulary
+  n_docs <- ndoc( weighted_dfm )
+  n_features <- nfeat( weighted_dfm )
   
   # final output table
   regstats <- matrix( NA_real_, nrow = 0, ncol = 4 )
@@ -116,24 +128,24 @@ optimal_topic <- function( lda_models, word_proportions,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    if ( "doc_id" %in% names( word_proportions ) ) {
-      cat( "Checking which documents have been estimated by LDA\n" )
-      docs <- unique( word_proportions$doc_id )
-      doc_check <- docs %in% 
-        lda_models[[ i_mod ]]@documents
-      setkey( word_proportions, doc_id )
-      word_proportions <- word_proportions[ !.( docs[ !doc_check ] ) ]
-      n_docs <- uniqueN( word_proportions$id_doc )
-      if ( length( which( doc_check == FALSE ) ) > 0 ) {
-        word_proportions[ , id_doc := .GRP, by = doc_id ]
-      } 
-    } else {
-      message( "doc_id is not in word_proportions. ", 
-      "Assuming that there a complete overlap between documents in ",
-      "the corpus/dfm and those estimated by LDA()." )
-      n_docs <- uniqueN( word_proportions$id_doc )
-    }
-    setkey( word_proportions, id_doc )
+    # if ( "doc_id" %in% names( weighted_dfm ) ) {
+    #   cat( "Checking which documents have been estimated by LDA\n" )
+    #   docs <- unique( weighted_dfm$doc_id )
+    #   doc_check <- docs %in%
+    #     lda_models[[ i_mod ]]@documents
+    #   setkey( weighted_dfm, doc_id )
+    #   weighted_dfm <- weighted_dfm[ !.( docs[ !doc_check ] ) ]
+    #   n_docs <- uniqueN( weighted_dfm$id_doc )
+    #   if ( length( which( doc_check == FALSE ) ) > 0 ) {
+    #     weighted_dfm[ , id_doc := .GRP, by = doc_id ]
+    #   }
+    # } else {
+    #   warning( "doc_id is not in weighted_dfm. ",
+    #   "Assuming that there is a complete overlap between documents in ",
+    #   "the corpus/dfm and those estimated by LDA()." )
+    #   n_docs <- uniqueN( weighted_dfm$id_doc )
+    # }
+    
     # getting the term word weights --> beta
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     # adding row position to both objects
@@ -145,14 +157,14 @@ optimal_topic <- function( lda_models, word_proportions,
     cat( "--> Processing documents\n" )
     for ( j_doc in 1L:n_docs ) {
       # subsetting word proportions based on id_doc
-      prop <- word_proportions[ .(j_doc) ]
+      prop <- matrix(weighted_dfm[ j_doc, ])
       # subsetting dww according to id_doc
       dwwj_doc <- dww[ j_doc, ]
       
       # casting N x K matrix
       dww_j_doc <- matrix( data = dwwj_doc,
                            ncol = length( dwwj_doc ),
-                           nrow = size_vocabulary,
+                           nrow = n_features,
                            byrow = TRUE )
       
       # this avoids the use of j index which does not match with matlab code
@@ -166,7 +178,7 @@ optimal_topic <- function( lda_models, word_proportions,
       
       # this returns a vector...maybe we want a matrix
       X <- base::rowSums( tww_dww )
-      BestPair <- cbind( prop[ , word_prop ], X )
+      BestPair <- cbind( prop, X )
       BestPair <- BestPair[ order(-BestPair[ , 2L ] ), ]
       # compute the cumlative probability over estimations
       BestPair <- cbind( BestPair, cumsum( BestPair[ , 2L ] ) )
@@ -199,9 +211,9 @@ optimal_topic <- function( lda_models, word_proportions,
   cat( "Computations done!\n" )
   cat( "---\n" )
   
-  setnames( Chi_K, old = names( Chi_K ), c( "topic", "chisq_std", "pval" ) )  
+  setnames( Chi_K, old = names( Chi_K ), c( "topic", "OpTop", "pval" ) )  
   
-  global_min <- Chi_K[ , .SD[ which.min( chisq_std ) ] ]
+  global_min <- Chi_K[ , .SD[ which.min( OpTop ) ] ]
   alpha_min <- Chi_K[ pval <= alpha ][ 1L ]
   if ( alpha == 0 || all( is.na( alpha_min ) ) ) {
     cat( "Optimal model found by global minimum\n" )
@@ -222,14 +234,13 @@ optimal_topic <- function( lda_models, word_proportions,
   if ( do_plot ) {
     cat( "Plotting...\n" )
     x_min <- best_topic$topic
-    y_min <- best_topic$chisq_std
+    y_min <- best_topic$OpTop
     p1 <- ggplot( Chi_K ) +
-      geom_line( aes( x = topic, y = chisq_std ), size = 0.8, color = "royalblue" ) +
+      geom_line( aes( x = topic, y = OpTop ), size = 0.8, color = "royalblue" ) +
       geom_hline( yintercept = y_min, color = "black", linetype = 2L ) +
       geom_vline( xintercept = x_min, color = "black", linetype = 2L ) +
       geom_point( aes( x = x_min, y_min ), color = "red", shape = 4L, size = 4L ) +
-      # scale_y_continuous( breaks = seq( 0, max( Chi_K$chisq_std ), by = 0.5 ) ) +
-      xlab( "Topics" ) + ylab( expression( bold( chi^2 ) ) ) +
+      xlab( "Topics" ) + ylab( expression(OpTop[J]^{"K"}) ) +
       ggtitle( "Optimal Topic Plot" ) +
       theme_OpTop
     print( p1 )

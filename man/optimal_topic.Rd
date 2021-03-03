@@ -6,7 +6,7 @@
 \usage{
 optimal_topic(
   lda_models,
-  word_proportions,
+  weighted_dfm,
   q = 0.8,
   alpha = 0.05,
   do_plot = TRUE,
@@ -18,8 +18,9 @@ optimal_topic(
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{word_proportions}{A \code{\link[data.table]{data.table}} giving the 
-word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.}
+\item{weighted_dfm}{A weighted \code{\link[quanteda]{dfm}} containing word proportions.
+It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
+"doc_id" with original document names. See 'Details'.}
 
 \item{q}{Set a cutoff for important words as the quantile of the expected
 cumulative probability of word weights. Default to 0.80, meaning that the 
@@ -39,6 +40,7 @@ Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 \value{
 A \code{data.table} containing the following columns:
 
+
 \item{\code{topic}}{An integer giving the number of topics.}
 \item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
 \item{\code{pval}}{A numeric giving the p-value of the test.}
@@ -53,6 +55,16 @@ the assumption that the distribution of words is multinomial. The test studies
 the stability of a K-topic model which fully characterizes the corpus if the
 observed and estimated word vectors are statistically indistinct.
 
+To ensure a complete matching between the set of LDA models specified 
+through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
+has a specific \code{docvar} indicating the original names of the documents as defined
+in the \code{corpus}. If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
+to estimate the requested \code{k} topics, then \code{optimal_topic} takes care of that 
+by ensuring that there is a perfect overlap between the documents found in \code{weighted_dfm}
+and the ones contained in \code{lda_models}. If \code{weighted_dfm} does not contain such 
+\code{docvar}, then \code{optimal_topic} throws a warning and assumes a complete match between
+the documents and those estimated by \code{\link[topicmodels]{LDA}}.
+
 The parameter \code{alpha} controls the confidence of the chi-square test. The
 optimal model is selected the first time the chi-square statistic reaches
 a p-value equal to \code{alpha}. In the event that the chi-square statistic
@@ -64,13 +76,13 @@ by setting \code{alpha} equal to zero.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-word_proportions <- word_proportions( corpus = data_corpus_inaugural,
+weighted_dfm <- weighted_dfm( corpus = data_corpus_inaugural,
                                       remove_document = TRUE,
                                       language = "en",
                                       source = "snowball" )
 
 test1 <- optimal_topic( lda_models = lda_list,
-                        word_proportions = word_proportions,
+                        weighted_dfm = weighted_dfm,
                         q = 0.80,
                         alpha = 0.05 )
 }

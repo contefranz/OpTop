@@ -6,7 +6,7 @@
 \usage{
 agg_document_stability(
   lda_models,
-  word_proportions,
+  weighted_dfm,
   optimal_model,
   q = 0.8,
   alpha = 0.05,
@@ -20,8 +20,9 @@ agg_document_stability(
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{word_proportions}{A \code{\link[data.table]{data.table}} giving the 
-word proportions in a corpus as computed by \code{\link[OpTop]{word_proportions}}.}
+\item{weighted_dfm}{A weighted \code{\link[quanteda]{dfm}} containing word proportions.
+It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
+"doc_id" with original document names. See ?\code{\link[OpTop]{optimal_topic}} for more details.}
 
 \item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a
@@ -40,7 +41,7 @@ function reaches 80\% of the distribution mass and leaves out the remaining
 Distribution Function over the cosine similarities in the Topic Word Weights
 matrix. Default to 0.05.}
 
-\item{smoothed}{A logical to control whether the test is perfomed on each 
+\item{smoothed}{A logical to control whether the test is performed on each 
 document for each LDA model or on the smoothed chi-square statistic. 
 This is the aggregated version which gives the overall behavior across all
 documents in the corpus. Default is \code{TRUE}.}
@@ -56,19 +57,19 @@ Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 \value{
 A \code{data.table} containing the following columns:
 
-\item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{id_doc}}{An integer document id as given in the original corpus.}
-\item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
-for the informative component.}
-\item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
-for the uninformative component.}
-\item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
-over the informative component.}
-\item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
-over the uninformative component.}
-\item{\code{Fstat}}{A numeric giving the standardized F statistic
-of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
-\item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
+* \code{topic} An integer giving the number of topics.
+* \code{id_doc} An integer document id as given in the original corpus.
+* \code{chisq_inform_std} A numeric giving the standardized chi-square statistic
+for the informative component.
+* \code{chisq_uninform_std} A numeric giving the standardized chi-square statistic
+for the uninformative component.
+* \code{pval_inform} A numeric giving the p-value of the chi-square test
+over the informative component.
+* \code{pval_uninform} A numeric giving the p-value of the chi-square test
+over the uninformative component.
+* \code{Fstat} A numeric giving the standardized F statistic
+of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.
+* \code{pval_Fstat} A numeric giving the p-value of the F test.
 }
 \description{
 Detects informative and uninformative components to compute aggregate document
@@ -77,10 +78,9 @@ Also, computes a F-test to further evaluate deviation from optimal model.
 }
 \examples{
 \dontrun{
-test4 <- agg_topic_stability( lda_models = lda_list,
-                              optimal_model = test1,
-                              q = 0.80, alpha = 0.05,
-                              smoothed = TRUE, do_plot = TRUE )
+test4 <- agg_document_stability( lda_models = lda_list,
+                                 weighted_dfm = weighted_dfm,
+                                 smoothed = TRUE, do_plot = TRUE )
 }
 }
 \references{

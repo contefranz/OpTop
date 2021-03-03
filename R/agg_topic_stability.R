@@ -11,7 +11,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' This contains the models with highest cosine similarity.
 #' @param least_match A data.table as computed by \code{\link[OpTop]{topic_match}}.
 #' This contains the models with lowest cosine similarity.
-#' @param smoothed A logical to control whether the test is perfomed on each 
+#' @param smoothed A logical to control whether the test is performed on each 
 #' document for each LDA model or on the smoothed chi-square statistic. 
 #' This is the aggregated version which gives the overall behavior across all
 #' documents in the corpus. Default is \code{TRUE}.
@@ -78,7 +78,7 @@ agg_topic_stability <- function( lda_models, optimal_model,
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
     cat( "optimal_model is a data.table or a data.frame.",
          "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( chisq_std ), topic ]
+    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
   } else if ( is.LDA_VEM( optimal_model ) ) {
     cat( "optimal_model is a LDA_VEM object.", 
          "Extracting information about the optimal model...\n" )

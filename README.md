@@ -1,7 +1,6 @@
-[![lifecycle](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.4-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.4)
+[![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://www.tidyverse.org/lifecycle/#maturing)
+[![release](https://img.shields.io/badge/release-v0.9.5-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.5)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
-[![Build Status](https://travis-ci.org/contefranz/OpTop.svg?branch=master)](https://travis-ci.org/contefranz/OpTop)
 [![DOI](https://zenodo.org/badge/138142794.svg)](https://zenodo.org/badge/latestdoi/138142794)
 
 # OpTop: detect the optimal number of topics from a pool of LDA models
@@ -36,7 +35,7 @@ __OpTop__ introduces a set of parametric tests to identify the optimal number of
 The package is not on CRAN yet. You can install the development version as follows:
 ``` r
 # Install the development version from Github:
-devtools::install_github( "contefranz/OpTop" )
+devtools::install_github("contefranz/OpTop")
 ```
 
 ## Functions
@@ -46,9 +45,6 @@ The package is in early alpha stage and contains seven functions:
 
 * `get_topic_models()`: handy function to immediately get the list of topic models
 the user wants to process from a specified environment;
-
-* `word_proportions()`: computes word proportions from either `corpus` or a `dfm` 
-object created by __quanteda__ [Benoit et al. (2018)];
 
 * `optimal_topic()`: implements _Test 1_ of optimality from the methodological 
 paper [Lewis and Grossetti (2019)].
@@ -65,7 +61,8 @@ from the methodological paper [Lewis and Grossetti (2019)].
 _Test 5_ of relative topic importance from the methodological paper 
 [Lewis and Grossetti (2019)].
 
-
+* `sim_dfm()`: convenient function to simulate a **quanteda** `dfm` object from a given 
+LDA specification.
 
 ## Bug Reporting
 
@@ -77,6 +74,7 @@ Bugs and issues can be reported at
 * [Francesco Grossetti](http://faculty.unibocconi.eu/francescogiovannigrossetti/) 
 
   Assistant Professor of Data Science and Accounting Information Systems  
+  Bocconi Institute for Data Science and Analytics ([BIDSA](https://www.bidsa.unibocconi.eu/wps/wcm/connect/Site/Bidsa/Home))  
   Accounting Department, Bocconi University.  
   Contact Francesco at: francesco.grossetti@unibocconi.it.  
 

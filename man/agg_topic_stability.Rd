@@ -44,7 +44,7 @@ function reaches 80\% of the distribution mass and leaves out the remaining
 Distribution Function over the cosine similarities in the Topic Word Weights
 matrix. Default to 0.05.}
 
-\item{smoothed}{A logical to control whether the test is perfomed on each 
+\item{smoothed}{A logical to control whether the test is performed on each 
 document for each LDA model or on the smoothed chi-square statistic. 
 This is the aggregated version which gives the overall behavior across all
 documents in the corpus. Default is \code{TRUE}.}
