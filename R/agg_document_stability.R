@@ -17,19 +17,19 @@ if ( getRversion() >= "2.15.1" ) {
 #' "doc_id" with original document names. See ?\code{\link[OpTop]{optimal_topic}} for more details.
 #' @return A \code{data.table} containing the following columns:
 #'
-#' * \code{topic} An integer giving the number of topics.
-#' * \code{id_doc} An integer document id as given in the original corpus.
-#' * \code{chisq_inform_std} A numeric giving the standardized chi-square statistic
-#' for the informative component.
-#' * \code{chisq_uninform_std} A numeric giving the standardized chi-square statistic
-#' for the uninformative component.
-#' * \code{pval_inform} A numeric giving the p-value of the chi-square test
-#' over the informative component.
-#' * \code{pval_uninform} A numeric giving the p-value of the chi-square test
-#' over the uninformative component.
-#' * \code{Fstat} A numeric giving the standardized F statistic
-#' of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.
-#' * \code{pval_Fstat} A numeric giving the p-value of the F test.
+#' \item{\code{topic}}{An integer giving the number of topics.}
+#' \item{\code{id_doc}}{An integer document id as given in the original corpus.}
+#' \item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
+#' for the informative component.}
+#' \item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
+#' for the uninformative component.}
+#' \item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
+#' over the informative component.}
+#' \item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
+#' over the uninformative component.}
+#' \item{\code{Fstat}}{A numeric giving the standardized F statistic
+#' of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
+#' \item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
 #' @examples
 #'\dontrun{
 #' test4 <- agg_document_stability( lda_models = lda_list,
@@ -101,9 +101,13 @@ agg_document_stability <- function( lda_models, weighted_dfm,
     tww_best <- t( exp( optimal_model@beta ) )
     .optimal_model <- ncol( dtw_best )
   }
+  if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+    message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
+    return( NULL )
+  }
   cat( "best model has", .optimal_model, "topics\n" )
-  
   tic <- proc.time()
+  
   # compute the number of docs and features in the vocabulary
   n_docs <- ndoc( weighted_dfm )
   n_features <- nfeat( weighted_dfm )

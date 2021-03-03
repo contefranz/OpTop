@@ -30,7 +30,6 @@ if ( getRversion() >= "2.15.1" ) {
 #' \item{\code{topic}}{An integer giving the number of topics.}
 #' \item{\code{df}}{An integer giving the degrees of freedom.}
 #' \item{\code{chisq}}{A numeric giving the chi-square statistic.}
-#' \item{\code{chisq_std}}{A numeric giving the standardized chi-square statistic.}
 #' @examples
 #' \dontrun{
 #' test2 <- topic_stability( lda_models = lda_list,
@@ -92,6 +91,11 @@ topic_stability <- function( lda_models, optimal_model,
     dtw_best <- optimal_model@gamma
     tww_best <- t( exp( optimal_model@beta ) )
     .optimal_model <- ncol( dtw_best )
+  }
+  
+  if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+    message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
+    return( NULL )
   }
   cat( "best model has", .optimal_model, "topics\n" )
   tic <- proc.time()

@@ -49,7 +49,6 @@ A `data.table` containing the following columns:
 \item{\code{topic}}{An integer giving the number of topics.}
 \item{\code{df}}{An integer giving the degrees of freedom.}
 \item{\code{chisq}}{A numeric giving the chi-square statistic.}
-\item{\code{chisq_std}}{A numeric giving the standardized chi-square statistic.}
 }
 \description{
 Implements fast chi-square like test to evaluate the stability of redundant

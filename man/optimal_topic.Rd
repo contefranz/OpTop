@@ -42,7 +42,7 @@ A \code{data.table} containing the following columns:
 
 
 \item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
+\item{\code{OpTop}}{A numeric giving the standardized chi-square.}
 \item{\code{pval}}{A numeric giving the p-value of the test.}
 }
 \description{

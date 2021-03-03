@@ -57,19 +57,19 @@ Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 \value{
 A \code{data.table} containing the following columns:
 
-* \code{topic} An integer giving the number of topics.
-* \code{id_doc} An integer document id as given in the original corpus.
-* \code{chisq_inform_std} A numeric giving the standardized chi-square statistic
-for the informative component.
-* \code{chisq_uninform_std} A numeric giving the standardized chi-square statistic
-for the uninformative component.
-* \code{pval_inform} A numeric giving the p-value of the chi-square test
-over the informative component.
-* \code{pval_uninform} A numeric giving the p-value of the chi-square test
-over the uninformative component.
-* \code{Fstat} A numeric giving the standardized F statistic
-of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.
-* \code{pval_Fstat} A numeric giving the p-value of the F test.
+\item{\code{topic}}{An integer giving the number of topics.}
+\item{\code{id_doc}}{An integer document id as given in the original corpus.}
+\item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
+for the informative component.}
+\item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
+for the uninformative component.}
+\item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
+over the informative component.}
+\item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
+over the uninformative component.}
+\item{\code{Fstat}}{A numeric giving the standardized F statistic
+of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
+\item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
 }
 \description{
 Detects informative and uninformative components to compute aggregate document

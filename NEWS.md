@@ -11,7 +11,15 @@ a LDA specification. This is useful for simulating corpora for testing.
 
 ### Minor Changes
 
-* Small tweaks in the computation speed for certain operations
+* Small tweaks in the computation speed for certain operations.
+
+* Improved documentation.
+
+### Bug Fix
+
+* If the optimal model is the last in the list of LDA objects passed to `optimal_topic()`, now all the 
+other functions devoted to testing return `NULL` with a message. This is because there is nothing
+to test in terms of topic stability above the optimal model.
 
 ---
 

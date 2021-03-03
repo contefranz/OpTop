@@ -86,8 +86,11 @@ agg_topic_stability <- function( lda_models, optimal_model,
     tww_best <- t( exp( optimal_model@beta ) )
     .optimal_model <- ncol( dtw_best )
   }
+  if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+    message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
+    return( NULL )
+  }
   cat( "best model has", .optimal_model, "topics\n" )
-  
   tic <- proc.time()
   
   k_end <- max( sapply( lda_models, function( x ) x@k ) )
