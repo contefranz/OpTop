@@ -23,6 +23,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' 20\%.
 #' @param alpha The confidence level of test acceptance. Default to 0.05. 
 #' See 'Details'.
+#' @param ncores Control the number of cores to use through \code{\link[parallel]{detectCores}}.
 #' @param do_plot Plot the chi-square statistic as a function of the number of 
 #' topics. Default to \code{TRUE}.
 #' @param convert Target convertion format. This version of \code{OpTop} supports
@@ -77,17 +78,19 @@ if ( getRversion() >= "2.15.1" ) {
 #' @import data.table ggplot2
 #' @importFrom tibble as_tibble
 #' @importFrom quanteda ndoc nfeat is.dfm
+#' @importFrom parallel detectCores clusterEvalQ clusterExport parLapply
 #' @export
 
-optimal_topic <- function( lda_models, weighted_dfm,
-                           q = 0.80, alpha = 0.05, 
-                           do_plot = TRUE, 
-                           convert = NULL ) {
+optimal_topic_fast <- function( lda_models, weighted_dfm,
+                                q = 0.80, alpha = 0.05, 
+                                ncores = NULL,
+                                do_plot = TRUE, 
+                                convert = NULL ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }
-  if ( length( lda_models ) == 1L ){
+  if ( length( lda_models ) == 1L ) {
     stop( paste( "length(lda_models) = 1.",
                  "This is strange since the test should be perfomed",
                  "on multiple LDA models." ) )
@@ -108,27 +111,39 @@ optimal_topic <- function( lda_models, weighted_dfm,
   if ( !is.null( convert ) && !is.character( convert ) ) {
     stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
   }
+  if ( is.null( ncores ) ) {
+    ncores = detectCores()
+  } else {
+    if ( !is.numeric( ncores ) ) {
+      stop("ncores must be a positive integer")
+    }
+    clust = makeCluster(ncores)
+  }
   
   tic <- proc.time()
   # compute the number of docs and features in the vocabulary
-  n_docs <- ndoc( weighted_dfm )
+  docs <- as.character( docid( weighted_dfm ) )
+  n_docs <- length( docs )
   n_features <- nfeat( weighted_dfm )
+  features = featnames( weighted_dfm )
   
   # final output table
   regstats <- matrix( NA_real_, nrow = 0, ncol = 4 )
   Chi_K <- data.table()
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
-  # we enter in looping over each model (j)
-  for ( i_mod in seq_along( lda_models ) ) {
-    
+  cat("Using", ncores, "cores\n" )
+  clusterEvalQ(clust, c(library(data.table), library(quanteda)))
+  clusterExport( clust, 
+                 c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features", "features"), 
+                 envir = environment())
+  
+  chisqlist = parLapply(cl = clust, X = seq_along( lda_models ), fun = function( i_mod ) {
+    # we enter in looping over each model (j)
     # getting the document word weights --> gamma
     dww <- lda_models[[ i_mod ]]@gamma
     current_k <- ncol( dww )
-    cat( "---\n" )
-    cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    docs <- as.character( docid( weighted_dfm ) )
     doc_check <- docs %in% lda_models[[ i_mod ]]@documents
     if ( !all(doc_check) ) {
       stop("All documents are missing in lda_models. Something is wrong...")
@@ -143,74 +158,74 @@ optimal_topic <- function( lda_models, weighted_dfm,
       toremove <- docs[ id_toremove ]
       weighted_dfm <- weighted_dfm[ -id_toremove, ]
     }
-
+    
     # getting the term word weights --> beta
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     # adding row position to both objects
-    dww <- cbind( dww, 1L:nrow(dww) )
-    tww <- cbind( tww, 1L:nrow(tww) )
     
-    # looping over each document (k) in each model (j)
-    # this is the loop that needs to be parallelized
-    cat( "--> Processing documents\n" )
-    for ( j_doc in 1L:n_docs ) {
-      # subsetting word proportions based on id_doc
-      prop <- matrix(weighted_dfm[ j_doc, ]) # this is costly
-      # subsetting dww according to id_doc
-      dwwj_doc <- dww[ j_doc, ]
-      
-      # casting N x K matrix
-      dww_j_doc <- matrix( data = dwwj_doc,
-                           ncol = length( dwwj_doc ),
-                           nrow = n_features,
-                           byrow = TRUE )
-      
-      # this avoids the use of j index which does not match with matlab code
-      # in matlab j loops over k_start -> k_end
-      # here starts from 1 up to the latest model
-      sub_dww_j_doc <- dww_j_doc[ , 1L:( ncol(dww_j_doc) - 1L ) ]
-      sub_tww <- tww[ , 1L:( ncol(tww) - 1L ) ]
-      
-      # dot product --> element-wise multiplication
-      tww_dww <- sub_dww_j_doc * sub_tww
-      
-      # this returns a vector...maybe we want a matrix
-      X <- base::rowSums( tww_dww )
-      BestPair <- cbind( prop, X )
-      BestPair <- BestPair[ order(-BestPair[ , 2L ] ), ]
-      # compute the cumlative probability over estimations
-      BestPair <- cbind( BestPair, cumsum( BestPair[ , 2L ] ) )
-      n_BP <- nrow( BestPair )
-      p_BP <- ncol( BestPair )
-      # stop when you reach q
-      AggBestPair <- BestPair[ which( round(BestPair[ , 3L ], 4L) <= q ), ]
-      icut <- nrow( AggBestPair )
-      lowest_estimates <- apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
-      AggBestPair <- rbind( AggBestPair, lowest_estimates )
-      numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
-      denominator <- AggBestPair[ , 2L ]
-      chi_sq_fit <- icut * sum( numerator / denominator )
-      
-      # column chisquare_mod is just a placeholder here
-      # this is to avoid the duplication of regstats in the outer loop
-      regout <- cbind( current_k, j_doc, chi_sq_fit, icut )
-      regstats <- rbind( regstats, regout )
-      
+    tww_dww_long = apply(dww, 1L, function(x) 
+      matrix(x, nrow = n_features, ncol = current_k, byrow = TRUE) * tww) #done yay!!!!
+    
+    tww_dww = lapply( seq_len( ncol( tww_dww_long ) ), function( x ) 
+      matrix( tww_dww_long[ , x ], ncol = current_k ) )
+    
+    X = lapply( tww_dww, function( x ) {
+      out = data.table( feature = features, 
+                        X = base::rowSums(x) ) 
+      setorder( out, -X )
+      out[ , cumX := cumsum( X ) ]
+      return( out )
     }
+    )
+    BestCut = lapply( X, function( x ) {
+      highest = x[ cumX <= q ]
+      lowest = x[ cumX > q, .( feature = NA_character_, X = sum( X ), cumX = sum( cumX ) ) ]
+      out = rbindlist( list( highest, lowest ) )
+    } )
     
-    chi_out <- regstats[ which( regstats[ , 1L ] == current_k ) , ]
-    sum_i_mod <- cbind( sum( chi_out[ , 3L ] ), sum( chi_out[ , 4L ] ) )
-    temp <- cbind( current_k, sum_i_mod[ , 1L ] / sum_i_mod[ , 2L ] )
-    temp <- cbind( temp, pchisq( temp[ , 2L ], df = 1L ) )
-    Chi_K <- rbind( Chi_K, temp )
+    chi_sq_fit = lapply( seq_along(BestCut), function( i_doc ) {
+      
+      keep_features = na.omit(BestCut[[ i_doc ]][ , feature ] ) 
+      current_dfm = dfm_subset( weighted_dfm, doc_id == docs[ i_doc ] )
+      current_dfm = dfm_keep( current_dfm, pattern = keep_features, valuetype = "fixed" )
+      current_features = featnames( current_dfm )
+      dt_prop = convert( current_dfm, to = "data.frame")
+      setDT(dt_prop)
+      dt_prop[ , doc_id := NULL ]  
+      dt_prop = data.table::transpose(dt_prop)
+      dt_prop[ , feature := current_features ]
+      res_prop = 1 - sum(dt_prop$V1)
+      
+      setkey( dt_prop, feature )
+      setkey( BestCut[[ i_doc ]], feature )
+      BestCut[[ i_doc ]] = dt_prop[ BestCut[[ i_doc ]] ]
+      BestCut[[ i_doc ]][ is.na(V1), V1 := res_prop ]
+      
+      numerator = BestCut[[ i_doc ]][ , (V1 - X)^2 ]
+      denominator = BestCut[[ i_doc ]][ , X ]
+      icut = length(current_features)
+      chi_sq_fit <- data.table( topic = current_k, 
+                                doc_id = i_doc, 
+                                chi_sq_fit = icut * sum( numerator / denominator ),
+                                icut = icut
+      )
+    } 
+    )
     
   }
+  )
+  stopCluster(clust)
+  
+  regstats = rbindlist(lapply( chisqlist, rbindlist))
+  Chi_K = regstats[ , .( sum(chi_sq_fit), sum(icut) ), by = topic]
+  Chi_K[ , OpTop := V1/V2 ]  
+  Chi_K[ , pval := pchisq( OpTop, df = 1L ) ]
+  Chi_K = Chi_K[ , .( topic, OpTop, pval ) ]
+  
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
   cat( "---\n" )
-  
-  setnames( Chi_K, old = names( Chi_K ), c( "topic", "OpTop", "pval" ) )  
-  
+
   global_min <- Chi_K[ , .SD[ which.min( OpTop ) ] ]
   alpha_min <- Chi_K[ pval <= alpha ][ 1L ]
   if ( alpha == 0 || all( is.na( alpha_min ) ) ) {
@@ -228,7 +243,7 @@ optimal_topic <- function( lda_models, weighted_dfm,
       best_topic <- global_min
     }
   }
-  
+
   if ( do_plot ) {
     cat( "Plotting...\n" )
     x_min <- best_topic$topic
@@ -243,7 +258,7 @@ optimal_topic <- function( lda_models, weighted_dfm,
       theme_OpTop
     print( p1 )
   }
-  
+
   if ( !is.null( convert ) ) {
     cat( "Converting to", convert, "\n" )
     if ( convert == "data.frame" ) {
@@ -259,4 +274,5 @@ optimal_topic <- function( lda_models, weighted_dfm,
   cat( "Function took:", runtime[ 3L ], "sec.\n" )
   cat( "---\n" )
   return( Chi_K )
+  # return( Chi_K )
 }
