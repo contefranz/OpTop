@@ -146,22 +146,18 @@ optimal_topic_old_par <- function( lda_models, weighted_dfm,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
-    
-    doc_check <- docs %in% lda_models[[ i_mod ]]@documents
-    if ( !all(doc_check) ) {
-      stop("All documents are missing in lda_models. Something is wrong...")
-    } else if ( all(doc_check) ) {
+    if ( all(doc_check) ) {
       cat("Found perfect match between LDA-documents and weighted_dfm\n" )
     } else {
-      cat("Removing unmatched documents\n" )
       id_toremove <- which( doc_check == FALSE )
-      if ( length( id_toremove ) < 1L ) {
+      if ( length( id_toremove ) < length( doc_check ) ) {
+        cat("Removing unmatched documents\n" )
+        toremove <- docs[ id_toremove ]
+        weighted_dfm <- weighted_dfm[ -id_toremove, ]
+      } else {
         stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
       }
-      toremove <- docs[ id_toremove ]
-      weighted_dfm <- weighted_dfm[ -id_toremove, ]
-    }
-    
+    }    
     # getting the term word weights --> beta
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     # adding row position to both objects
