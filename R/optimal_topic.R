@@ -129,6 +129,7 @@ optimal_topic <- function( lda_models, weighted_dfm,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
+    doc_check <- docs %in% lda_models[[ i_mod ]]@documents
     if ( all(doc_check) ) {
       cat("Found perfect match between LDA-documents and weighted_dfm\n" )
     } else {
