@@ -131,14 +131,14 @@ optimal_topic_old_par <- function( lda_models, weighted_dfm,
   Chi_K <- data.table()
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
-  clusterEvalQ(clust, c(library(data.table), library(quanteda)))
-  clusterExport( clust, 
-                 c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features"), 
-                 envir = environment())
-  
-  # we enter in looping over each model (j)
-  chisqlist = parLapply(cl = clust, X = seq_along( lda_models ), fun = function( i_mod ) {
-    
+  # clusterEvalQ(clust, c(library(data.table), library(quanteda)))
+  # clusterExport( clust, 
+  #                c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features"), 
+  #                envir = environment())
+  # 
+  # # we enter in looping over each model (j)
+  # chisqlist = parLapply(cl = clust, X = seq_along( lda_models ), fun = function( i_mod ) {
+  for ( i_mod in seq_along( lda_models ) ) {    
     
     # getting the document word weights --> gamma
     dww <- lda_models[[ i_mod ]]@gamma
@@ -146,6 +146,7 @@ optimal_topic_old_par <- function( lda_models, weighted_dfm,
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
+    doc_check <- docs %in% lda_models[[ i_mod ]]@documents
     if ( all(doc_check) ) {
       cat("Found perfect match between LDA-documents and weighted_dfm\n" )
     } else {
@@ -166,8 +167,18 @@ optimal_topic_old_par <- function( lda_models, weighted_dfm,
     
     # looping over each document (k) in each model (j)
     # this is the loop that needs to be parallelized
-    cat( "--> Processing documents\n" )
-    for ( j_doc in 1L:n_docs ) {
+    clusterEvalQ(clust, c(library(data.table), library(quanteda)))
+    clusterExport( clust,
+                   c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features",
+                     "dww", "tww"),
+                   envir = environment())
+    
+    
+    
+    regout <- parLapply(cl = clust, X = seq_len( n_docs ), fun = function( j_doc ) {
+    # regout <- lapply(seq_len( n_docs ), function( j_doc ) {
+      # cat( "--> Processing documents\n" )
+      # for ( j_doc in 1L:n_docs ) {
       # subsetting word proportions based on id_doc
       prop <- matrix(weighted_dfm[ j_doc, ]) # this is costly
       # subsetting dww according to id_doc
@@ -207,17 +218,14 @@ optimal_topic_old_par <- function( lda_models, weighted_dfm,
       
       # column chisquare_mod is just a placeholder here
       # this is to avoid the duplication of regstats in the outer loop
-      regout <- cbind( current_k, j_doc, chi_sq_fit, icut )
       regout <- data.table( topic = current_k, j_doc = j_doc, chi_sq_fit = chi_sq_fit, icut = icut )
-      regstats <- rbindlist( list(regstats, regout) )
-      
-    }
-    regstats
+    } 
+    )
+    currentchi <- rbindlist(regout)
+    regstats <- rbindlist(list(regstats, currentchi))
   }
-  )
   stopCluster(clust)
   
-  regstats = rbindlist(chisqlist)
   Chi_K = regstats[ , .( sum(chi_sq_fit), sum(icut) ), by = topic]
   Chi_K[ , OpTop := V1/V2 ]  
   Chi_K[ , pval := pchisq( OpTop, df = 1L ) ]

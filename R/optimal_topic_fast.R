@@ -133,12 +133,13 @@ optimal_topic_fast <- function( lda_models, weighted_dfm,
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   cat("Using", ncores, "cores\n" )
-  clusterEvalQ(clust, c(library(data.table), library(quanteda)))
-  clusterExport( clust, 
-                 c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features", "features"), 
-                 envir = environment())
+  # clusterEvalQ(clust, c(library(data.table), library(quanteda)))
+  # clusterExport( clust, 
+  #                c("lda_models", "weighted_dfm", "docs", "n_docs", "n_features", "features"), 
+  #                envir = environment())
   
-  chisqlist = parLapply(cl = clust, X = seq_along( lda_models ), fun = function( i_mod ) {
+  chisqlist = lapply(seq_along( lda_models ), function( i_mod ) {
+  # chisqlist = parLapply(cl = clust, X = seq_along( lda_models ), fun = function( i_mod ) {
     # we enter in looping over each model (j)
     # getting the document word weights --> gamma
     dww <- lda_models[[ i_mod ]]@gamma
@@ -228,7 +229,7 @@ optimal_topic_fast <- function( lda_models, weighted_dfm,
     
   }
   )
-  stopCluster(clust)
+  # stopCluster(clust)
   
   regstats = rbindlist(lapply( chisqlist, rbindlist))
   Chi_K = regstats[ , .( sum(chi_sq_fit), sum(icut) ), by = topic]
