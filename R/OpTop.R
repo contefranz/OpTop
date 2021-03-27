@@ -10,5 +10,7 @@
 #'
 #' @docType package
 #' @name OpTop
+#' @useDynLib OpTop, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
 NULL
 #> NULL

@@ -23,4 +23,7 @@ Imports:
     ggplot2 (>= 3.1.0),
     grid (>= 3.4.0),
     gridExtra (>= 2.3.0),
-    lifecycle
+    lifecycle,
+    Rcpp (>= 0.11.0)
+LinkingTo: Rcpp, RcppArmadillo
+SystemRequirements: C++11

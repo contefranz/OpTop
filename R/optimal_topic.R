@@ -4,7 +4,8 @@ if ( getRversion() >= "2.15.1" ) {
                              "word_sum", "check", "topics",
                              ".", "chisquare", "chisquare_mod",
                              "row_cut", "chi_sum", "word_prop_hat",
-                             "word_prop_hat_cum", "pval" ) )
+                             "word_prop_hat_cum", "pval", "docid",
+                             "OpTop") )
 }
 #' Find the optimal number of topics from a pool of LDA models
 #'
@@ -118,21 +119,11 @@ optimal_topic <- function( lda_models, weighted_dfm,
   # final output table
   regstats <- matrix( NA_real_, nrow = 0, ncol = 4 )
   Chi_K <- data.table()
-  cat( "# # # # # # # # # # # # # # # # # # # #\n" )
-  cat( "Beginning computations...\n" )
-  # we enter in looping over each model (j)
+
+  # get the list of documents to work on, by removing those which are not in the LDA models
   for ( i_mod in seq_along( lda_models ) ) {
-    
-    # getting the document word weights --> gamma
-    dww <- lda_models[[ i_mod ]]@gamma
-    current_k <- ncol( dww )
-    cat( "---\n" )
-    cat( "# # # Processing LDA with k =", current_k, "\n" )
-    
     doc_check <- docs %in% lda_models[[ i_mod ]]@documents
-    if ( all(doc_check) ) {
-      cat("Found perfect match between LDA-documents and weighted_dfm\n" )
-    } else {
+    if ( !all(doc_check) ) {
       id_toremove <- which( doc_check == FALSE )
       if ( length( id_toremove ) < length( doc_check ) ) {
         cat("Removing unmatched documents\n" )
@@ -142,72 +133,17 @@ optimal_topic <- function( lda_models, weighted_dfm,
         stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
       }
     }
-
-    # getting the term word weights --> beta
-    tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
-    # adding row position to both objects
-    dww <- cbind( dww, 1L:nrow(dww) )
-    tww <- cbind( tww, 1L:nrow(tww) )
-    
-    # looping over each document (k) in each model (j)
-    # this is the loop that needs to be parallelized
-    cat( "--> Processing documents\n" )
-    for ( j_doc in 1L:n_docs ) {
-      # subsetting word proportions based on id_doc
-      prop <- matrix(weighted_dfm[ j_doc, ]) # this is costly
-      # subsetting dww according to id_doc
-      dwwj_doc <- dww[ j_doc, ]
-      
-      # casting N x K matrix
-      dww_j_doc <- matrix( data = dwwj_doc,
-                           ncol = length( dwwj_doc ),
-                           nrow = n_features,
-                           byrow = TRUE )
-      
-      # this avoids the use of j index which does not match with matlab code
-      # in matlab j loops over k_start -> k_end
-      # here starts from 1 up to the latest model
-      sub_dww_j_doc <- dww_j_doc[ , 1L:( ncol(dww_j_doc) - 1L ) ]
-      sub_tww <- tww[ , 1L:( ncol(tww) - 1L ) ]
-      
-      # dot product --> element-wise multiplication
-      tww_dww <- sub_dww_j_doc * sub_tww
-      
-      # this returns a vector...maybe we want a matrix
-      X <- base::rowSums( tww_dww )
-      BestPair <- cbind( prop, X )
-      BestPair <- BestPair[ order(-BestPair[ , 2L ] ), ]
-      # compute the cumlative probability over estimations
-      BestPair <- cbind( BestPair, cumsum( BestPair[ , 2L ] ) )
-      n_BP <- nrow( BestPair )
-      p_BP <- ncol( BestPair )
-      # stop when you reach q
-      AggBestPair <- BestPair[ which( round(BestPair[ , 3L ], 4L) <= q ), ]
-      icut <- nrow( AggBestPair )
-      lowest_estimates <- apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
-      AggBestPair <- rbind( AggBestPair, lowest_estimates )
-      numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
-      denominator <- AggBestPair[ , 2L ]
-      chi_sq_fit <- icut * sum( numerator / denominator )
-      
-      # column chisquare_mod is just a placeholder here
-      # this is to avoid the duplication of regstats in the outer loop
-      regout <- cbind( current_k, j_doc, chi_sq_fit, icut )
-      regstats <- rbind( regstats, regout )
-      
-    }
-    
-    chi_out <- regstats[ which( regstats[ , 1L ] == current_k ) , ]
-    sum_i_mod <- cbind( sum( chi_out[ , 3L ] ), sum( chi_out[ , 4L ] ) )
-    temp <- cbind( current_k, sum_i_mod[ , 1L ] / sum_i_mod[ , 2L ] )
-    temp <- cbind( temp, pchisq( temp[ , 2L ], df = 1L ) )
-    Chi_K <- rbind( Chi_K, temp )
-    
   }
+  
+  cat( "# # # # # # # # # # # # # # # # # # # #\n" )
+  cat( "Beginning computations...\n" )
+  # Chi_K = OpTop:::optimal_topic_core(lda_models, weighted_dfm, q, docs, n_docs, n_features)
+  Chi_K = .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
   cat( "---\n" )
   
+  Chi_K = as.data.table(Chi_K)
   setnames( Chi_K, old = names( Chi_K ), c( "topic", "OpTop", "pval" ) )  
   
   global_min <- Chi_K[ , .SD[ which.min( OpTop ) ] ]
