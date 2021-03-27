@@ -7,13 +7,13 @@
 using namespace Rcpp;
 
 // optimal_topic_core
-arma::mat optimal_topic_core(const Rcpp::List& lda_models, const Rcpp::S4& weighted_dfm, double q, const Rcpp::CharacterVector& docs, int n_docs, int n_features);
+arma::mat optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const Rcpp::CharacterVector& docs, int n_docs, int n_features);
 RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP docsSEXP, SEXP n_docsSEXP, SEXP n_featuresSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Rcpp::List& >::type lda_models(lda_modelsSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type weighted_dfm(weighted_dfmSEXP);
+    Rcpp::traits::input_parameter< const arma::sp_mat& >::type weighted_dfm(weighted_dfmSEXP);
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< const Rcpp::CharacterVector& >::type docs(docsSEXP);
     Rcpp::traits::input_parameter< int >::type n_docs(n_docsSEXP);

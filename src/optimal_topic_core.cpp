@@ -4,7 +4,7 @@
 //' @keywords internal
 // [[Rcpp::export]]
 arma::mat optimal_topic_core(const Rcpp::List& lda_models,
-                             const Rcpp::S4& weighted_dfm,
+                             const arma::sp_mat& weighted_dfm,
                              double q,
                              const Rcpp::CharacterVector& docs,
                              int n_docs,
@@ -12,17 +12,6 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
 {
     // Rcpp::Rcout << "ENTERED RCPP CODE" << std::endl;
   
-    // build sparse matrix from S4 object
-    Rcpp::IntegerVector dims = weighted_dfm.slot("Dim");
-    arma::urowvec i = Rcpp::as<arma::urowvec>(weighted_dfm.slot("i"));
-    arma::urowvec p = Rcpp::as<arma::urowvec>(weighted_dfm.slot("p"));
-    arma::vec x     = Rcpp::as<arma::vec>(weighted_dfm.slot("x"));
-  
-    int nrow = dims[0], ncol = dims[1];
-    
-    // use Armadillo sparse matrix constructor
-    arma::sp_mat weighted_dfm_(i, p, x, nrow, ncol);
-    
     // this is the output of this method 
     arma::mat Chi_K(lda_models.size(), 3);
 
@@ -62,12 +51,12 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
             // TODO logic unclear; could all of this loop be written with fewer calls?
 
             // subsetting word proportions and dtw based on id_doc;
-            // Rcpp::Rcout << "weighted_dfm row " << j_doc << ": " << std::endl << weighted_dfm_.row(j_doc) << std::endl; // TODO REMOVE
+            // Rcpp::Rcout << "weighted_dfm row " << j_doc << ": " << std::endl << weighted_dfm.row(j_doc) << std::endl; // TODO REMOVE
             // define BestPair as n_cols(weighted_dfm) x 1, then fill it with weighted_dfm jth
-            arma::mat BestPair(weighted_dfm_.n_cols, 1);
+            arma::mat BestPair(weighted_dfm.n_cols, 1);
             for (std::size_t row_index = 0; row_index < BestPair.n_rows; ++row_index)
             {
-                BestPair(row_index, 0) = weighted_dfm_.row(j_doc)(row_index);
+                BestPair(row_index, 0) = weighted_dfm.row(j_doc)(row_index);
             }
             // Rcpp::Rcout << "Best Pair: " << std::endl << BestPair << std::endl; // TODO REMOVE
 
