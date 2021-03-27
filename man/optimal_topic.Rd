@@ -14,7 +14,7 @@ optimal_topic(
 )
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as computed by
+\item{lda_models}{A list of ordered LDA models as estimated by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
@@ -47,13 +47,16 @@ A \code{data.table} containing the following columns:
 }
 \description{
 Implements a fast chi-square like test to detect the number of topics
-that best describes the corpus estimated via Latent Dirichelet Allocation.
+estimated via Latent Dirichelet Allocation that best describes the corpus.
 }
 \details{
 The function implements a Pearson chi-square statistic that exploits
 the assumption that the distribution of words is multinomial. The test studies
 the stability of a K-topic model which fully characterizes the corpus if the
-observed and estimated word vectors are statistically indistinct.
+observed and estimated word vectors are statistically indistinct. 
+
+All internal algorithms are implemented in \code{C} to increase speed and efficiency 
+when highly-dimensional models together with large weighted DFMs need to be analyzed. 
 
 To ensure a complete matching between the set of LDA models specified 
 through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
@@ -81,7 +84,7 @@ by setting \code{alpha} equal to zero.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-test1 <- optimal_topic( lda_models = lda_list,
+test1 = optimal_topic( lda_models = lda_list,
                         weighted_dfm = weighted_dfm,
                         q = 0.80,
                         alpha = 0.05 )

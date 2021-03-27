@@ -16,13 +16,13 @@ agg_document_stability(
 )
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as computed by
+\item{lda_models}{A list of ordered LDA models as estimated by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
 \item{weighted_dfm}{A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
-"doc_id" with original document names. See ?\code{\link[OpTop]{optimal_topic}} for more details.}
+It is recommended that \code{weighted_dfm} has the corresponding internal variable that can be
+accessed with \code{docid}. See ?\code{\link[OpTop]{optimal_topic}} for more details.}
 
 \item{optimal_model}{The optimal topic model. It can be either an integer giving
 the number of topics for the optimal topic model or a

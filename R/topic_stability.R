@@ -1,5 +1,5 @@
 if ( getRversion() >= "2.15.1" ) {
-  utils::globalVariables( c( "chi_std", "topic", "pchisq", "dfs", "chisq_std" ) )
+  utils::globalVariables( c( "chisq", "chi_std", "topic", "pchisq", "dfs", "chisq_std" ) )
 }
 #' Compute topic stability for over-optimal topic specifications
 #'

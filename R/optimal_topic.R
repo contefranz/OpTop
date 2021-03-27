@@ -10,9 +10,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' Find the optimal number of topics from a pool of LDA models
 #'
 #' Implements a fast chi-square like test to detect the number of topics
-#' that best describes the corpus estimated via Latent Dirichelet Allocation.
+#' estimated via Latent Dirichelet Allocation that best describes the corpus.
 #'
-#' @param lda_models A list of ordered LDA models as computed by
+#' @param lda_models A list of ordered LDA models as estimated by
 #' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 #' according to the number of topics.
 #' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
@@ -32,7 +32,10 @@ if ( getRversion() >= "2.15.1" ) {
 #' @details The function implements a Pearson chi-square statistic that exploits
 #' the assumption that the distribution of words is multinomial. The test studies
 #' the stability of a K-topic model which fully characterizes the corpus if the
-#' observed and estimated word vectors are statistically indistinct.
+#' observed and estimated word vectors are statistically indistinct. 
+#' 
+#' All internal algorithms are implemented in \code{C} to increase speed and efficiency 
+#' when highly-dimensional models together with large weighted DFMs need to be analyzed. 
 #' 
 #' To ensure a complete matching between the set of LDA models specified 
 #' through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
@@ -65,7 +68,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
-#' test1 <- optimal_topic( lda_models = lda_list,
+#' test1 = optimal_topic( lda_models = lda_list,
 #'                         weighted_dfm = weighted_dfm,
 #'                         q = 0.80,
 #'                         alpha = 0.05 )
@@ -77,10 +80,10 @@ if ( getRversion() >= "2.15.1" ) {
 #' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table ggplot2
 #' @importFrom tibble as_tibble
-#' @importFrom quanteda ndoc nfeat is.dfm
+#' @importFrom quanteda ndoc nfeat is.dfm docid
 #' @export
 
-optimal_topic <- function( lda_models, weighted_dfm,
+optimal_topic = function( lda_models, weighted_dfm,
                            q = 0.80, alpha = 0.05, 
                            do_plot = TRUE, 
                            convert = NULL ) {
@@ -110,25 +113,25 @@ optimal_topic <- function( lda_models, weighted_dfm,
     stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
   }
   
-  tic <- proc.time()
+  tic = proc.time()
   # compute the number of docs and features in the vocabulary
-  docs <- as.character( docid( weighted_dfm ) )
-  n_docs <- ndoc( weighted_dfm )
-  n_features <- nfeat( weighted_dfm )
+  docs = as.character( docid( weighted_dfm ) )
+  n_docs = ndoc( weighted_dfm )
+  n_features = nfeat( weighted_dfm )
   
   # final output table
-  regstats <- matrix( NA_real_, nrow = 0, ncol = 4 )
-  Chi_K <- data.table()
+  regstats = matrix( NA_real_, nrow = 0, ncol = 4 )
+  Chi_K = data.table()
 
   # get the list of documents to work on, by removing those which are not in the LDA models
   for ( i_mod in seq_along( lda_models ) ) {
-    doc_check <- docs %in% lda_models[[ i_mod ]]@documents
+    doc_check = docs %in% lda_models[[ i_mod ]]@documents
     if ( !all(doc_check) ) {
-      id_toremove <- which( doc_check == FALSE )
+      id_toremove = which( doc_check == FALSE )
       if ( length( id_toremove ) < length( doc_check ) ) {
         cat("Removing unmatched documents\n" )
-        toremove <- docs[ id_toremove ]
-        weighted_dfm <- weighted_dfm[ -id_toremove, ]
+        toremove = docs[ id_toremove ]
+        weighted_dfm = weighted_dfm[ -id_toremove, ]
       } else {
         stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
       }
@@ -137,7 +140,6 @@ optimal_topic <- function( lda_models, weighted_dfm,
   
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
-  # Chi_K = OpTop:::optimal_topic_core(lda_models, weighted_dfm, q, docs, n_docs, n_features)
   Chi_K = .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
@@ -146,12 +148,12 @@ optimal_topic <- function( lda_models, weighted_dfm,
   Chi_K = as.data.table(Chi_K)
   setnames( Chi_K, old = names( Chi_K ), c( "topic", "OpTop", "pval" ) )  
   
-  global_min <- Chi_K[ , .SD[ which.min( OpTop ) ] ]
-  alpha_min <- Chi_K[ pval <= alpha ][ 1L ]
+  global_min = Chi_K[ , .SD[ which.min( OpTop ) ] ]
+  alpha_min = Chi_K[ pval <= alpha ][ 1L ]
   if ( alpha == 0 || all( is.na( alpha_min ) ) ) {
     cat( "Optimal model found by global minimum\n" )
     cat( "Optimal model has", global_min$topic, "topics\n" )
-    best_topic <- global_min
+    best_topic = global_min
   } else {
     if ( global_min$topic > alpha_min$topic ) {
       cat( "Optimal model found by significance level of", alpha, "\n" )
@@ -160,15 +162,15 @@ optimal_topic <- function( lda_models, weighted_dfm,
     } else {
       cat( "Optimal model found by global minimum\n" )
       cat( "Optimal model has", global_min$topic, "topics\n" )
-      best_topic <- global_min
+      best_topic = global_min
     }
   }
   
   if ( do_plot ) {
     cat( "Plotting...\n" )
-    x_min <- best_topic$topic
-    y_min <- best_topic$OpTop
-    p1 <- ggplot( Chi_K ) +
+    x_min = best_topic$topic
+    y_min = best_topic$OpTop
+    p1 = ggplot( Chi_K ) +
       geom_line( aes( x = topic, y = OpTop ), size = 0.8, color = "royalblue" ) +
       geom_hline( yintercept = y_min, color = "black", linetype = 2L ) +
       geom_vline( xintercept = x_min, color = "black", linetype = 2L ) +
@@ -184,12 +186,12 @@ optimal_topic <- function( lda_models, weighted_dfm,
     if ( convert == "data.frame" ) {
       setDF( Chi_K )
     } else if ( convert == "tibble" ) {
-      Chi_K <- as_tibble( Chi_K )
+      Chi_K = as_tibble( Chi_K )
     }
   }
   
-  toc <- proc.time()
-  runtime <- toc - tic
+  toc = proc.time()
+  runtime = toc - tic
   cat( "---\n" )
   cat( "Function took:", runtime[ 3L ], "sec.\n" )
   cat( "---\n" )

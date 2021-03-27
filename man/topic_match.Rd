@@ -7,7 +7,7 @@
 topic_match(lda_models, optimal_model, var_correction = TRUE)
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as computed by
+\item{lda_models}{A list of ordered LDA models as estimated by
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 

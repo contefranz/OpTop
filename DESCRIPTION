@@ -4,8 +4,9 @@ Title: Optimal topic specification for latent dirichlet allocation models
 Version: 0.9.5
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
-    role = c("cre", "aut", "cph"), comment = c( ORCID = "0000-0002-5130-7745" ) ), 
-    person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = "aut" ) )
+    role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
+    person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
+    person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
 Description: A set of fast parametric tests to detect the optimal number 
     of topics from a pool of Latent Dirichlet Allocation models.
 License: GPL-3

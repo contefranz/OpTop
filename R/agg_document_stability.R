@@ -13,8 +13,8 @@ if ( getRversion() >= "2.15.1" ) {
 #' 
 #' @inheritParams agg_topic_stability
 #' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-#' It is recommended that \code{weighted_dfm} has the \code{\link[quanteda]{docvar}} 
-#' "doc_id" with original document names. See ?\code{\link[OpTop]{optimal_topic}} for more details.
+#' It is recommended that \code{weighted_dfm} has the corresponding internal variable that can be
+#' accessed with \code{docid}. See ?\code{\link[OpTop]{optimal_topic}} for more details.
 #' @return A \code{data.table} containing the following columns:
 #'
 #' \item{\code{topic}}{An integer giving the number of topics.}
