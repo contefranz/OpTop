@@ -136,6 +136,8 @@ optimal_topic = function( lda_models, weighted_dfm,
     if ( length( id_toremove ) < length( doc_check ) ) {
       cat("Removing unmatched documents\n" )
       weighted_dfm = weighted_dfm[ -id_toremove, ]
+      # update number of docs
+      n_docs = ndoc( weighted_dfm )
     } else {
       stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
     }
