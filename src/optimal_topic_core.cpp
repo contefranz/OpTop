@@ -13,7 +13,7 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
     // this is the output of this method
     arma::mat Chi_K(lda_models.size(), 3);
 
-    // loop variables
+    // loop LDA models
     arma::mat regstats(n_docs, 4);
     for (std::size_t i_mod = 0; i_mod < lda_models.size(); ++i_mod)
     {
