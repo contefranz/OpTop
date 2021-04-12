@@ -10,7 +10,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' Find the optimal number of topics from a pool of LDA models
 #'
 #' Implements a fast chi-square like test to detect the number of topics
-#' estimated via Latent Dirichelet Allocation that best describes the corpus.
+#' estimated via Latent Dirichlet Allocation that best describes the corpus.
 #'
 #' @param lda_models A list of ordered LDA models as estimated by
 #' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
@@ -26,20 +26,17 @@ if ( getRversion() >= "2.15.1" ) {
 #' See 'Details'.
 #' @param do_plot Plot the chi-square statistic as a function of the number of 
 #' topics. Default to \code{TRUE}.
-#' @param convert Target convertion format. This version of \code{OpTop} supports
-#' \code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
-#' Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.
 #' @details The function implements a Pearson chi-square statistic that exploits
 #' the assumption that the distribution of words is multinomial. The test studies
 #' the stability of a K-topic model which fully characterizes the corpus if the
 #' observed and estimated word vectors are statistically indistinct. 
 #' 
-#' All internal algorithms are implemented in \code{C} to increase speed and efficiency 
-#' when highly-dimensional models together with large weighted DFMs need to be analyzed. 
+#' All internal algorithms are implemented in \code{C} and \code{C++} to increase speed and efficiency 
+#' when highly-dimensional models, together with large weighted DFMs, need to be analyzed. 
 #' 
 #' To ensure a complete matching between the set of LDA models specified 
-#' through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
-#' has specific element names indicating the original names of the documents as defined
+#' through \code{lda_models}, we strongly recommend the corresponding \code{weighted_dfm} 
+#' to have specific element names indicating the original names of the documents as defined
 #' in the \code{\link[quanteda]{corpus}}. These element names can be extracted with 
 #' \code{\link[quanteda]{docid}}\code{(weighted_dfm)}. 
 #' If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
@@ -83,10 +80,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @importFrom quanteda ndoc nfeat is.dfm docid
 #' @export
 
-optimal_topic = function( lda_models, weighted_dfm,
-                          q = 0.80, alpha = 0.05, 
-                          do_plot = TRUE, 
-                          convert = NULL ) {
+optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_plot = TRUE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
@@ -109,19 +103,12 @@ optimal_topic = function( lda_models, weighted_dfm,
   if ( !is.numeric( alpha ) ) {
     stop( "alpha must be a numeric" )
   }
-  if ( !is.null( convert ) && !is.character( convert ) ) {
-    stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
-  }
   
   tic = proc.time()
   # compute the number of docs and features in the vocabulary
   docs = as.character( docid( weighted_dfm ) )
   n_docs = ndoc( weighted_dfm )
   n_features = nfeat( weighted_dfm )
-  
-  # final output table
-  regstats = matrix( NA_real_, nrow = 0, ncol = 4 )
-  Chi_K = data.table()
   
   # get the list of documents to work on, by removing those which are not in the LDA models
   # ASSUMPTION: we assume that whenever the LDA fails to estimate topics in a given document, 
@@ -157,10 +144,10 @@ optimal_topic = function( lda_models, weighted_dfm,
   # }
   ######### DEPRECATED CODE WHICH WILL BE PROBABLY REMOVED ############
   
-  cat( "# # # # # # # # # # # # # # # # # # # #\n" )
+  # cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   Chi_K = .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
-  cat( "# # # # # # # # # # # # # # # # # # # #\n" )
+  # cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
   cat( "---\n" )
   
@@ -198,15 +185,6 @@ optimal_topic = function( lda_models, weighted_dfm,
       ggtitle( "Optimal Topic Plot" ) +
       theme_OpTop
     print( p1 )
-  }
-  
-  if ( !is.null( convert ) ) {
-    cat( "Converting to", convert, "\n" )
-    if ( convert == "data.frame" ) {
-      setDF( Chi_K )
-    } else if ( convert == "tibble" ) {
-      Chi_K = as_tibble( Chi_K )
-    }
   }
   
   toc = proc.time()

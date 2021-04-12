@@ -38,7 +38,7 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
 
         // looping over each document (k) in each model (j);
         // this is the loop that needs to be parallelized
-        Rcpp::Rcout << "--> Processing documents" << std::endl;
+        // Rcpp::Rcout << "--> Processing documents" << std::endl;
         for (std::size_t j_doc = 0; j_doc < n_docs; ++j_doc)
         {
             Rcpp::checkUserInterrupt();

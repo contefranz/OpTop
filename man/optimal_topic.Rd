@@ -4,14 +4,7 @@
 \alias{optimal_topic}
 \title{Find the optimal number of topics from a pool of LDA models}
 \usage{
-optimal_topic(
-  lda_models,
-  weighted_dfm,
-  q = 0.8,
-  alpha = 0.05,
-  do_plot = TRUE,
-  convert = NULL
-)
+optimal_topic(lda_models, weighted_dfm, q = 0.8, alpha = 0.05, do_plot = TRUE)
 }
 \arguments{
 \item{lda_models}{A list of ordered LDA models as estimated by
@@ -32,10 +25,6 @@ See 'Details'.}
 
 \item{do_plot}{Plot the chi-square statistic as a function of the number of 
 topics. Default to \code{TRUE}.}
-
-\item{convert}{Target convertion format. This version of \code{OpTop} supports
-\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
-Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 }
 \value{
 A \code{data.table} containing the following columns:
@@ -47,7 +36,7 @@ A \code{data.table} containing the following columns:
 }
 \description{
 Implements a fast chi-square like test to detect the number of topics
-estimated via Latent Dirichelet Allocation that best describes the corpus.
+estimated via Latent Dirichlet Allocation that best describes the corpus.
 }
 \details{
 The function implements a Pearson chi-square statistic that exploits
@@ -55,12 +44,12 @@ the assumption that the distribution of words is multinomial. The test studies
 the stability of a K-topic model which fully characterizes the corpus if the
 observed and estimated word vectors are statistically indistinct. 
 
-All internal algorithms are implemented in \code{C} to increase speed and efficiency 
-when highly-dimensional models together with large weighted DFMs need to be analyzed. 
+All internal algorithms are implemented in \code{C} and \code{C++} to increase speed and efficiency 
+when highly-dimensional models, together with large weighted DFMs, need to be analyzed. 
 
 To ensure a complete matching between the set of LDA models specified 
-through \code{lda_models}, we strongly recommend that the corresponding \code{weighted_dfm} 
-has specific element names indicating the original names of the documents as defined
+through \code{lda_models}, we strongly recommend the corresponding \code{weighted_dfm} 
+to have specific element names indicating the original names of the documents as defined
 in the \code{\link[quanteda]{corpus}}. These element names can be extracted with 
 \code{\link[quanteda]{docid}}\code{(weighted_dfm)}. 
 If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 

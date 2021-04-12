@@ -38,10 +38,6 @@ matrix. Default to 0.05.}
 \item{do_plot}{Plot the chi-square statistic as a function of the number of 
 topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
 the significance level according to \code{alpha}.}
-
-\item{convert}{Target convertion format. This version of \code{OpTop} supports
-\code{\link[base]{data.frame}} and \code{\link[tibble]{tibble}}.
-Default to \code{NULL} which returns a \code{\link[data.table]{data.table}}.}
 }
 \value{
 A `data.table` containing the following columns:
