@@ -123,7 +123,7 @@ topic_stability <- function( lda_models, optimal_model,
     tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
   }
   # Normalizing by scaling by vector norms
-  tww_best_norm <- norm_tww( tww_best )
+  tww_best_norm <- .Call(`_OpTop_normalize_columns`, tww_best)
   l_models = length( lda_models )
   # pre-allocating required objects
   BestTopics    <- matrix( 0, nrow = (l_models - best_pos), ncol = .optimal_model )
@@ -162,7 +162,7 @@ topic_stability <- function( lda_models, optimal_model,
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     
     # Normalizing by scaling by vector norms
-    tww_norm <- norm_tww( tww )
+    tww_norm <- .Call(`_OpTop_normalize_columns`, tww)
     
     # this is the matrix multiplication to get the Cosine Similarities
     # between the best set of topics and the targe ones

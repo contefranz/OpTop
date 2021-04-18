@@ -87,7 +87,7 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
     tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
   }
   # Normalizing by scaling by vector norms
-  tww_best_norm <- norm_tww( tww_best )
+  tww_best_norm <- .Call(`_OpTop_normalize_columns`, tww_best)
   
   loop_sequence <- (best_pos + 1L):length( lda_models )
   min_loop <- min( loop_sequence )
@@ -110,7 +110,7 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     # Normalizing by scaling by vector norms
-    tww_norm <- norm_tww( tww )
+    tww_norm <- .Call(`_OpTop_normalize_columns`, tww)
     
     # this is the matrix multiplication to get the Cosine Similarities
     # between the best set of topics and the targe ones

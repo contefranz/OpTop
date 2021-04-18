@@ -6,3 +6,8 @@ optimal_topic_core <- function(lda_models, weighted_dfm, q, docs, n_docs, n_feat
     .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
 }
 
+#' @keywords internal
+normalize_columns <- function(x) {
+    .Call(`_OpTop_normalize_columns`, x)
+}
+
