@@ -43,45 +43,27 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
     stop( paste( "lda_models must contain LDA_VEM obects as computed",
                  "by topicmodels::LDA()" ) )
   }
-  if ( ( !is.data.frame( optimal_model ) || !is.data.table( optimal_model ) ) &&
-       !is.numeric( optimal_model ) && !is.LDA_VEM( optimal_model ) ) {
-    stop( paste( "optimal_model must be either 1. an integer identifying",
-                 "the number of topics which best fits the corpus",
-                 "2. a data.table/data.frame as returned by optimal_topic()",
-                 "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
+  if ( !is.numeric( optimal_model ) || optimal_model < 2 ) {
+    stop("optimal_model must be a number greater than 2")
   }
-  if ( is.numeric( optimal_model ) ) {
-    .optimal_model <- optimal_model
-  } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
-    cat( "optimal_model is a data.table or a data.frame.",
-         "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
-  } else if ( is.LDA_VEM( optimal_model ) ) {
-    cat( "optimal_model is a LDA_VEM object.", 
-         "Extracting information about the optimal model...\n" )
-    dtw_best <- optimal_model@gamma
-    tww_best <- t( exp( optimal_model@beta ) )
-    .optimal_model <- ncol( dtw_best )
-  }
-  
-  if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+  if ( optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
     message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
     return( NULL )
   }
-  cat( "best model has", .optimal_model, "topics\n" )  
+  
   tic <- proc.time()
   
-  k_end <- max( sapply( lda_models, function( x ) x@k ) )
   # find the element corresponding to the best topic
-  best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
-  
+  best_pos <- which( sapply( lda_models, function( x ) x@k ) == optimal_model )
+  # check that optimal_models does correspond to a real LDA model in lda_models
   if ( length( best_pos ) == 0 ) {
-    stop( paste( "There is no optimal model in lda_models.",
-                 "This could be either due to a wrong specification of",
-                 "argument optimal_model or",
-                 "if optimal_model is a data.table, the optimal model cannot be found",
-                 "in the list lda_models." ) )
+    stop("optimal_model does not correspond to any topic number in lda_models")
   }
+  
+  #############################
+  #############################
+  # FROM HERE ON WE MOVE TO C++
+  #############################
   if ( !is.LDA_VEM( optimal_model ) ) {
     # extracting information from best model
     tww_best <- t( exp( lda_models[[ best_pos ]]@beta ) )
@@ -99,14 +81,11 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
   for ( i_mod in loop_sequence ) {
-    # i_pos <- i_mod - .optimal_model + 1L
     i_pos <- i_mod - min_loop + 1L
     
     # reading tww
     tww <- t( exp( lda_models[[ i_mod ]]@beta ) )
     current_k <- ncol( tww )
-    # n_tww <- nrow( tww )
-    # p_tww <- ncol( tww )
     cat( "---\n" )
     cat( "# # # Processing LDA with k =", current_k, "\n" )
     # Normalizing by scaling by vector norms
@@ -137,10 +116,10 @@ topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {
     tops <- 1L:current_k
     # pre-allocate object
     above_thresh <- matrix( as.integer( CosSim > thresh ), 
-                            nrow = .optimal_model, 
+                            nrow = optimal_model, 
                             ncol = current_k )
-    top_mat      <- matrix( rep( 1L:current_k, each = .optimal_model ), 
-                            nrow = .optimal_model, 
+    top_mat      <- matrix( rep( 1L:current_k, each = optimal_model ), 
+                            nrow = optimal_model, 
                             ncol = current_k )
     
     # Identify factors that are highly similar to at least one base model factor
