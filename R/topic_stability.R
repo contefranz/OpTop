@@ -43,7 +43,7 @@ if ( getRversion() >= "2.15.1" ) {
 
 topic_stability <- function( lda_models, optimal_model,
                              q = 0.80, alpha = 0.05,
-                             do_plot = TRUE, convert = NULL ) {
+                             do_plot = TRUE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )

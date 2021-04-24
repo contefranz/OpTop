@@ -40,7 +40,7 @@ agg_topic_stability <- function( lda_models, optimal_model,
                                  best_match, least_match,
                                  q = 0.80, alpha = 0.05,
                                  smoothed = TRUE,
-                                 do_plot = TRUE, convert = NULL ) {
+                                 do_plot = TRUE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )

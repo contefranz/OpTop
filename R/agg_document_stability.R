@@ -51,8 +51,7 @@ if ( getRversion() >= "2.15.1" ) {
 agg_document_stability <- function( lda_models, weighted_dfm, 
                                     optimal_model, 
                                     q = 0.80, alpha = 0.05, 
-                                    smoothed = TRUE, do_plot = TRUE,
-                                    convert = NULL ) {
+                                    smoothed = TRUE, do_plot = TRUE ) {
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )

@@ -11,8 +11,7 @@ agg_document_stability(
   q = 0.8,
   alpha = 0.05,
   smoothed = TRUE,
-  do_plot = TRUE,
-  convert = NULL
+  do_plot = TRUE
 )
 }
 \arguments{

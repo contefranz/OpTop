@@ -9,8 +9,7 @@ topic_stability(
   optimal_model,
   q = 0.8,
   alpha = 0.05,
-  do_plot = TRUE,
-  convert = NULL
+  do_plot = TRUE
 )
 }
 \arguments{
