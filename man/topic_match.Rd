@@ -11,13 +11,7 @@ topic_match(lda_models, optimal_model, var_correction = TRUE)
 \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
 according to the number of topics.}
 
-\item{optimal_model}{The optimal topic model. It can be either an integer giving
-the number of topics for the optimal topic model or a
-\code{\link[data.table]{data.table}}/\code{\link[base]{data.frame}} as
-returned by \code{\link[OpTop]{optimal_topic}}. In the latter case, the
-function automatically finds the optimal model. This argument can also be
-a \code{\link[topicmodels]{LDA-class}} object of type \code{LDA_VEM} as 
-returned by \code{\link[topicmodels]{LDA}}.}
+\item{optimal_model}{A number corresponding to the optimal topic model.}
 
 \item{var_correction}{Use the unbiased estimator of the co-variance for 
 i.i.d. observations by applying n - 1 in the denominator. Default is \code{TRUE}.}

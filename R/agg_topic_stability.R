@@ -70,9 +70,6 @@ agg_topic_stability <- function( lda_models, optimal_model,
   if ( !is.logical( smoothed ) ) {
     stop( "smoothed must be either TRUE or FALSE" )
   }
-  if ( !is.null( convert ) && !is.character( convert ) ) {
-    stop( "When not NULL, convert must be either a \"data.frame\" or a \"tibble\"" )
-  }
   if ( is.numeric( optimal_model ) ) {
     .optimal_model <- optimal_model
   } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
@@ -228,15 +225,6 @@ agg_topic_stability <- function( lda_models, optimal_model,
       cat( "---\n" )
       cat( "Overall, aggregated topic stability is achieved for ", 
            round( prop_H0 * 100, 2 ), "% of the models\n", sep = "" )
-    }
-  }
-  
-  if ( !is.null( convert ) ) {
-    cat( "Converting to", convert, "\n" )
-    if ( convert == "data.frame" ) {
-      setDF( Chi_K )
-    } else if ( convert == "tibble" ) {
-      Chi_K <- as_tibble( Chi_K )
     }
   }
   
