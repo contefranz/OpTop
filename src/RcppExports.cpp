@@ -22,6 +22,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// topic_match_core
+Rcpp::List topic_match_core(const Rcpp::List& lda_models, std::size_t best_pos, std::size_t optimal_k, bool var_correction);
+RcppExport SEXP _OpTop_topic_match_core(SEXP lda_modelsSEXP, SEXP best_posSEXP, SEXP optimal_kSEXP, SEXP var_correctionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type lda_models(lda_modelsSEXP);
+    Rcpp::traits::input_parameter< std::size_t >::type best_pos(best_posSEXP);
+    Rcpp::traits::input_parameter< std::size_t >::type optimal_k(optimal_kSEXP);
+    Rcpp::traits::input_parameter< bool >::type var_correction(var_correctionSEXP);
+    rcpp_result_gen = Rcpp::wrap(topic_match_core(lda_models, best_pos, optimal_k, var_correction));
+    return rcpp_result_gen;
+END_RCPP
+}
 // normalize_columns
 arma::mat normalize_columns(const arma::mat& x);
 RcppExport SEXP _OpTop_normalize_columns(SEXP xSEXP) {
@@ -36,6 +50,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 6},
+    {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
     {NULL, NULL, 0}
 };

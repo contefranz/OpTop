@@ -7,6 +7,11 @@ optimal_topic_core <- function(lda_models, weighted_dfm, q, docs, n_docs, n_feat
 }
 
 #' @keywords internal
+topic_match_core <- function(lda_models, best_pos, optimal_k, var_correction) {
+    .Call(`_OpTop_topic_match_core`, lda_models, best_pos, optimal_k, var_correction)
+}
+
+#' @keywords internal
 normalize_columns <- function(x) {
     .Call(`_OpTop_normalize_columns`, x)
 }
