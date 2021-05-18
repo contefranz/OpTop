@@ -84,7 +84,7 @@ agg_document_stability <- function( lda_models, weighted_dfm,
   if ( !is.logical( smoothed ) ) {
     stop( "smoothed must be either TRUE or FALSE" )
   }
-  if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+  if ( optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
     message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
     return( NULL )
   }
