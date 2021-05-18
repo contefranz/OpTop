@@ -2,6 +2,7 @@
 is.LDA_VEM <- function( x ) {
   "LDA_VEM" %in% class(x)
 }
+#' @keywords internal
 
 # this declare my personal ggplot theme
 font_size = 10
