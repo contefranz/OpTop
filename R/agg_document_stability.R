@@ -65,12 +65,12 @@ agg_document_stability <- function( lda_models, weighted_dfm,
     stop( paste( "lda_models must contain LDA_VEM obects as computed",
                  "by topicmodels::LDA()" ) )
   }
-  if ( ( !is.data.frame( optimal_model ) || !is.data.table( optimal_model ) ) &&
-       !is.numeric( optimal_model ) && !is.LDA_VEM( optimal_model ) ) {
-    stop( paste( "optimal_model must be either 1. an integer identifying",
-                 "the number of topics which best fits the corpus",
-                 "2. a data.table/data.frame as returned by .optimal_model()",
-                 "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
+  if ( !is.numeric( optimal_model ) || optimal_model < 2 ) {
+    stop("optimal_model must be a number greater than 2")
+  }
+  if ( optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
+    message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
+    return( NULL )
   }
   if( !is.dfm( weighted_dfm ) ) {
     stop( "weighted_dfm must be a dfm" )
@@ -84,39 +84,91 @@ agg_document_stability <- function( lda_models, weighted_dfm,
   if ( !is.logical( smoothed ) ) {
     stop( "smoothed must be either TRUE or FALSE" )
   }
-  if ( is.numeric( optimal_model ) ) {
-    .optimal_model <- optimal_model
-  } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
-    cat( "optimal_model is a data.table or a data.frame.",
-         "Extracting information about optimal model...\n" )
-    .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
-  } else if ( is.LDA_VEM( optimal_model ) ) {
-    cat( "optimal_model is a LDA_VEM object.", 
-         "Extracting information about the optimal model...\n" )
-    dtw_best <- optimal_model@gamma
-    tww_best <- t( exp( optimal_model@beta ) )
-    .optimal_model <- ncol( dtw_best )
-  }
   if ( .optimal_model == lda_models[[ length(lda_models ) ]]@k ) {
     message("Optimal model is already the last one in lda_models. There is nothing to compute above that.")
     return( NULL )
   }
-  cat( "best model has", .optimal_model, "topics\n" )
+  ###############################################################
+  # THIS IS OLD CODE TO BE REMOVED ONCE THE CONVERSION IS STABLE
+  ###############################################################
+  # 
+  # if ( ( !is.data.frame( optimal_model ) || !is.data.table( optimal_model ) ) &&
+  #      !is.numeric( optimal_model ) && !is.LDA_VEM( optimal_model ) ) {
+  #   stop( paste( "optimal_model must be either 1. an integer identifying",
+  #                "the number of topics which best fits the corpus",
+  #                "2. a data.table/data.frame as returned by .optimal_model()",
+  #                "3. an LDA_VEM obect as computed by topicmodels::LDA()" ) )
+  # }
+  # if ( is.numeric( optimal_model ) ) {
+  #   .optimal_model <- optimal_model
+  # } else if ( is.data.table( optimal_model ) || is.data.frame( optimal_model ) ) {
+  #   cat( "optimal_model is a data.table or a data.frame.",
+  #        "Extracting information about optimal model...\n" )
+  #   .optimal_model <- optimal_model[ which.min( OpTop ), topic ]
+  # } else if ( is.LDA_VEM( optimal_model ) ) {
+  #   cat( "optimal_model is a LDA_VEM object.", 
+  #        "Extracting information about the optimal model...\n" )
+  #   dtw_best <- optimal_model@gamma
+  #   tww_best <- t( exp( optimal_model@beta ) )
+  #   .optimal_model <- ncol( dtw_best )
+  # }
+  # cat( "best model has", .optimal_model, "topics\n" )
+  ###############################################################
+  
   tic <- proc.time()
-  
-  # compute the number of docs and features in the vocabulary
-  n_docs <- ndoc( weighted_dfm )
-  n_features <- nfeat( weighted_dfm )
-  
-  k_end <- max( sapply( lda_models, function( x ) x@k ) )
-  best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
+  best_pos <- which( sapply( lda_models, function( x ) x@k ) == optimal_model )
   if ( length( best_pos ) == 0 ) {
-    stop( paste( "There is no optimal model in lda_models.",
-                 "This could be either due to a wrong specification of",
-                 "argument optimal_model or",
-                 "if optimal_model is a data.table, the optimal model cannot be found",
-                 "in the list lda_models." ) )
+    stop("optimal_model does not correspond to any topic number in lda_models")
   }
+  
+  ###############################################################
+  # THIS IS OLD CODE TO BE REMOVED ONCE THE CONVERSION IS STABLE
+  ###############################################################
+  # compute the number of docs and features in the vocabulary
+  # n_docs <- ndoc( weighted_dfm )
+  # n_features <- nfeat( weighted_dfm )
+  # 
+  # k_end <- max( sapply( lda_models, function( x ) x@k ) )
+  # best_pos <- which( sapply( lda_models, function( x ) x@k ) == .optimal_model )
+  # if ( length( best_pos ) == 0 ) {
+  #   stop( paste( "There is no optimal model in lda_models.",
+  #                "This could be either due to a wrong specification of",
+  #                "argument optimal_model or",
+  #                "if optimal_model is a data.table, the optimal model cannot be found",
+  #                "in the list lda_models." ) )
+  # }
+  ###############################################################
+  
+  # THE CODE ABOVE HAS BEEN REPLACED BY THE FOLLOWING
+  # THIS IS WHAT WE DO IN OPTIMAL_TOPIC()
+  docs = as.character( docid( weighted_dfm ) )
+  n_docs = ndoc( weighted_dfm )
+  n_features = nfeat( weighted_dfm )
+  
+  # get the list of documents to work on, by removing those which are not in the LDA models
+  # ASSUMPTION: we assume that whenever the LDA fails to estimate topics in a given document, 
+  # that document is dropped unconditionally on LDA specifications. That is, if we set k = 2 or
+  # k = 10, the same document wil be dropped. Hence, the original loop over "lda_models" does not
+  # make sense anymore. 
+  # 
+  # SOLUTION: we only check once and for all on the optimal topic model
+  doc_check = docs %in% lda_models[[ best_pos ]]@documents
+  if ( !all(doc_check) ) {
+    id_toremove = which( doc_check == FALSE )
+    if ( length( id_toremove ) < length( doc_check ) ) {
+      cat("Removing unmatched documents\n" )
+      weighted_dfm = weighted_dfm[ -id_toremove, ]
+      # update number of docs
+      n_docs = ndoc( weighted_dfm )
+    } else {
+      stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
+    }
+  }  
+  ##########################
+  # C++ BEGINS HERE ! ! !
+  ##########################
+  
+  # TO DO: this also needs to be converted in C++
   if ( !is.LDA_VEM( optimal_model ) ) {
     # extracting information from best model
     dtw_best <- lda_models[[ best_pos ]]@gamma
@@ -196,9 +248,9 @@ agg_document_stability <- function( lda_models, weighted_dfm,
       AggBestPair <- rbind( BestPair[ 1L:icut, ], unname( lowest_estimates ) )
       
       chisq_inform <- (icut  + 1L) * sum( ( AggBestPair[ , 2L ] - AggBestPair[ , 1L ] )^2L /
-        AggBestPair[ , 1L ] )
+                                            AggBestPair[ , 1L ] )
       chisq_uninform <- (icut + 1L) * sum( ( AggBestPair[ , 3L ] - AggBestPair[ , 1L ] )^2L /
-        AggBestPair[ , 1L ] )
+                                             AggBestPair[ , 1L ] )
       out_doc <- data.table( topic = current_k,
                              id_doc = j_doc,
                              df = icut,
