@@ -185,11 +185,11 @@ agg_document_stability <- function( lda_models, weighted_dfm,
     dtwj_doc <- dtw_best[ j_doc, ]
     # casting N x K matrix
     dtw_j_doc <- matrix( data = dtwj_doc,
-                         ncol = .optimal_model,
+                         ncol = optimal_model,
                          nrow = n_features,
                          byrow = TRUE )
     fitval <- (dtw_j_doc * tww_best) %*% matrix( data = 1L, 
-                                                 nrow = .optimal_model,
+                                                 nrow = optimal_model,
                                                  ncol = 1L )
     K_fitval[ , j_doc ] <- fitval
   }
@@ -220,21 +220,21 @@ agg_document_stability <- function( lda_models, weighted_dfm,
                            ncol = p_tww,
                            nrow = n_features,
                            byrow = TRUE )
-      inform <- dtw_j_doc[ , 1L:.optimal_model ] * tww[ , 1L:.optimal_model ]
+      inform <- dtw_j_doc[ , 1L:optimal_model ] * tww[ , 1L:optimal_model ]
       inform_norm <- ( inform %*% matrix( data = 1L, 
-                                          nrow = .optimal_model, 
+                                          nrow = optimal_model, 
                                           ncol = 1L ) ) / 
         sum( inform %*% matrix( data = 1L, 
-                                nrow = .optimal_model, 
+                                nrow = optimal_model, 
                                 ncol = 1L ) )
       
-      uninform <- dtw_j_doc[ , (.optimal_model+1L):p_tww ] * 
-        tww[ , (.optimal_model+1L):p_tww ]
+      uninform <- dtw_j_doc[ , (optimal_model+1L):p_tww ] * 
+        tww[ , (optimal_model+1L):p_tww ]
       uninform_norm <- ( uninform %*% matrix( data = 1L, 
-                                              nrow = current_k - .optimal_model, 
+                                              nrow = current_k - optimal_model, 
                                               ncol = 1L ) ) / 
         sum( uninform %*% matrix( data = 1L, 
-                                  nrow = current_k - .optimal_model, 
+                                  nrow = current_k - optimal_model, 
                                   ncol = 1L ) )
       X <- cbind( K_fitval[ , j_doc ], inform_norm, uninform_norm )
       BestPair <- apply( X, 2L, function( x ) sort( x, decreasing = TRUE ) )
@@ -333,6 +333,7 @@ agg_document_stability <- function( lda_models, weighted_dfm,
         ggtitle( "Point-wise F-Test Plot" ) +
         theme_OpTop +
         theme( legend.position = "none" )
+      # this is the BAD! replace this with patchwork!!!
       print( marrangeGrob( list( p1, p2 ), ncol = 1, nrow = 2, top = "" ) )
       
     } else {
@@ -350,6 +351,7 @@ agg_document_stability <- function( lda_models, weighted_dfm,
         ggtitle( "Smoothed F-Test Plot" ) +
         theme_OpTop +
         theme( legend.position = "none" )
+      # this is the BAD! replace this with patchwork!!!
       print( marrangeGrob( list( p1, p2 ), ncol = 1, nrow = 2, top = "" ) )
       
     }

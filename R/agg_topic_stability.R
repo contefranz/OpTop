@@ -161,7 +161,7 @@ agg_topic_stability <- function( lda_models, optimal_model,
     for ( j_doc in 1L:n_doc ) {
       DTW_best <- matrix( dtw_best[ j_doc, ], 
                           nrow = n_tww,
-                          ncol = .optimal_model )
+                          ncol = optimal_model )
       DTW_most <- matrix( MostSimDTW[ k, ], 
                           nrow = n_tww,
                           ncol = ncol( MostSimDTW ) )

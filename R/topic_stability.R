@@ -158,9 +158,17 @@ topic_stability <- function( lda_models, optimal_model,
       # stop when you reach q
       AggBestPair <- BestPair[ BestPair[ , 3L ] >= 1L - q, ]
       icut <- nrow( AggBestPair )
-      lowest_estimates <- apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
       
-      AggBestPair <- rbind( BestPair[ 1L:icut, ], unname( lowest_estimates ) )
+      if ( n_BP - icut == 0 ) {
+        AggBestPair = BestPair
+      } else if ( n_BP - icut == 1 ) {
+        lowest_estimates = BestPair[ (icut + 1L):n_BP, ]
+        AggBestPair <- rbind( BestPair[ 1L:icut, ], lowest_estimates )
+      } else {
+        lowest_estimates = apply( BestPair[ (icut + 1L):n_BP, ], 2L, sum )
+        # I just removed unname(lowest_estimates)
+        AggBestPair <- rbind( BestPair[ 1L:icut, ], lowest_estimates )
+      }
       numerator <- ( AggBestPair[ , 1L ] - AggBestPair[ , 2L ] )^2L
       denominator <- AggBestPair[ , 1L ]
       Chi_k[ i_pos, j + 1L ] <- icut * sum( numerator / denominator )
