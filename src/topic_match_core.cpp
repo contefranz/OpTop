@@ -114,20 +114,17 @@ Rcpp::List topic_match_core(const Rcpp::List& lda_models,
         // If CosSim exceeds thresh it is too similar to be treated as a
         // distinct factor. Matlab uses a weighting of 0.7 which is difficult
         // to replicate here;
-        // TODO the use of min() seems unjustified. CHECK THIS!
         const arma::vec& CosSimVec = CosSim.as_col();
         double thresh;
         if (var_correction)
         {
-            thresh = arma::min(arma::mean(CosSimVec) + 2.58 * arma::stddev(CosSimVec));
+            thresh = arma::mean(CosSimVec) + 2.58 * arma::stddev(CosSimVec);
         }
         else
         {
             std::size_t n = CosSimVec.size();
-            thresh = arma::min(
-                arma::mean(CosSimVec)
-                + 2.58 * arma::stddev(CosSimVec) * sqrt((n - 1) / n)
-            );
+            thresh =  arma::mean(CosSimVec)
+                + 2.58 * arma::stddev(CosSimVec) * sqrt((n - 1) / n);
         }
 
         // in this next loop, we identify factors that are highly similar to at
