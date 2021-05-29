@@ -31,15 +31,4 @@ out3 <- topic_match( lda_models = lda_list,
                      var_correction = TRUE )
 }
 }
-\references{
-Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-A Statistical Approach for Optimal Topic Model Identification.
-}
-\seealso{
-\code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-}
-\author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
-
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
-}
+\keyword{internal}

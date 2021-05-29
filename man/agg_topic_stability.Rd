@@ -7,8 +7,6 @@
 agg_topic_stability(
   lda_models,
   optimal_model,
-  best_match,
-  least_match,
   q = 0.8,
   alpha = 0.05,
   smoothed = TRUE,
@@ -21,12 +19,6 @@ agg_topic_stability(
 according to the number of topics.}
 
 \item{optimal_model}{A number corresponding to the optimal topic model.}
-
-\item{best_match}{A data.table as computed by \code{\link[OpTop]{topic_match}}.
-This contains the models with highest cosine similarity.}
-
-\item{least_match}{A data.table as computed by \code{\link[OpTop]{topic_match}}.
-This contains the models with lowest cosine similarity.}
 
 \item{q}{Set a cutoff for important words as the quantile of the expected
 cumulative probability of word weights. Default to 0.80, meaning that the 
@@ -61,9 +53,7 @@ stability for above optimal models.
 \examples{
 \dontrun{
 test4 <- agg_topic_stability( lda_models = lda_list,
-                              optimal_model = test1,
-                              best_match = BestMatch,
-                              least_match = LeastMatch )
+                              optimal_model = test1)
 }
 }
 \references{

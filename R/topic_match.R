@@ -20,13 +20,8 @@ if ( getRversion() >= "2.15.1" ) {
 #'                      optimal_model = test1, 
 #'                      var_correction = TRUE )
 #' }
-#' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-#' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-#' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
-#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table
-#' @export
+#' @keywords internal
 
 
 topic_match <- function( lda_models, optimal_model, var_correction = TRUE ) {

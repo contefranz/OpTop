@@ -7,10 +7,6 @@ if ( getRversion() >= "2.15.1" ) {
 #' stability for above optimal models.
 #' 
 #' @inheritParams topic_stability
-#' @param best_match A data.table as computed by \code{\link[OpTop]{topic_match}}.
-#' This contains the models with highest cosine similarity.
-#' @param least_match A data.table as computed by \code{\link[OpTop]{topic_match}}.
-#' This contains the models with lowest cosine similarity.
 #' @param smoothed A logical to control whether the test is performed on each 
 #' document for each LDA model or on the smoothed chi-square statistic. 
 #' This is the aggregated version which gives the overall behavior across all
@@ -24,9 +20,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @examples
 #'\dontrun{
 #' test4 <- agg_topic_stability( lda_models = lda_list,
-#'                               optimal_model = test1,
-#'                               best_match = BestMatch,
-#'                               least_match = LeastMatch )
+#'                               optimal_model = test1)
 #' }
 #' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
 #' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
@@ -37,16 +31,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' @export
 
 agg_topic_stability <- function( lda_models, optimal_model, 
-                                 best_match, least_match,
                                  q = 0.80, alpha = 0.05,
                                  smoothed = TRUE,
                                  do_plot = TRUE ) {
-  
-  ########################################################################
-  # NOTE: PARAMETERS best_match and least_match WILL BE REMOVED
-  # ONCE topic_match() WILL BE INTEGRATED DIRECTLY IN agg_topic_stability()
-  # AND WON'T BE EXPORTED ANYMORE
-  ########################################################################
   
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
@@ -139,6 +126,8 @@ agg_topic_stability <- function( lda_models, optimal_model,
   cat( "---\n" )
   cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
+  matches = topic_match(lda_models = lda_models, optimal_model = optimal_model)
+
   for ( i_mod in loop_sequence ) {
     # i_pos <- i_mod - .optimal_model + 1L
     i_pos <- i_mod - min_loop + 1L
@@ -152,7 +141,7 @@ agg_topic_stability <- function( lda_models, optimal_model,
     # fix the index i down below
     i <- i_pos
     # i <- current_k - .optimal_model
-    MostSim <- intersect( 1L:current_k, best_match[ i, ] )
+    MostSim <- intersect( 1L:current_k, matches$BestMatch[ i, ] )
     MostSimDTW <- dtw[ , MostSim ]
     MostSimTWW <- tww[ , MostSim ]
     
