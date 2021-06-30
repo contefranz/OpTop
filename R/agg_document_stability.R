@@ -12,6 +12,8 @@ if ( getRversion() >= "2.15.1" ) {
 #' Also, computes a F-test to further evaluate deviation from optimal model.
 #' 
 #' @inheritParams agg_topic_stability
+#' @param do_plot Plot the chi-square statistic and the F-statistic as functions of the number of 
+#' topics. Default to \code{TRUE}.
 #' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
 #' It is recommended that \code{weighted_dfm} has the corresponding internal variable that can be
 #' accessed with \code{docid}. See ?\code{\link[OpTop]{optimal_topic}} for more details.
@@ -42,10 +44,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}.
 #' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table
-#' @import grid
 #' @importFrom quanteda ndoc nfeat is.dfm
-#' @importFrom gridExtra marrangeGrob
 #' @importFrom stats pf qf qchisq pchisq loess fitted.values
+#' @importFrom patchwork wrap_plots
 #' @export
 
 agg_document_stability <- function( lda_models, weighted_dfm, 
@@ -150,7 +151,6 @@ agg_document_stability <- function( lda_models, weighted_dfm,
   # that document is dropped unconditionally on LDA specifications. That is, if we set k = 2 or
   # k = 10, the same document wil be dropped. Hence, the original loop over "lda_models" does not
   # make sense anymore. 
-  # 
   # SOLUTION: we only check once and for all on the optimal topic model
   doc_check = docs %in% lda_models[[ best_pos ]]@documents
   if ( !all(doc_check) ) {
@@ -333,8 +333,7 @@ agg_document_stability <- function( lda_models, weighted_dfm,
         ggtitle( "Point-wise F-Test Plot" ) +
         theme_OpTop +
         theme( legend.position = "none" )
-      # this is the BAD! replace this with patchwork!!!
-      print( marrangeGrob( list( p1, p2 ), ncol = 1, nrow = 2, top = "" ) )
+      print(wrap_plots( p1, p2, ncol = 1L, nrow = 2L ))
       
     } else {
       p1 = ggplot( Chi_K ) +
@@ -351,8 +350,7 @@ agg_document_stability <- function( lda_models, weighted_dfm,
         ggtitle( "Smoothed F-Test Plot" ) +
         theme_OpTop +
         theme( legend.position = "none" )
-      # this is the BAD! replace this with patchwork!!!
-      print( marrangeGrob( list( p1, p2 ), ncol = 1, nrow = 2, top = "" ) )
+      print(wrap_plots( p1, p2, ncol = 1L, nrow = 2L ))
       
     }
   }

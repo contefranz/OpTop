@@ -39,9 +39,8 @@ document for each LDA model or on the smoothed chi-square statistic.
 This is the aggregated version which gives the overall behavior across all
 documents in the corpus. Default is \code{TRUE}.}
 
-\item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
-the significance level according to \code{alpha}.}
+\item{do_plot}{Plot the chi-square statistic and the F-statistic as functions of the number of 
+topics. Default to \code{TRUE}.}
 }
 \value{
 A \code{data.table} containing the following columns:
