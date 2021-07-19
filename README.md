@@ -11,7 +11,7 @@ __OpTop__ is an `R` package that implements the testing approach described in
 the paper _A Statistical Approach for Optimal Topic Model Identification_ 
 by Lewis and Grossetti (2019). 
 
-Latent Dirichelet Allocation (LDA) was developed by Blei, Ng, and Jordan in 
+Latent Dirichlet Allocation (LDA) was developed by Blei, Ng, and Jordan in 
 2003 [Blei et al., (2003)] and is based on the idea that a corpus can be 
 represented by a set of topics. LDA has been used extensively in computational 
 linguistics, is replicable, and is automated so it cannot be influenced by 
@@ -19,7 +19,7 @@ researcher prejudice. LDA uses a likelihood approach to discover clusters of
 text, namely topics that frequently appear in a corpus.
 
 One of the open challenges in topic modeling is to rigorously determine the 
-optimal number of topics for a corpus. Extant research relies on hueristic 
+optimal number of topics for a corpus. Extant research relies on heuristic 
 approaches such as iterative trial-and-error procedures to select the number 
 of topics. For example, a standard approach is to determine which specification 
 is the least perplexed by the test sets. Perplexity is based on the intuition 
@@ -27,7 +27,8 @@ that a high degree of similarity, identified as a low level of perplexity, can
 be used to determine the appropriate number of topics [Blei et al., (2003); 
 Hornik and Grün, (2011)].
 
-__OpTop__ introduces a set of parametric tests to identify the optimal number of topics in a collection of LDA models. OpTop also includes several tests to explore topic stability and redundancy.
+__OpTop__ introduces a set of parametric tests to identify the optimal number of topics from a 
+collection of LDA models. OpTop also includes several tests to explore topic stability and redundancy.
 
 
 ## Installation
@@ -41,7 +42,8 @@ devtools::install_github("contefranz/OpTop")
 ## Functions
 
 All the procedures described in the paper will be implemented in this package.
-The package is in early alpha stage and contains seven functions:
+The package is in beta stage and contains the following functions whose most of the internals 
+are in `C++` and `C` to increase the performance.
 
 * `get_topic_models()`: handy function to immediately get the list of topic models
 the user wants to process from a specified environment;
@@ -52,8 +54,6 @@ paper [Lewis and Grossetti (2019)].
 * `topic_stability()`: implements _Test 2_ of topic stability from the 
 methodological paper [Lewis and Grossetti (2019)].
 
-* `topic_match()`: detect and extract informative and uninformative components.
-
 * `agg_topic_stability()`: implements _Test 3_ of aggregate topic stability 
 from the methodological paper [Lewis and Grossetti (2019)].
 
@@ -62,7 +62,7 @@ _Test 5_ of relative topic importance from the methodological paper
 [Lewis and Grossetti (2019)].
 
 * `sim_dfm()`: convenient function to simulate a **quanteda** `dfm` object from a given 
-LDA specification.
+LDA model of class `LDA_VEM` from **topicmodels**.
 
 ## Bug Reporting
 
