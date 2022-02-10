@@ -86,8 +86,8 @@ Bugs and issues can be reported at
 
 ## Bibliography
 
-1. Lewis, C. and Grossetti, F. (2019 - forthcoming): _A Statistical Approach
-for Optimal Topic Model Identification_.
+1. Lewis, C. and Grossetti, F. (2022): _A Statistical Approach
+for Optimal Topic Model Identification_ (forthcoming on Journal of Machine Learning Research)
 2. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). _Latent Dirichlet Allocation_.
 Journal of Machine Learning Research, 3(Jan):993–1022.
 3. Benoit K., Watanabe K., Wang H., Nulty P., Obeng A., M&uuml;ller S., Matsuo A.
