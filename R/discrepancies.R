@@ -291,10 +291,10 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   phi <- tp$phi
   J <- nrow(theta); W <- ncol(phi)
   
-  if (add_baseline_topic) {
-    phi <- rbind(phi, pi_row)
-    theta <- cbind(theta, rep(0, J))
-  }
+  # if (add_baseline_topic) {
+  #   phi <- rbind(phi, pi_row)
+  #   theta <- cbind(theta, rep(0, J))
+  # }
   
   
   D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
