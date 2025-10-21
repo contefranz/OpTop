@@ -1,14 +1,14 @@
 Package: OpTop
 Type: Package
-Title: Optimal topic specification for latent dirichlet allocation models
+Title: Optimal Topic Selection and Goodness-of-Fit for LDA Models
 Version: 0.9.6
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
     person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
-Description: A set of fast parametric tests to detect the optimal number 
-    of topics from a pool of Latent Dirichlet Allocation models.
+Description: Implements statistical tests and discrepancy indices to select the optimal number of 
+    topics and compare goodness-of-fit across Latent Dirichlet Allocation models.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
