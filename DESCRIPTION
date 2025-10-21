@@ -1,7 +1,7 @@
 Package: OpTop
 Type: Package
 Title: Optimal topic specification for latent dirichlet allocation models
-Version: 0.9.5
+Version: 0.9.6
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
@@ -11,10 +11,11 @@ Description: A set of fast parametric tests to detect the optimal number
     of topics from a pool of Latent Dirichlet Allocation models.
 License: GPL-3
 Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
 LazyData: true
 URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-RoxygenNote: 7.1.1
+RoxygenNote: 7.3.3
 Depends: R (>= 3.1)
 Imports: 
     data.table (>= 1.11.0),
@@ -24,6 +25,9 @@ Imports:
     ggplot2 (>= 3.1.0),
     patchwork (>= 1.1.1),
     lifecycle,
-    Rcpp (>= 0.11.0)
+    Rcpp (>= 0.11.0),
+    Matrix,
+    methods,
+    topicmodels
 LinkingTo: Rcpp, RcppArmadillo
 SystemRequirements: C++11
