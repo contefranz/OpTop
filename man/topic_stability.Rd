@@ -2,7 +2,7 @@
 % Please edit documentation in R/topic_stability.R
 \name{topic_stability}
 \alias{topic_stability}
-\title{Compute topic stability for over-optimal topic specifications}
+\title{Topic stability for Over–optimal Topic Specifications}
 \usage{
 topic_stability(
   lda_models,
@@ -13,42 +13,50 @@ topic_stability(
 )
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as estimated by
-\code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
-according to the number of topics.}
+\item{lda_models}{A list of fitted \code{topicmodels::LDA} models (VEM), typically
+ordered by increasing number of topics and including \code{optimal_model}.}
 
-\item{optimal_model}{A number corresponding to the optimal topic model.}
+\item{optimal_model}{Integer giving the number of topics of the optimal model;
+must match one entry in \code{lda_models}.}
 
-\item{q}{Set a cutoff for important words as the quantile of the expected
-cumulative probability of word weights. Default to 0.80, meaning that the 
-function reaches 80\% of the distribution mass and leaves out the remaining
-20\%.}
+\item{q}{Numeric in \verb{(0, 1]}; cumulative mass used to define the best-pair
+envelope (default \code{0.80}).}
 
-\item{alpha}{Alpha level to identify informative words from the Cumulative
-Distribution Function over the cosine similarities in the Topic Word Weights
-matrix. Default to 0.05.}
+\item{alpha}{Numeric significance level used to assess stability (default \code{0.05}).}
 
-\item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
-the significance level according to \code{alpha}.}
+\item{do_plot}{Logical; if \code{TRUE}, plot the chi-square statistic as a function
+of the number of topics (default \code{TRUE}).}
 }
 \value{
-A `data.table` containing the following columns:
-
-\item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{df}}{An integer giving the degrees of freedom.}
-\item{\code{chisq}}{A numeric giving the chi-square statistic.}
+A \code{data.table} with one row per model and columns:
+\itemize{
+\item \code{topic}: integer number of topics.
+\item \code{chisq}: standardized chi-square statistic.
+\item \code{pval}: p-value from the chi-square distribution with 1 df.
+}
 }
 \description{
-Implements fast chi-square like test to evaluate the stability of redundant
-topics.
+Evaluate the stability of redundant topics when the number of topics exceeds
+the selected \code{optimal_model}. The routine implements a fast chi-square–like
+test that compares each above–optimal model to the reference structure and
+summarizes the departure as a standardized chi-square per model.
 }
 \details{
-This function implements Test 3 as defined in 
-Lewis and Grossetti (2019). Test 3 evaluates the aggregated 
-stability of over-optimal topic specifications by summing each 
-point-wise contribution. See 'Value' to understand how \code{topic_stability} 
-returns the results.
+For each model with \code{k > optimal_model}, the function:
+\enumerate{
+\item normalizes topic–word distributions and computes cosine similarities to the
+\code{optimal_model} topics;
+\item for each reference topic, selects its best matching topic and builds a
+cumulative “best-pair” envelope up to mass \code{q};
+\item computes a chi-square–style discrepancy on that envelope and averages
+across the \code{optimal_model} topics.
+}
+
+The result is a per-model standardized chi-square and its p-value (with 1 df).
+If \code{do_plot = TRUE}, a line plot of the statistic versus topics is printed,
+with a horizontal reference at \code{qchisq(alpha, 1)}. If \code{optimal_model} already
+equals the largest topic count in \code{lda_models}, there is nothing to assess
+above it and the function returns \code{NULL} with a message.
 }
 \examples{
 \dontrun{
@@ -57,16 +65,4 @@ test2 <- topic_stability( lda_models = lda_list,
                           q = 0.00075,
                           alpha = 0.05 )
 }
-}
-\references{
-Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-A Statistical Approach for Optimal Topic Model Identification.
-}
-\seealso{
-\code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-}
-\author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
-
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
 }

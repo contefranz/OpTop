@@ -1,29 +1,43 @@
 if ( getRversion() >= "2.15.1" ) {
   utils::globalVariables( c( "chisq", "chi_std", "topic", "pchisq", "dfs", "chisq_std" ) )
 }
-#' Compute topic stability for over-optimal topic specifications
+#' Topic stability for Over–optimal Topic Specifications
 #'
-#' Implements fast chi-square like test to evaluate the stability of redundant
-#' topics.
+#' Evaluate the stability of redundant topics when the number of topics exceeds
+#' the selected `optimal_model`. The routine implements a fast chi-square–like
+#' test that compares each above–optimal model to the reference structure and
+#' summarizes the departure as a standardized chi-square per model.
+#'
+#' @param lda_models A list of fitted `topicmodels::LDA` models (VEM), typically
+#'   ordered by increasing number of topics and including `optimal_model`.
+#' @param optimal_model Integer giving the number of topics of the optimal model;
+#'   must match one entry in `lda_models`.
+#' @param q Numeric in `(0, 1]`; cumulative mass used to define the best-pair
+#'   envelope (default `0.80`).
+#' @param alpha Numeric significance level used to assess stability (default `0.05`).
+#' @param do_plot Logical; if `TRUE`, plot the chi-square statistic as a function
+#'   of the number of topics (default `TRUE`).
+#'   
+#' @details
+#' For each model with `k > optimal_model`, the function:
+#' 1) normalizes topic–word distributions and computes cosine similarities to the
+#'    `optimal_model` topics;  
+#' 2) for each reference topic, selects its best matching topic and builds a
+#'    cumulative “best-pair” envelope up to mass `q`;  
+#' 3) computes a chi-square–style discrepancy on that envelope and averages
+#'    across the `optimal_model` topics.
+#'
+#' The result is a per-model standardized chi-square and its p-value (with 1 df).
+#' If `do_plot = TRUE`, a line plot of the statistic versus topics is printed,
+#' with a horizontal reference at `qchisq(alpha, 1)`. If `optimal_model` already
+#' equals the largest topic count in `lda_models`, there is nothing to assess
+#' above it and the function returns `NULL` with a message.
 #' 
-#' @inheritParams optimal_topic
-#' @param optimal_model A number corresponding to the optimal topic model.
-#' @param alpha Alpha level to identify informative words from the Cumulative
-#' Distribution Function over the cosine similarities in the Topic Word Weights
-#' matrix. Default to 0.05.
-#' @param do_plot Plot the chi-square statistic as a function of the number of 
-#' topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
-#' the significance level according to \code{alpha}.
-#' @details This function implements Test 3 as defined in 
-#' Lewis and Grossetti (2019). Test 3 evaluates the aggregated 
-#' stability of over-optimal topic specifications by summing each 
-#' point-wise contribution. See 'Value' to understand how \code{topic_stability} 
-#' returns the results.
-#' @return A `data.table` containing the following columns:
+#' @return A `data.table` with one row per model and columns:
+#' - `topic`: integer number of topics.
+#' - `chisq`: standardized chi-square statistic.
+#' - `pval`: p-value from the chi-square distribution with 1 df.
 #'
-#' \item{\code{topic}}{An integer giving the number of topics.}
-#' \item{\code{df}}{An integer giving the degrees of freedom.}
-#' \item{\code{chisq}}{A numeric giving the chi-square statistic.}
 #' @examples
 #' \dontrun{
 #' test2 <- topic_stability( lda_models = lda_list,
@@ -31,11 +45,6 @@ if ( getRversion() >= "2.15.1" ) {
 #'                           q = 0.00075,
 #'                           alpha = 0.05 )
 #' }
-#' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-#' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-#' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
-#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
 #' @import data.table ggplot2
 #' @importFrom stats pchisq
 #' @importFrom tibble as_tibble

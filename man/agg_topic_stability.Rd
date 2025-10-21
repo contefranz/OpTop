@@ -2,7 +2,7 @@
 % Please edit documentation in R/agg_topic_stability.R
 \name{agg_topic_stability}
 \alias{agg_topic_stability}
-\title{Compute aggregate topic stability}
+\title{Compute Aggregate Topic Stability}
 \usage{
 agg_topic_stability(
   lda_models,
@@ -14,57 +14,68 @@ agg_topic_stability(
 )
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as estimated by
-\code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
-according to the number of topics.}
+\item{lda_models}{A list of fitted \code{topicmodels::LDA} models (VEM), typically
+ordered by increasing number of topics and including \code{optimal_model}.}
 
-\item{optimal_model}{A number corresponding to the optimal topic model.}
+\item{optimal_model}{Integer giving the number of topics for the optimal model;
+must match one entry in \code{lda_models}.}
 
-\item{q}{Set a cutoff for important words as the quantile of the expected
-cumulative probability of word weights. Default to 0.80, meaning that the 
-function reaches 80\% of the distribution mass and leaves out the remaining
-20\%.}
+\item{q}{Numeric in \verb{(0, 1]}; cumulative mass used to define the best-pair
+envelope (default \code{0.80}).}
 
-\item{alpha}{Alpha level to identify informative words from the Cumulative
-Distribution Function over the cosine similarities in the Topic Word Weights
-matrix. Default to 0.05.}
+\item{alpha}{Numeric significance level used when assessing stability
+(default \code{0.05}).}
 
-\item{smoothed}{A logical to control whether the test is performed on each 
-document for each LDA model or on the smoothed chi-square statistic. 
-This is the aggregated version which gives the overall behavior across all
-documents in the corpus. Default is \code{TRUE}.}
+\item{smoothed}{Logical; if \code{TRUE}, apply LOESS smoothing across documents
+before testing (default \code{TRUE}). If \code{FALSE}, use pointwise document-level
+values.}
 
-\item{do_plot}{Plot the chi-square statistic as a function of the number of 
-topics. Default to \code{TRUE}. The horizontal dot-dashed line represents
-the significance level according to \code{alpha}.}
+\item{do_plot}{Logical; if \code{TRUE}, print the chi-square plot as a function of
+the number of topics (default \code{TRUE}).}
 }
 \value{
-A \code{data.table} containing the following columns:
-
-\item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{id_doc}}{An integer document id as given in the original corpus.}
-\item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
-\item{\code{pval}}{A numeric giving the p-value of the test.}
+A \code{data.table} with one row per document–model pair and the columns:
+\itemize{
+\item \code{topic}: integer number of topics.
+\item \code{id_doc}: integer document id (row index in the aligned data).
+\item \code{chisq_std}: standardized chi-square statistic.
+\item \code{pval}: p-value of the chi-square test.
+}
 }
 \description{
-Compute aggregate topic and perform a chi-square test to evaluate topic
-stability for above optimal models.
+Compute aggregate topic stability and perform a chi-square test to evaluate
+how topic structure changes for models with more topics than the selected
+optimal model. The function produces a standardized chi-square statistic
+per document and model, and optional plots showing how stability varies with
+the number of topics.
+}
+\details{
+For each model with \code{k > optimal_model}, the routine compares the best-matching
+topics to the reference structure at \code{optimal_model} and builds, for each
+document, a cumulative “best-pair” envelope up to mass \code{q}. The standardized
+chi-square statistic is then computed on that envelope, and a p-value is
+obtained from the chi-square distribution with one degree of freedom.
+
+When \code{smoothed = TRUE}, a LOESS smoother is fit to the document-level
+chi-square values across topics; inference is then based on the smoothed
+series. When \code{smoothed = FALSE}, inference is based on the pointwise
+document-level values. If \code{do_plot = TRUE}, the function prints a plot of
+the standardized chi-square against the number of topics (with either
+per-document trajectories or a smoothed curve, depending on \code{smoothed}).
+
+Inputs are expected to be fitted \link[topicmodels:lda]{topicmodels::LDA} objects (VEM). The
+\code{optimal_model} must match one of the topic counts present in \code{lda_models}.
+If the optimal model is already the last element (largest k) in \code{lda_models},
+there is nothing to evaluate above it and the function returns \code{NULL}
+with a message.
 }
 \examples{
 \dontrun{
 test4 <- agg_topic_stability( lda_models = lda_list,
                               optimal_model = test1)
 }
-}
-\references{
-Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-A Statistical Approach for Optimal Topic Model Identification.
+
 }
 \seealso{
-\code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-}
-\author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
-
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
+\code{\link[=optimal_topic]{optimal_topic()}} \code{\link[topicmodels:lda]{topicmodels::LDA()}}
 }

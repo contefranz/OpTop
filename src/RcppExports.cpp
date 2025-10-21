@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // optimal_topic_core
 arma::mat optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const Rcpp::CharacterVector& docs, int n_docs, int n_features);
 RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP docsSEXP, SEXP n_docsSEXP, SEXP n_featuresSEXP) {

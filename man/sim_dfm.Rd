@@ -21,7 +21,7 @@ sim_dfm(DTW, TWW, doc_length, alpha = NULL, seed = NULL)
 A \code{\link[quanteda]{dfm}} object.
 }
 \description{
-Simulate a document-feature-matrix from estimated DTW and TWW. The number of topics as well as 
+Simulate a document-feature-matrix from estimated DTW and TWW. The number of topics as well as
 the number of documents are inferred from the LDA parameters.
 }
 \references{

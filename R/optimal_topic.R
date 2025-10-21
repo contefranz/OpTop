@@ -9,59 +9,48 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Find the optimal number of topics from a pool of LDA models
 #'
-#' Implements a fast chi-square like test to detect the number of topics
-#' estimated via Latent Dirichlet Allocation that best describes the corpus.
+#' Identify the number of topics that best describes the corpus by applying a
+#' fast chi-square–style test across a grid of `topicmodels::LDA` fits. The
+#' routine evaluates each model and selects the optimal topic count using a
+#' significance rule controlled by `alpha`, with a fallback to the global
+#' minimum of the statistic.
+#' 
+#' @param lda_models A list of `topicmodels::LDA` objects (VEM), ordered by
+#'   increasing number of topics. The grid should span the candidate values of `K`.
+#' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
+#'   for each document; it is recommended that document ids are available via
+#'   `quanteda::docid()`.
+#' @param q Numeric in `(0, 1]`. Cumulative mass used to define the truncated
+#'   envelope (default `0.80`).
+#' @param alpha Numeric in `[0, 1]`. Significance level for the selection rule
+#'   (default `0.05`). See Details.
+#' @param do_plot Logical; if `TRUE`, plot the statistic versus topics with
+#'   vertical and horizontal guides at the selected optimum (default `TRUE`).
+#'   
+#' @details
+#' The method builds a Pearson-type statistic under a multinomial view of word
+#' counts and evaluates stability for each candidate `K`. The envelope used in
+#' the comparison is truncated at cumulative mass `q` (e.g., `q = 0.80` keeps
+#' the top 80% of mass).
 #'
-#' @param lda_models A list of ordered LDA models as estimated by
-#' \code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
-#' according to the number of topics.
-#' @param weighted_dfm A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-#' It is recommended that \code{weighted_dfm} has element names consistent with the ones detected
-#' by \code{\link[topicmodels]{LDA}}. See 'Details'.
-#' @param q Set a cutoff for important words as the quantile of the expected
-#' cumulative probability of word weights. Default to 0.80, meaning that the 
-#' function reaches 80\% of the distribution mass and leaves out the remaining
-#' 20\%.
-#' @param alpha The confidence level of test acceptance. Default to 0.05. 
-#' See 'Details'.
-#' @param do_plot Plot the chi-square statistic as a function of the number of 
-#' topics. Default to \code{TRUE}.
-#' @details The function implements a Pearson chi-square statistic that exploits
-#' the assumption that the distribution of words is multinomial. The test studies
-#' the stability of a K-topic model which fully characterizes the corpus if the
-#' observed and estimated word vectors are statistically indistinct. 
-#' 
-#' All internal algorithms are implemented in \code{C} and \code{C++} to increase speed and efficiency 
-#' when highly-dimensional models, together with large weighted DFMs, need to be analyzed. 
-#' 
-#' To ensure a complete matching between the set of LDA models specified 
-#' through \code{lda_models}, we strongly recommend the corresponding \code{weighted_dfm} 
-#' to have specific element names indicating the original names of the documents as defined
-#' in the \code{\link[quanteda]{corpus}}. These element names can be extracted with 
-#' \code{\link[quanteda]{docid}}\code{(weighted_dfm)}. 
-#' If, for any reason, the function \code{\link[topicmodels]{LDA}} fails 
-#' to estimate the requested \code{k} topics over certain documents, then \code{optimal_topic} 
-#' takes care of that by ensuring that there is a perfect match between the documents found in 
-#' \code{weighted_dfm} and the ones contained in \code{lda_models}. 
-#' If \code{weighted_dfm} does not contain any meaningful name to be matched with \code{lda_models}, 
-#' for instance if the whole vector is full of \code{FALSE}, then \code{optimal_topic} stops 
-#' with an error because most likely there is something wrong. If \code{optimal_topic} finds
-#' few documents that are not present in \code{lda_models}, then it removes them from the input
-#' \code{weighted_dfm} in order to achieve a perfect match. 
-#'  
-#' The parameter \code{alpha} controls the confidence of the chi-square test. The
-#' optimal model is selected the first time the chi-square statistic reaches
-#' a p-value equal to \code{alpha}. In the event that the chi-square statistic
-#' fails to reach \code{alpha}, the minimum chi-square statistic
-#' is selected. A higher \code{alpha} resolves in selecting a model with less 
-#' topics. You can force the algorithm to find the minimum chi-square statistic
-#' by setting \code{alpha} equal to zero.
-#' @return A \code{data.table} containing the following columns:
-#' 
+#' **Selection rule.** The optimal `K` is the first model whose p-value is at
+#' most `alpha`. If no model reaches `alpha`, the model with the minimum
+#' statistic is selected. Setting `alpha = 0` forces the global-minimum rule.
 #'
-#' \item{\code{topic}}{An integer giving the number of topics.}
-#' \item{\code{OpTop}}{A numeric giving the standardized chi-square.}
-#' \item{\code{pval}}{A numeric giving the p-value of the test.}
+#' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
+#' proportions (row-wise). Document identifiers are taken from
+#' `quanteda::docid(weighted_dfm)` and matched to the LDA fits; documents not
+#' present in the first model’s `@documents` slot are dropped (with a message)
+#' to ensure alignment.
+#'
+#' **Performance note.** The core computation is delegated to C++ compiled code
+#' to handle high-dimensional vocabularies efficiently.
+#' 
+#' @return A `data.table` with columns:
+#' - `topic`: integer number of topics (`K`).
+#' - `OpTop`: standardized chi-square–style statistic for each `K`.
+#' - `pval`: p-value associated with `OpTop`.
+#' 
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
@@ -70,11 +59,9 @@ if ( getRversion() >= "2.15.1" ) {
 #'                         q = 0.80,
 #'                         alpha = 0.05 )
 #' }
-#' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-#' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-#' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
-#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
+#' 
+#' @seealso [topicmodels::LDA()]
+#' 
 #' @import data.table ggplot2
 #' @importFrom tibble as_tibble
 #' @importFrom quanteda ndoc nfeat is.dfm docid

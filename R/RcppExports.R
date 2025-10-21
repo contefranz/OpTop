@@ -3,16 +3,16 @@
 
 #' @keywords internal
 optimal_topic_core <- function(lda_models, weighted_dfm, q, docs, n_docs, n_features) {
-    .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
+    .Call('_OpTop_optimal_topic_core', PACKAGE = 'OpTop', lda_models, weighted_dfm, q, docs, n_docs, n_features)
 }
 
 #' @keywords internal
 topic_match_core <- function(lda_models, best_pos, optimal_k, var_correction) {
-    .Call(`_OpTop_topic_match_core`, lda_models, best_pos, optimal_k, var_correction)
+    .Call('_OpTop_topic_match_core', PACKAGE = 'OpTop', lda_models, best_pos, optimal_k, var_correction)
 }
 
 #' @keywords internal
 normalize_columns <- function(x) {
-    .Call(`_OpTop_normalize_columns`, x)
+    .Call('_OpTop_normalize_columns', PACKAGE = 'OpTop', x)
 }
 
