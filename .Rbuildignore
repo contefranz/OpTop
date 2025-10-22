@@ -2,3 +2,4 @@
 ^\.Rproj\.user$
 ^test\.R$
 ^\.DS_Store$
+^\.github$
