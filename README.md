@@ -1,9 +1,6 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://www.tidyverse.org/lifecycle/#maturing)
 [![release](https://img.shields.io/badge/release-v0.9.6-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.6)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
-<!-- badges: start -->
-  [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
-  <!-- badges: end -->
 
 # OpTop
 
