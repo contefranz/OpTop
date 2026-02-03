@@ -14,7 +14,9 @@ optop_index_se(
   baseline,
   macro = FALSE,
   reopt = c("none", "se"),
-  add_baseline_topic = TRUE
+  add_baseline_topic = TRUE,
+  level = c("document", "word"),
+  ztest = FALSE
 )
 
 optop_index_chisq(
@@ -24,7 +26,9 @@ optop_index_chisq(
   baseline,
   macro = FALSE,
   reopt = c("none", "pearson"),
-  add_baseline_topic = TRUE
+  add_baseline_topic = TRUE,
+  level = c("document", "word"),
+  ztest = FALSE
 )
 
 optop_index_deviance(
@@ -33,7 +37,9 @@ optop_index_deviance(
   partition,
   baseline,
   macro = FALSE,
-  reopt = c("none", "deviance")
+  reopt = c("none", "deviance"),
+  level = c("document", "word"),
+  ztest = FALSE
 )
 }
 \arguments{
@@ -58,15 +64,34 @@ Unsupported values for a given metric are ignored.}
 \item{add_baseline_topic}{Logical; if \code{TRUE}, augment topics with a baseline row to
 guarantee non-negativity of \eqn{R^2}. Default: \code{TRUE}.
 (Only for \code{optop_index_se()} and \code{optop_index_chisq()}).}
+
+\item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
+document-level indices aggregated across words (Section 3.2-3.5 of the paper).
+\code{"word"} computes word-level indices aggregated across documents (Section 3.7).}
+
+\item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference
+(Section 3.6.1, Equations 24-26). Tests whether the topic model provides
+statistically significant improvement over the no-topics baseline. Default: \code{FALSE}.
+Only applicable when \code{level = "document"}.}
 }
 \value{
-A list with:
+When \code{level = "document"}, a list with:
 \itemize{
 \item \code{r2}: scalar micro index (e.g., \eqn{R^2_{SE}}{R2_SE}).
 \item \code{r2_macro}: scalar macro index if \code{macro = TRUE}, otherwise \code{NULL}.
-\item \code{r2_doc}: numeric vector (length = number of documents) with per-document contributions.
+\item \code{r2_doc}: numeric vector (length J) with per-document contributions.
 \item \code{K}: number of topics in \code{model}.
-\item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}, according to function call.
+\item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
+\item \code{ztest}: (if \code{ztest = TRUE}) list with \code{z}, \code{pval}, \code{se}, \code{ci}, \code{J}.
+}
+
+When \code{level = "word"}, a list with:
+\itemize{
+\item \code{r2_word}: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)}.
+\item \code{r2_micro_word}: scalar Micro-Word index (frequency-weighted average, Eq. 34).
+\item \code{r2_macro_word}: scalar Macro-Word index (unweighted average, Eq. 35).
+\item \code{K}: number of topics in \code{model}.
+\item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
 }
 }
 \description{
@@ -78,21 +103,31 @@ defined by \code{\link[=optop_make_partition]{optop_make_partition()}}.
 }
 \details{
 \strong{Harmonized support.} For each document, rare words (as determined by
-\code{\link[=optop_make_partition]{optop_make_partition()}}) are collapsed into a single “min” bin. Indices are then
+\code{\link[=optop_make_partition]{optop_make_partition()}}) are collapsed into a single "min" bin. Indices are then
 evaluated on \verb{\{non-rare terms\} ∪ \{min\}} to ensure comparability across \eqn{K}.
 
 \strong{Alignment requirements.} The following must share the same vocabulary and column
 order: the \code{dtm} passed to the index, the DTM used for \code{partition} and \code{baseline}, and the
-model’s term–topic matrix. If they differ, align with \code{optop_align_dtm_to_models()} and
+model's term–topic matrix. If they differ, align with \code{optop_align_dtm_to_models()} and
 recompute \code{partition} and \code{baseline}.
 
 \strong{Counts only.} SE/chi-square/deviance indices are defined for multinomial counts.
 Do not pass weighted matrices (e.g., proportions from \code{quanteda::dfm_weight(scheme = "prop")}
 or tf-idf). If your workflow uses proportions elsewhere, reconstruct counts before calling.
 
-All three functions return the micro index (e.g., \eqn{R^2_{SE}}{R2_SE}) and, if
-requested, the macro index (e.g., \eqn{\bar R^2_{SE}}{R2_SE_bar}), plus per-document
-components (e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
+\strong{Document-level aggregation} (\code{level = "document"}). Returns the micro index
+(e.g., \eqn{R^2_{SE}}{R2_SE}) and, if requested, the macro index
+(e.g., \eqn{\bar R^2_{SE}}{R2_SE_bar}), plus per-document components
+(e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
+
+\strong{Word-level aggregation} (\code{level = "word"}). Returns per-word indices
+\eqn{R^2_{D,w}(K)} (Equations 29, 31, 33), plus Micro-Word (Equation 34) and
+Macro-Word (Equation 35) corpus-level summaries. This perspective reveals which
+words are well-captured vs. poorly modeled by the topic structure.
+
+\strong{Z-test} (\code{ztest = TRUE}). Implements the hypothesis test from Section 3.6.1.
+Under H0: μ_R² ≤ 0 (no improvement), the statistic Z = √J · R̄²_Macro / σ̂_R
+is asymptotically N(0,1). Requires \code{macro = TRUE} implicitly.
 }
 \section{Functions}{
 \itemize{

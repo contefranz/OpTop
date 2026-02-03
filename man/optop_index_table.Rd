@@ -13,7 +13,9 @@ optop_index_table(
   reopt = "none",
   add_baseline_topic = TRUE,
   partition = NULL,
-  baseline = NULL
+  baseline = NULL,
+  level = c("document", "word"),
+  ztest = FALSE
 )
 }
 \arguments{
@@ -52,13 +54,29 @@ If \code{NULL}, it is computed internally from \code{models} and \code{dtm}.}
 
 \item{baseline}{Optional precomputed result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}. If \code{NULL},
 it is computed internally from \code{dtm}.}
+
+\item{level}{Character; aggregation level for the indices. \code{"document"} (default)
+returns document-level micro/macro indices. \code{"word"} returns word-level
+Micro-Word and Macro-Word indices (Section 3.7).}
+
+\item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference
+(Section 3.6.1). Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
 }
 \value{
-A \code{data.frame} with one row per model and columns:
+When \code{level = "document"}, a \code{data.frame} with one row per model and columns:
 \itemize{
 \item \code{K}: number of topics in the model.
 \item \code{R2_SE}, \code{R2_chisq}, \code{R2_dev}: micro indices for the selected metrics.
 \item \code{R2_SE_macro}, \code{R2_chisq_macro}, \code{R2_dev_macro}: macro indices when \code{macro = TRUE}.
+\item \code{Z_SE}, \code{Z_chisq}, \code{Z_dev}, \code{pval_SE}, \code{pval_chisq}, \code{pval_dev}: Z-test
+statistics and p-values when \code{ztest = TRUE}.
+}
+
+When \code{level = "word"}, a \code{data.frame} with columns:
+\itemize{
+\item \code{K}: number of topics in the model.
+\item \code{R2_SE_micro_word}, \code{R2_chisq_micro_word}, \code{R2_dev_micro_word}: Micro-Word indices.
+\item \code{R2_SE_macro_word}, \code{R2_chisq_macro_word}, \code{R2_dev_macro_word}: Macro-Word indices.
 }
 
 Missing columns are omitted when the corresponding metric is not requested.
