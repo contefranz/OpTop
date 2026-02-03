@@ -19,12 +19,11 @@
 #'   Allowed values include `"none"` (default), `"se"`, `"pearson"`, and `"deviance"`.
 #'   Unsupported values for a given metric are ignored.
 #' @param level Character; aggregation level for the index. `"document"` (default) computes
-#'   document-level indices aggregated across words (Section 3.2-3.5 of the paper).
-#'   `"word"` computes word-level indices aggregated across documents (Section 3.7).
-#' @param ztest Logical; if `TRUE`, append a Z-test for cross-document inference
-#'   (Section 3.6.1, Equations 24-26). Tests whether the topic model provides
-#'   statistically significant improvement over the no-topics baseline. Default: `FALSE`.
-#'   Only applicable when `level = "document"`.
+#'   document-level indices aggregated across words. `"word"` computes word-level indices
+#'   aggregated across documents.
+#' @param ztest Logical; if `TRUE`, append a Z-test for cross-document inference.
+#'   Tests whether the topic model provides statistically significant improvement
+#'   over the no-topics baseline. Default: `FALSE`. Only applicable when `level = "document"`.
 #'
 #' @details
 #' **Harmonized support.** For each document, rare words (as determined by
@@ -46,11 +45,11 @@
 #' (e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
 #'
 #' **Word-level aggregation** (`level = "word"`). Returns per-word indices
-#' \eqn{R^2_{D,w}(K)} (Equations 29, 31, 33), plus Micro-Word (Equation 34) and
-#' Macro-Word (Equation 35) corpus-level summaries. This perspective reveals which
-#' words are well-captured vs. poorly modeled by the topic structure.
+#' \eqn{R^2_{D,w}(K)}, plus Micro-Word (frequency-weighted) and Macro-Word (unweighted)
+#' corpus-level summaries. This perspective reveals which words are well-captured vs.
+#' poorly modeled by the topic structure.
 #'
-#' **Z-test** (`ztest = TRUE`). Implements the hypothesis test from Section 3.6.1.
+#' **Z-test** (`ztest = TRUE`). Implements a hypothesis test for cross-document inference.
 #' Under H0: μ_R² ≤ 0 (no improvement), the statistic Z = √J · R̄²_Macro / σ̂_R
 #' is asymptotically N(0,1). Requires `macro = TRUE` implicitly.
 #'
@@ -64,8 +63,8 @@
 #'
 #' When `level = "word"`, a list with:
 #' - `r2_word`: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)}.
-#' - `r2_micro_word`: scalar Micro-Word index (frequency-weighted average, Eq. 34).
-#' - `r2_macro_word`: scalar Macro-Word index (unweighted average, Eq. 35).
+#' - `r2_micro_word`: scalar Micro-Word index (frequency-weighted average).
+#' - `r2_macro_word`: scalar Macro-Word index (unweighted average).
 #' - `K`: number of topics in `model`.
 #' - `metric`: one of `"se"`, `"chisq"`, `"deviance"`.
 #'
@@ -184,22 +183,22 @@ optop_index_se <- function(model, dtm, partition, baseline,
     # Convert dtm to dense matrix for word-level operations
     N_mat <- as.matrix(dtm)
 
-    # Equation 32: SSE_w(K) = Σ_j (N_jw - E^K_jw)²
+    # SSE_w(K) = Σ_j (N_jw - E^K_jw)²
     SSE_w <- colSums((N_mat - E_mat)^2)
 
     # SST_w = Σ_j (N_jw - B_jw)²
     SST_w <- colSums((N_mat - B_mat)^2)
 
-    # Equation 33: R²_SE,w(K) = 1 - SSE_w(K) / SST_w
+    # R²_SE,w(K) = 1 - SSE_w(K) / SST_w
     r2_word <- ifelse(SST_w > 0, 1 - SSE_w / SST_w, 0)
     names(r2_word) <- vocab_model
 
-    # Equation 34: Micro-Word aggregation (frequency-weighted)
+    # Micro-Word aggregation (frequency-weighted)
     # R²_D,w-Micro(K) = Σ_w ω̃_w R²_D,w(K), where ω̃_w = D_w(null) / Σ_v D_v(null)
     omega_w <- SST_w / sum(SST_w)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Equation 35: Macro-Word aggregation (unweighted average)
+    # Macro-Word aggregation (unweighted average)
     # R²_D,w-Macro(K) = (1/W) Σ_w R²_D,w(K)
     # Exclude words with SST_w = 0 (degenerate)
     valid_words <- SST_w > 0
@@ -263,8 +262,8 @@ optop_index_se <- function(model, dtm, partition, baseline,
     D_null[j] <- sst_se
     r2_doc[j] <- if (sst_se > 0) 1 - sse_k / sst_se else 0
   }
-  r2_micro <- 1 - sum(D_K) / sum(D_null)             # Equation 19
-  r2_macro <- mean(r2_doc[D_null > 0])               # Equation 20
+  r2_micro <- 1 - sum(D_K) / sum(D_null)             
+  r2_macro <- mean(r2_doc[D_null > 0])               
 
   # Build result
   result <- list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
@@ -340,21 +339,21 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
     # Convert dtm to dense matrix for word-level operations
     N_mat <- as.matrix(dtm)
 
-    # Equation 30: χ²_w(K) = Σ_j (N_jw - E^K_jw)² / E^K_jw
+    # χ²_w(K) = Σ_j (N_jw - E^K_jw)² / E^K_jw
     chisq_w <- colSums((N_mat - E_mat)^2 / E_mat)
 
     # χ²_w(null) = Σ_j (N_jw - B_jw)² / B_jw
     chisq_w_null <- colSums((N_mat - B_mat)^2 / B_mat)
 
-    # Equation 31: R²_χ²,w(K) = 1 - χ²_w(K) / χ²_w(null)
+    # R²_χ²,w(K) = 1 - χ²_w(K) / χ²_w(null)
     r2_word <- ifelse(chisq_w_null > 0, 1 - chisq_w / chisq_w_null, 0)
     names(r2_word) <- vocab_model
 
-    # Equation 34: Micro-Word aggregation (frequency-weighted)
+    # Micro-Word aggregation (frequency-weighted)
     omega_w <- chisq_w_null / sum(chisq_w_null)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Equation 35: Macro-Word aggregation (unweighted average)
+    # Macro-Word aggregation (unweighted average)
     valid_words <- chisq_w_null > 0
     r2_macro_word <- mean(r2_word[valid_words])
 
@@ -453,7 +452,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
     # Convert dtm to dense matrix for word-level operations
     N_mat <- as.matrix(dtm)
 
-    # Equation 27: D_w(K) = 2 Σ_j N_jw log(N_jw / E^K_jw)
+    # D_w(K) = 2 Σ_j N_jw log(N_jw / E^K_jw)
     # Only sum over j where N_jw > 0
     dev_w <- numeric(W)
     dev_w_null <- numeric(W)
@@ -464,20 +463,20 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
       idx <- N_w > 0
       if (any(idx)) {
         dev_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(E_w[idx])))
-        # Equation 28: D_w(null) = 2 Σ_j N_jw log(N_jw / B_jw)
+        # D_w(null) = 2 Σ_j N_jw log(N_jw / B_jw)
         dev_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(B_w[idx])))
       }
     }
 
-    # Equation 29: R²_Dev,w(K) = 1 - D_w(K) / D_w(null)
+    # R²_Dev,w(K) = 1 - D_w(K) / D_w(null)
     r2_word <- ifelse(dev_w_null > 0, 1 - dev_w / dev_w_null, 0)
     names(r2_word) <- vocab_model
 
-    # Equation 34: Micro-Word aggregation (frequency-weighted)
+    # Micro-Word aggregation (frequency-weighted)
     omega_w <- dev_w_null / sum(dev_w_null)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Equation 35: Macro-Word aggregation (unweighted average)
+    # Macro-Word aggregation (unweighted average)
     valid_words <- dev_w_null > 0
     r2_macro_word <- mean(r2_word[valid_words])
 
@@ -541,7 +540,6 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param reopt Re-optimization mode forwarded to the underlying index:
 #'   - `"none"` (default): no re-optimization;
 #'   - `"se"`: enable SE blending in [`optop_index_se()`];
-#'   - `"pearson"`: reserved for a Pearson-specific re-optimizer (if implemented);
 #'   - `"deviance"`: reserved for a deviance-specific re-optimizer (if implemented).
 #'
 #'   Values are routed per metric (e.g., `"se"` only affects the SE column).
@@ -554,9 +552,9 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #'   it is computed internally from `dtm`.
 #' @param level Character; aggregation level for the indices. `"document"` (default)
 #'   returns document-level micro/macro indices. `"word"` returns word-level
-#'   Micro-Word and Macro-Word indices (Section 3.7).
-#' @param ztest Logical; if `TRUE`, append Z-test statistics for cross-document inference
-#'   (Section 3.6.1). Only applicable when `level = "document"`. Default: `FALSE`.
+#'   Micro-Word and Macro-Word indices.
+#' @param ztest Logical; if `TRUE`, append Z-test statistics for cross-document inference.
+#'   Only applicable when `level = "document"`. Default: `FALSE`.
 #'
 #' @details
 #' The function wraps [`optop_index_se()`], [`optop_index_chisq()`], and
@@ -767,7 +765,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 #'
 #' @details
 #' The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
-
+#'
 #' the global distribution on average). Under regularity conditions, the
 #' test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
 #'
@@ -784,12 +782,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                 ci = c(NA_real_, NA_real_), J = J))
   }
 
-  # Equation 24: variance estimator
+  # variance estimator
   # σ̂²_R = (1/(J-1)) Σ_j (R²_j - R̄²_Macro)²
   sigma2_hat <- sum((r2_valid - r2_macro)^2) / (J - 1)
   sigma_hat <- sqrt(sigma2_hat)
 
-  # Equation 26: Z-statistic
+  # Z-statistic
   # Z = √J · R̄²_Macro / σ̂_R
   se_mean <- sigma_hat / sqrt(J)
   z_stat <- r2_macro / se_mean

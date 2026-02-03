@@ -57,10 +57,10 @@ it is computed internally from \code{dtm}.}
 
 \item{level}{Character; aggregation level for the indices. \code{"document"} (default)
 returns document-level micro/macro indices. \code{"word"} returns word-level
-Micro-Word and Macro-Word indices (Section 3.7).}
+Micro-Word and Macro-Word indices.}
 
-\item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference
-(Section 3.6.1). Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
+\item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference.
+Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
 }
 \value{
 When \code{level = "document"}, a \code{data.frame} with one row per model and columns:

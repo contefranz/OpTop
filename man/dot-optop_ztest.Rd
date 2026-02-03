@@ -28,6 +28,7 @@ improvement over the no-topics baseline.
 }
 \details{
 The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
+
 the global distribution on average). Under regularity conditions, the
 test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
 }

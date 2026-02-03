@@ -66,13 +66,12 @@ guarantee non-negativity of \eqn{R^2}. Default: \code{TRUE}.
 (Only for \code{optop_index_se()} and \code{optop_index_chisq()}).}
 
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
-document-level indices aggregated across words (Section 3.2-3.5 of the paper).
-\code{"word"} computes word-level indices aggregated across documents (Section 3.7).}
+document-level indices aggregated across words. \code{"word"} computes word-level indices
+aggregated across documents.}
 
-\item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference
-(Section 3.6.1, Equations 24-26). Tests whether the topic model provides
-statistically significant improvement over the no-topics baseline. Default: \code{FALSE}.
-Only applicable when \code{level = "document"}.}
+\item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference.
+Tests whether the topic model provides statistically significant improvement
+over the no-topics baseline. Default: \code{FALSE}. Only applicable when \code{level = "document"}.}
 }
 \value{
 When \code{level = "document"}, a list with:
@@ -88,8 +87,8 @@ When \code{level = "document"}, a list with:
 When \code{level = "word"}, a list with:
 \itemize{
 \item \code{r2_word}: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)}.
-\item \code{r2_micro_word}: scalar Micro-Word index (frequency-weighted average, Eq. 34).
-\item \code{r2_macro_word}: scalar Macro-Word index (unweighted average, Eq. 35).
+\item \code{r2_micro_word}: scalar Micro-Word index (frequency-weighted average).
+\item \code{r2_macro_word}: scalar Macro-Word index (unweighted average).
 \item \code{K}: number of topics in \code{model}.
 \item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
 }
@@ -121,11 +120,11 @@ or tf-idf). If your workflow uses proportions elsewhere, reconstruct counts befo
 (e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
 
 \strong{Word-level aggregation} (\code{level = "word"}). Returns per-word indices
-\eqn{R^2_{D,w}(K)} (Equations 29, 31, 33), plus Micro-Word (Equation 34) and
-Macro-Word (Equation 35) corpus-level summaries. This perspective reveals which
-words are well-captured vs. poorly modeled by the topic structure.
+\eqn{R^2_{D,w}(K)}, plus Micro-Word (frequency-weighted) and Macro-Word (unweighted)
+corpus-level summaries. This perspective reveals which words are well-captured vs.
+poorly modeled by the topic structure.
 
-\strong{Z-test} (\code{ztest = TRUE}). Implements the hypothesis test from Section 3.6.1.
+\strong{Z-test} (\code{ztest = TRUE}). Implements a hypothesis test for cross-document inference.
 Under H0: μ_R² ≤ 0 (no improvement), the statistic Z = √J · R̄²_Macro / σ̂_R
 is asymptotically N(0,1). Requires \code{macro = TRUE} implicitly.
 }
