@@ -14,21 +14,19 @@
 \value{
 A list with:
 \itemize{
-\item \code{z}: Z-statistic (Equation 26).
+\item \code{z}: Z-statistic.
 \item \code{pval}: One-sided p-value for H1: μ_R² > 0.
-\item \code{se}: Standard error σ̂_R (sqrt of Equation 24).
+\item \code{se}: Standard error σ̂_R.
 \item \code{ci}: 95\\% confidence interval for the true mean R².
 \item \code{J}: Number of valid documents used.
 }
 }
 \description{
-Implements the hypothesis test from Section 3.6.1 of the paper.
 Tests whether the K-topic model provides statistically significant
 improvement over the no-topics baseline.
 }
 \details{
 The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
-
 the global distribution on average). Under regularity conditions, the
 test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
 }

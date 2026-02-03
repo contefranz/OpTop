@@ -54,8 +54,8 @@
 #' poorly modeled by the topic structure.
 #'
 #' **Z-test** (`ztest = TRUE`). Implements a hypothesis test for cross-document inference.
-#' Under H0: μ_R² ≤ 0 (no improvement), the statistic Z = √J · R̄²_Macro / σ̂_R
-#' is asymptotically N(0,1). Requires `macro = TRUE` implicitly.
+#' Under H0: \eqn{\mu_{R^2} \leq 0} (no improvement), the statistic \eqn{Z = \sqrt{J}\cdot \bar{R}^2_{Macro} / \hat{\sigma}_R}R
+#' is asymptotically \eqn{N(0,1)}. Requires `macro = TRUE` implicitly.
 #'
 #' @return When `level = "document"`, a list with:
 #' - `r2`: scalar micro index (e.g., \eqn{R^2_{SE}}{R2_SE}).

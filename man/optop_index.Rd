@@ -16,6 +16,7 @@ optop_index_se(
   reopt = c("none", "se"),
   add_baseline_topic = TRUE,
   level = c("document", "word"),
+  block_size = NULL,
   ztest = FALSE
 )
 
@@ -28,6 +29,7 @@ optop_index_chisq(
   reopt = c("none", "pearson"),
   add_baseline_topic = TRUE,
   level = c("document", "word"),
+  block_size = NULL,
   ztest = FALSE
 )
 
@@ -39,6 +41,7 @@ optop_index_deviance(
   macro = FALSE,
   reopt = c("none", "deviance"),
   level = c("document", "word"),
+  block_size = NULL,
   ztest = FALSE
 )
 }
@@ -68,6 +71,11 @@ guarantee non-negativity of \eqn{R^2}. Default: \code{TRUE}.
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
 document-level indices aggregated across words. \code{"word"} computes word-level indices
 aggregated across documents.}
+
+\item{block_size}{Integer or \code{NULL}; number of vocabulary terms to process at once
+during word-level computation. Smaller values use less memory but may be slower.
+If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
+memory usage. Only used when \code{level = "word"}.}
 
 \item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference.
 Tests whether the topic model provides statistically significant improvement
@@ -125,8 +133,8 @@ corpus-level summaries. This perspective reveals which words are well-captured v
 poorly modeled by the topic structure.
 
 \strong{Z-test} (\code{ztest = TRUE}). Implements a hypothesis test for cross-document inference.
-Under H0: μ_R² ≤ 0 (no improvement), the statistic Z = √J · R̄²_Macro / σ̂_R
-is asymptotically N(0,1). Requires \code{macro = TRUE} implicitly.
+Under H0: \eqn{\mu_{R^2} \leq 0} (no improvement), the statistic \eqn{Z = \sqrt{J}\cdot \bar{R}^2_{Macro} / \hat{\sigma}_R}R
+is asymptotically \eqn{N(0,1)}. Requires \code{macro = TRUE} implicitly.
 }
 \section{Functions}{
 \itemize{

@@ -15,6 +15,7 @@ optop_index_table(
   partition = NULL,
   baseline = NULL,
   level = c("document", "word"),
+  block_size = NULL,
   ztest = FALSE
 )
 }
@@ -57,6 +58,10 @@ it is computed internally from \code{dtm}.}
 \item{level}{Character; aggregation level for the indices. \code{"document"} (default)
 returns document-level micro/macro indices. \code{"word"} returns word-level
 Micro-Word and Macro-Word indices.}
+
+\item{block_size}{Integer or \code{NULL}; number of vocabulary terms to process at once
+during word-level computation. If \code{NULL} (default), automatically chosen based on
+corpus size. Only used when \code{level = "word"}.}
 
 \item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference.
 Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
