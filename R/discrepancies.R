@@ -21,6 +21,10 @@
 #' @param level Character; aggregation level for the index. `"document"` (default) computes
 #'   document-level indices aggregated across words. `"word"` computes word-level indices
 #'   aggregated across documents.
+#' @param block_size Integer or `NULL`; number of vocabulary terms to process at once
+#'   during word-level computation. Smaller values use less memory but may be slower.
+#'   If `NULL` (default), automatically chosen based on corpus size to target ~1.5 GB
+#'   memory usage. Only used when `level = "word"`.
 #' @param ztest Logical; if `TRUE`, append a Z-test for cross-document inference.
 #'   Tests whether the topic model provides statistically significant improvement
 #'   over the no-topics baseline. Default: `FALSE`. Only applicable when `level = "document"`.
@@ -131,6 +135,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
                            macro = FALSE, reopt = c("none", "se"),
                            add_baseline_topic = TRUE,
                            level = c("document", "word"),
+                           block_size = NULL,
                            ztest = FALSE) {
 
   level <- match.arg(level)
@@ -170,37 +175,46 @@ optop_index_se <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # WORD-LEVEL AGGREGATION (Section 3.7)
+  # WORD-LEVEL AGGREGATION (block-based for memory efficiency)
   # =========================================================================
   if (level == "word") {
-    # Compute expected counts matrix E (J x W)
-    E_mat <- theta %*% phi  # J x W fitted probabilities
-    E_mat <- E_mat * partition$L  # scale by document lengths (recycled)
+    # Auto-detect block size if not specified
+    # Target: ~500 MB per block matrix (1.5 GB total for 3 matrices)
+    if (is.null(block_size)) {
+      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+    }
 
-    # Baseline expected counts B_jw = L_j * pi_glob(w)
-    B_mat <- outer(partition$L, pi_row)
+    SSE_w <- numeric(W)
+    SST_w <- numeric(W)
 
-    # Convert dtm to dense matrix for word-level operations
-    N_mat <- as.matrix(dtm)
+    for (start in seq(1L, W, by = block_size)) {
+      end <- min(start + block_size - 1L, W)
+      w_idx <- start:end
 
-    # SSE_w(K) = Σ_j (N_jw - E^K_jw)²
-    SSE_w <- colSums((N_mat - E_mat)^2)
+      # Extract block of observed counts from sparse DTM
+      # Converting only the block to dense: J × block_size
+      N_block <- as.matrix(dtm[, w_idx, drop = FALSE])
 
-    # SST_w = Σ_j (N_jw - B_jw)²
-    SST_w <- colSums((N_mat - B_mat)^2)
+      # Compute expected counts for this block: E_jw = L_j * Σ_k θ_jk φ_kw
+      E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
 
-    # R²_SE,w(K) = 1 - SSE_w(K) / SST_w
+      # Baseline expected counts: B_jw = L_j * π_glob(w)
+      B_block <- outer(partition$L, pi_row[w_idx])
+
+      # Squared-error discrepancies for this block
+      SSE_w[w_idx] <- colSums((N_block - E_block)^2)
+      SST_w[w_idx] <- colSums((N_block - B_block)^2)
+    }
+
+    # R² for each word
     r2_word <- ifelse(SST_w > 0, 1 - SSE_w / SST_w, 0)
     names(r2_word) <- vocab_model
 
-    # Micro-Word aggregation (frequency-weighted)
-    # R²_D,w-Micro(K) = Σ_w ω̃_w R²_D,w(K), where ω̃_w = D_w(null) / Σ_v D_v(null)
+    # Micro-Word: frequency-weighted average
     omega_w <- SST_w / sum(SST_w)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Macro-Word aggregation (unweighted average)
-    # R²_D,w-Macro(K) = (1/W) Σ_w R²_D,w(K)
-    # Exclude words with SST_w = 0 (degenerate)
+    # Macro-Word: unweighted average (excluding degenerate words)
     valid_words <- SST_w > 0
     r2_macro_word <- mean(r2_word[valid_words])
 
@@ -209,7 +223,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION (Sections 3.2-3.5)
+  # DOCUMENT-LEVEL AGGREGATION
   # =========================================================================
 
   # precompute baseline vectors
@@ -262,8 +276,8 @@ optop_index_se <- function(model, dtm, partition, baseline,
     D_null[j] <- sst_se
     r2_doc[j] <- if (sst_se > 0) 1 - sse_k / sst_se else 0
   }
-  r2_micro <- 1 - sum(D_K) / sum(D_null)             
-  r2_macro <- mean(r2_doc[D_null > 0])               
+  r2_micro <- 1 - sum(D_K) / sum(D_null)
+  r2_macro <- mean(r2_doc[D_null > 0])
 
   # Build result
   result <- list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
@@ -287,6 +301,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                               macro = FALSE, reopt = c("none", "pearson"),
                               add_baseline_topic = TRUE,
                               level = c("document", "word"),
+                              block_size = NULL,
                               ztest = FALSE) {
 
   level <- match.arg(level)
@@ -322,38 +337,48 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # WORD-LEVEL AGGREGATION (Section 3.7)
+  # WORD-LEVEL AGGREGATION (block-based for memory efficiency)
   # =========================================================================
   if (level == "word") {
     eps <- 1e-12
 
-    # Compute expected counts matrix E (J x W)
-    E_mat <- theta %*% phi  # J x W fitted probabilities
-    E_mat <- E_mat * partition$L  # scale by document lengths (recycled)
-    E_mat <- pmax(E_mat, eps)  # avoid division by zero
+    # Auto-detect block size if not specified
+    if (is.null(block_size)) {
+      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+    }
 
-    # Baseline expected counts B_jw = L_j * pi_glob(w)
-    B_mat <- outer(partition$L, pi_row)
-    B_mat <- pmax(B_mat, eps)
+    chisq_w <- numeric(W)
+    chisq_w_null <- numeric(W)
 
-    # Convert dtm to dense matrix for word-level operations
-    N_mat <- as.matrix(dtm)
+    for (start in seq(1L, W, by = block_size)) {
+      end <- min(start + block_size - 1L, W)
+      w_idx <- start:end
 
-    # χ²_w(K) = Σ_j (N_jw - E^K_jw)² / E^K_jw
-    chisq_w <- colSums((N_mat - E_mat)^2 / E_mat)
+      # Extract block of observed counts from sparse DTM
+      N_block <- as.matrix(dtm[, w_idx, drop = FALSE])
 
-    # χ²_w(null) = Σ_j (N_jw - B_jw)² / B_jw
-    chisq_w_null <- colSums((N_mat - B_mat)^2 / B_mat)
+      # Compute expected counts for this block
+      E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
+      E_block <- pmax(E_block, eps)
 
-    # R²_χ²,w(K) = 1 - χ²_w(K) / χ²_w(null)
+      # Baseline expected counts
+      B_block <- outer(partition$L, pi_row[w_idx])
+      B_block <- pmax(B_block, eps)
+
+      # Chi-square discrepancies for this block
+      chisq_w[w_idx] <- colSums((N_block - E_block)^2 / E_block)
+      chisq_w_null[w_idx] <- colSums((N_block - B_block)^2 / B_block)
+    }
+
+    # R² for each word
     r2_word <- ifelse(chisq_w_null > 0, 1 - chisq_w / chisq_w_null, 0)
     names(r2_word) <- vocab_model
 
-    # Micro-Word aggregation (frequency-weighted)
+    # Micro-Word: frequency-weighted average
     omega_w <- chisq_w_null / sum(chisq_w_null)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Macro-Word aggregation (unweighted average)
+    # Macro-Word: unweighted average (excluding degenerate words)
     valid_words <- chisq_w_null > 0
     r2_macro_word <- mean(r2_word[valid_words])
 
@@ -362,7 +387,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION (Sections 3.2-3.5)
+  # DOCUMENT-LEVEL AGGREGATION
   # =========================================================================
 
   D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
@@ -405,6 +430,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
 optop_index_deviance <- function(model, dtm, partition, baseline,
                                  macro = FALSE, reopt = c("none", "deviance"),
                                  level = c("document", "word"),
+                                 block_size = NULL,
                                  ztest = FALSE) {
 
   level <- match.arg(level)
@@ -435,48 +461,57 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   J <- nrow(theta); W <- ncol(phi)
 
   # =========================================================================
-  # WORD-LEVEL AGGREGATION (Section 3.7)
+  # WORD-LEVEL AGGREGATION (block-based for memory efficiency)
   # =========================================================================
   if (level == "word") {
     eps <- 1e-12
 
-    # Compute expected counts matrix E (J x W)
-    E_mat <- theta %*% phi  # J x W fitted probabilities
-    E_mat <- E_mat * partition$L  # scale by document lengths (recycled)
-    E_mat <- pmax(E_mat, eps)  # avoid log(0)
+    # Auto-detect block size if not specified
+    if (is.null(block_size)) {
+      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+    }
 
-    # Baseline expected counts B_jw = L_j * pi_glob(w)
-    B_mat <- outer(partition$L, pi_row)
-    B_mat <- pmax(B_mat, eps)
-
-    # Convert dtm to dense matrix for word-level operations
-    N_mat <- as.matrix(dtm)
-
-    # D_w(K) = 2 Σ_j N_jw log(N_jw / E^K_jw)
-    # Only sum over j where N_jw > 0
     dev_w <- numeric(W)
     dev_w_null <- numeric(W)
-    for (w in 1:W) {
-      N_w <- N_mat[, w]
-      E_w <- E_mat[, w]
-      B_w <- B_mat[, w]
-      idx <- N_w > 0
-      if (any(idx)) {
-        dev_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(E_w[idx])))
-        # D_w(null) = 2 Σ_j N_jw log(N_jw / B_jw)
-        dev_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(B_w[idx])))
+
+    for (start in seq(1L, W, by = block_size)) {
+      end <- min(start + block_size - 1L, W)
+      w_idx <- start:end
+
+      # Extract block of observed counts from sparse DTM
+      N_block <- as.matrix(dtm[, w_idx, drop = FALSE])
+
+      # Compute expected counts for this block
+      E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
+      E_block <- pmax(E_block, eps)
+
+      # Baseline expected counts
+      B_block <- outer(partition$L, pi_row[w_idx])
+      B_block <- pmax(B_block, eps)
+
+      # Deviance for each word in block (only where N > 0)
+      for (i in seq_along(w_idx)) {
+        w <- w_idx[i]
+        N_w <- N_block[, i]
+        E_w <- E_block[, i]
+        B_w <- B_block[, i]
+        idx <- N_w > 0
+        if (any(idx)) {
+          dev_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(E_w[idx])))
+          dev_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(B_w[idx])))
+        }
       }
     }
 
-    # R²_Dev,w(K) = 1 - D_w(K) / D_w(null)
+    # R² for each word
     r2_word <- ifelse(dev_w_null > 0, 1 - dev_w / dev_w_null, 0)
     names(r2_word) <- vocab_model
 
-    # Micro-Word aggregation (frequency-weighted)
+    # Micro-Word: frequency-weighted average
     omega_w <- dev_w_null / sum(dev_w_null)
     r2_micro_word <- sum(omega_w * r2_word)
 
-    # Macro-Word aggregation (unweighted average)
+    # Macro-Word: unweighted average (excluding degenerate words)
     valid_words <- dev_w_null > 0
     r2_macro_word <- mean(r2_word[valid_words])
 
@@ -485,7 +520,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION (Sections 3.2-3.5)
+  # DOCUMENT-LEVEL AGGREGATION
   # =========================================================================
 
   D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
@@ -553,6 +588,9 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param level Character; aggregation level for the indices. `"document"` (default)
 #'   returns document-level micro/macro indices. `"word"` returns word-level
 #'   Micro-Word and Macro-Word indices.
+#' @param block_size Integer or `NULL`; number of vocabulary terms to process at once
+#'   during word-level computation. If `NULL` (default), automatically chosen based on
+#'   corpus size. Only used when `level = "word"`.
 #' @param ztest Logical; if `TRUE`, append Z-test statistics for cross-document inference.
 #'   Only applicable when `level = "document"`. Default: `FALSE`.
 #'
@@ -638,6 +676,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                               add_baseline_topic = TRUE,
                               partition = NULL, baseline = NULL,
                               level = c("document", "word"),
+                              block_size = NULL,
                               ztest = FALSE) {
 
   level <- match.arg(level)
@@ -656,7 +695,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         x <- optop_index_se(m, dtm, partition, baseline,
                             macro = FALSE, reopt = if (reopt=="se") "se" else "none",
                             add_baseline_topic = add_baseline_topic,
-                            level = "word", ztest = FALSE)
+                            level = "word", block_size = block_size, ztest = FALSE)
         res$R2_SE_micro_word <- x$r2_micro_word
         res$R2_SE_macro_word <- x$r2_macro_word
       }
@@ -664,14 +703,14 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         x <- optop_index_chisq(m, dtm, partition, baseline,
                                macro = FALSE, reopt = if (reopt=="pearson") "pearson" else "none",
                                add_baseline_topic = add_baseline_topic,
-                               level = "word", ztest = FALSE)
+                               level = "word", block_size = block_size, ztest = FALSE)
         res$R2_chisq_micro_word <- x$r2_micro_word
         res$R2_chisq_macro_word <- x$r2_macro_word
       }
       if ("deviance" %in% metrics) {
         x <- optop_index_deviance(m, dtm, partition, baseline,
                                   macro = FALSE, reopt = if (reopt=="deviance") "deviance" else "none",
-                                  level = "word", ztest = FALSE)
+                                  level = "word", block_size = block_size, ztest = FALSE)
         res$R2_dev_micro_word <- x$r2_micro_word
         res$R2_dev_macro_word <- x$r2_macro_word
       }
@@ -681,7 +720,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         x <- optop_index_se(m, dtm, partition, baseline,
                             macro, reopt = if (reopt=="se") "se" else "none",
                             add_baseline_topic = add_baseline_topic,
-                            level = "document", ztest = ztest)
+                            level = "document", block_size = block_size, ztest = ztest)
         res$R2_SE <- x$r2
         if (macro) res$R2_SE_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -693,7 +732,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         x <- optop_index_chisq(m, dtm, partition, baseline,
                                macro, reopt = if (reopt=="pearson") "pearson" else "none",
                                add_baseline_topic = add_baseline_topic,
-                               level = "document", ztest = ztest)
+                               level = "document", block_size = block_size, ztest = ztest)
         res$R2_chisq <- x$r2
         if (macro) res$R2_chisq_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -704,7 +743,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       if ("deviance" %in% metrics) {
         x <- optop_index_deviance(m, dtm, partition, baseline,
                                   macro, reopt = if (reopt=="deviance") "deviance" else "none",
-                                  level = "document", ztest = ztest)
+                                  level = "document", block_size = block_size, ztest = ztest)
         res$R2_dev <- x$r2
         if (macro) res$R2_dev_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -724,9 +763,9 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 .optop_doc_vectors <- function(j, dtm, rare_mask_row, L_j, E_row, B_nonrare, B_min) {
   # indices for non-rare words
   nonrare <- which(!rare_mask_row)
-  # observed counts
+  # observed counts (as.numeric ensures plain vector even from S4 dfm/dgCMatrix)
   Nj_nonrare <- as.numeric(dtm[j, nonrare, drop = TRUE])
-  Nj_min     <- as.numeric(sum(dtm[j, rare_mask_row, drop = TRUE]))
+  Nj_min     <- sum(as.numeric(dtm[j, rare_mask_row, drop = TRUE]))
   # fitted expected counts (already E_row = L_j * i_j)
   EK_nonrare <- E_row[nonrare]
   EK_min     <- sum(E_row[rare_mask_row])
@@ -747,7 +786,6 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 
 #' Z-test for cross-document inference on Macro R² index
 #'
-#' Implements the hypothesis test from Section 3.6.1 of the paper.
 #' Tests whether the K-topic model provides statistically significant
 #' improvement over the no-topics baseline.
 #'
@@ -756,16 +794,15 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 #'
 #' @return A list with:
 #' \itemize{
-#'   \item \code{z}: Z-statistic (Equation 26).
+#'   \item \code{z}: Z-statistic.
 #'   \item \code{pval}: One-sided p-value for H1: μ_R² > 0.
-#'   \item \code{se}: Standard error σ̂_R (sqrt of Equation 24).
+#'   \item \code{se}: Standard error σ̂_R.
 #'   \item \code{ci}: 95\% confidence interval for the true mean R².
 #'   \item \code{J}: Number of valid documents used.
 #' }
 #'
 #' @details
 #' The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
-#'
 #' the global distribution on average). Under regularity conditions, the
 #' test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
 #'
@@ -776,19 +813,16 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   r2_valid <- r2_doc[valid]
   J <- length(r2_valid)
 
-
   if (J < 2) {
     return(list(z = NA_real_, pval = NA_real_, se = NA_real_,
                 ci = c(NA_real_, NA_real_), J = J))
   }
 
-  # variance estimator
-  # σ̂²_R = (1/(J-1)) Σ_j (R²_j - R̄²_Macro)²
+  # Variance estimator: σ̂²_R = (1/(J-1)) Σ_j (R²_j - R̄²_Macro)²
   sigma2_hat <- sum((r2_valid - r2_macro)^2) / (J - 1)
   sigma_hat <- sqrt(sigma2_hat)
 
-  # Z-statistic
-  # Z = √J · R̄²_Macro / σ̂_R
+  # Z-statistic: Z = √J · R̄²_Macro / σ̂_R
   se_mean <- sigma_hat / sqrt(J)
   z_stat <- r2_macro / se_mean
 
