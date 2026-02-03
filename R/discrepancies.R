@@ -727,8 +727,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   # indices for non-rare words
   nonrare <- which(!rare_mask_row)
   # observed counts
-  Nj_nonrare <- dtm[j, nonrare, drop = TRUE]
-  Nj_min     <- sum(dtm[j, rare_mask_row, drop = TRUE])
+  Nj_nonrare <- as.numeric(dtm[j, nonrare, drop = TRUE])
+  Nj_min     <- as.numeric(sum(dtm[j, rare_mask_row, drop = TRUE]))
   # fitted expected counts (already E_row = L_j * i_j)
   EK_nonrare <- E_row[nonrare]
   EK_min     <- sum(E_row[rare_mask_row])
