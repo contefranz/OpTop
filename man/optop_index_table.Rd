@@ -39,7 +39,6 @@ per-document indices). Default: \code{FALSE}.}
 \itemize{
 \item \code{"none"} (default): no re-optimization;
 \item \code{"se"}: enable SE blending in \code{\link[=optop_index_se]{optop_index_se()}};
-\item \code{"pearson"}: reserved for a Pearson-specific re-optimizer (if implemented);
 \item \code{"deviance"}: reserved for a deviance-specific re-optimizer (if implemented).
 }
 
