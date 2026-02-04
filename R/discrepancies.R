@@ -876,7 +876,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     }
     rows[[length(rows)+1]] <- as.data.frame(res, check.names = FALSE)
   }
-  do.call(rbind, rows)
+  out <- do.call(rbind, rows)
+  data.table::setDT(out)
 }
 
 
