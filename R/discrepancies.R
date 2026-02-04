@@ -223,59 +223,98 @@ optop_index_se <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION
+  # DOCUMENT-LEVEL AGGREGATION (block-based vectorization)
   # =========================================================================
 
-  # precompute baseline vectors
-  B_nonrare_all <- matrix(NA_real_, nrow = J, ncol = W)
-  B_min_all     <- numeric(J)
-  for (j in 1:J) {
-    rare_j <- partition$rare_mask[j, ]
-    B_nonrare_all[j, ] <- partition$L[j] * pi_row
-    B_min_all[j]       <- partition$L[j] * sum(pi_row[rare_j])
-  }
+  # Adaptive block size for documents: target ~500 MB per block matrix
+  block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
 
-  # loop over docs
-  D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
-  for (j in 1:J) {
-    # fitted probabilities and counts
-    i_j <- as.numeric(theta[j, , drop=TRUE] %*% phi)       # length W; E_jw = L_j * i_jw
-    E_j <- partition$L[j] * i_j
+  # Initialize output vectors
 
-    # optional θ re-optimization targeting SE (projected simplex PGD)
+  D_K <- numeric(J)
+  D_null <- numeric(J)
+  r2_doc <- numeric(J)
+
+  # Precompute B_min for all documents (vectorized)
+  # B_min[j] = L[j] * sum(pi_row[rare_j])
+  rare_mask <- partition$rare_mask  # J × W logical matrix
+  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+
+  for (start in seq(1L, J, by = block_size_doc)) {
+    end <- min(start + block_size_doc - 1L, J)
+    j_idx <- start:end
+    block_len <- length(j_idx)
+
+    # Extract blocks: convert sparse DTM to dense for this block only
+    N_block <- as.matrix(dtm[j_idx, , drop = FALSE])           # block × W
+    L_block <- partition$L[j_idx]                              # block vector
+    rare_block <- rare_mask[j_idx, , drop = FALSE]             # block × W
+
+    # Compute expected counts: E_jw = L_j * Σ_k θ_jk φ_kw
+    E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
+
+    # Baseline expected counts: B_jw = L_j * π_glob(w)
+    B_block <- outer(L_block, pi_row)                          # block × W
+
     if (reopt == "se") {
-      # cheap one-parameter blend towards baseline (guarantees SSE <= min{SSE_K,SST})
-      i_base <- pi_row
-      diff   <- i_j - i_base
-      # compute λ* on counts space
-      # inner products over non-rare plus min bin
-      rare_j <- partition$rare_mask[j, ]
-      # vectors on fixed support
-      Nj_nonrare <- dtm[j, !rare_j, drop = TRUE]
-      Nj_min     <- sum(dtm[j,  rare_j, drop = TRUE])
-      Ej_nonrare <- E_j[!rare_j]; Ej_min <- sum(E_j[ rare_j])
-      Bj_nonrare <- partition$L[j] * i_base[!rare_j]
-      Bj_min     <- partition$L[j] * sum(i_base[ rare_j])
-      num <- sum((Nj_nonrare - Bj_nonrare) * (Ej_nonrare - Bj_nonrare)) + (Nj_min - Bj_min) * (Ej_min - Bj_min)
-      den <- sum((Ej_nonrare - Bj_nonrare)^2) + (Ej_min - Bj_min)^2
-      lambda <- if (den <= 0) 0 else max(0, min(1, num / den))
-      E_j[!rare_j] <- lambda * Ej_nonrare + (1 - lambda) * Bj_nonrare
-      E_j[ rare_j] <- 0  # reconciling min below
-      E_j_min <- lambda * Ej_min + (1 - lambda) * Bj_min
-    } else {
-      rare_j <- partition$rare_mask[j, ]
-      E_j_min <- sum(E_j[rare_j])
-    }
+      # Re-optimization requires per-document lambda computation
+      # Keep as nested loop within the block
+      for (local_idx in seq_len(block_len)) {
+        j <- j_idx[local_idx]
+        rare_j <- rare_block[local_idx, ]
 
-    # pack vectors and compute discrepancies
-    v <- .optop_doc_vectors(j, dtm, rare_j, partition$L[j], E_j,
-                            B_nonrare_all[j, ], B_min_all[j])
-    sse_k   <- .optop_disc_se(v$N_nonrare, v$E_nonrare) + (v$N_min - v$E_min)^2
-    sst_se  <- .optop_disc_se(v$N_nonrare, v$B_nonrare) + (v$N_min - v$B_min)^2
-    D_K[j]  <- sse_k
-    D_null[j] <- sst_se
-    r2_doc[j] <- if (sst_se > 0) 1 - sse_k / sst_se else 0
+        N_j <- N_block[local_idx, ]
+        E_j <- E_block[local_idx, ]
+        B_j <- B_block[local_idx, ]
+
+        # Compute lambda for blending E towards B
+        Nj_nonrare <- N_j[!rare_j]; Nj_min <- sum(N_j[rare_j])
+        Ej_nonrare <- E_j[!rare_j]; Ej_min <- sum(E_j[rare_j])
+        Bj_nonrare <- B_j[!rare_j]; Bj_min <- sum(B_j[rare_j])
+
+        num <- sum((Nj_nonrare - Bj_nonrare) * (Ej_nonrare - Bj_nonrare)) +
+               (Nj_min - Bj_min) * (Ej_min - Bj_min)
+        den <- sum((Ej_nonrare - Bj_nonrare)^2) + (Ej_min - Bj_min)^2
+        lambda <- if (den <= 0) 0 else max(0, min(1, num / den))
+
+        # Blend E towards B
+        Ej_opt_nonrare <- lambda * Ej_nonrare + (1 - lambda) * Bj_nonrare
+        Ej_opt_min <- lambda * Ej_min + (1 - lambda) * Bj_min
+
+        # Compute discrepancies on harmonized support
+        sse_k <- sum((Nj_nonrare - Ej_opt_nonrare)^2) + (Nj_min - Ej_opt_min)^2
+        sst_se <- sum((Nj_nonrare - Bj_nonrare)^2) + (Nj_min - Bj_min)^2
+
+        D_K[j] <- sse_k
+        D_null[j] <- sst_se
+        r2_doc[j] <- if (sst_se > 0) 1 - sse_k / sst_se else 0
+      }
+    } else {
+      # Vectorized computation using decomposition trick:
+      # D_K = SSE_full - SSE_rare + SSE_min
+      # where SSE_full = Σ_w (N-E)², SSE_rare = Σ_{rare w} (N-E)², SSE_min = (N_min - E_min)²
+
+      diff_E <- N_block - E_block  # block × W
+      diff_B <- N_block - B_block  # block × W
+
+      # Model discrepancy D_K
+      SSE_full <- rowSums(diff_E^2)
+      SSE_rare <- rowSums(rare_block * diff_E^2)
+      N_min <- rowSums(rare_block * N_block)
+      E_min <- rowSums(rare_block * E_block)
+      D_K[j_idx] <- SSE_full - SSE_rare + (N_min - E_min)^2
+
+      # Baseline discrepancy D_null
+      SST_full <- rowSums(diff_B^2)
+      SST_rare <- rowSums(rare_block * diff_B^2)
+      B_min <- B_min_all[j_idx]
+      D_null[j_idx] <- SST_full - SST_rare + (N_min - B_min)^2
+
+      # Per-document R²
+      r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
+    }
   }
+
   r2_micro <- 1 - sum(D_K) / sum(D_null)
   r2_macro <- mean(r2_doc[D_null > 0])
 
@@ -387,24 +426,60 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION
+  # DOCUMENT-LEVEL AGGREGATION (block-based vectorization)
   # =========================================================================
 
-  D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
-  for (j in 1:J) {
-    i_j <- as.numeric(theta[j, , drop=TRUE] %*% phi)
-    E_j <- partition$L[j] * i_j
-    rare_j <- partition$rare_mask[j, ]
+  eps <- 1e-12
 
-    # reopt (lightweight IRLS would go here; omitted for brevity)
+  # Adaptive block size for documents: target ~500 MB per block matrix
+  block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
 
-    v <- .optop_doc_vectors(j, dtm, rare_j, partition$L[j], E_j,
-                            partition$L[j] * pi_row,
-                            partition$L[j] * sum(pi_row[rare_j]))
-    ssk   <- .optop_disc_chisq(v$N_nonrare, v$E_nonrare) + .optop_disc_chisq(v$N_min, v$E_min)
-    sst   <- .optop_disc_chisq(v$N_nonrare, v$B_nonrare) + .optop_disc_chisq(v$N_min, v$B_min)
-    D_K[j] <- ssk; D_null[j] <- sst
-    r2_doc[j] <- if (sst > 0) 1 - ssk / sst else 0
+  # Initialize output vectors
+  D_K <- numeric(J)
+  D_null <- numeric(J)
+  r2_doc <- numeric(J)
+
+  # Precompute B_min for all documents (vectorized)
+  rare_mask <- partition$rare_mask  # J × W logical matrix
+  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+
+  for (start in seq(1L, J, by = block_size_doc)) {
+    end <- min(start + block_size_doc - 1L, J)
+    j_idx <- start:end
+
+    # Extract blocks: convert sparse DTM to dense for this block only
+    N_block <- as.matrix(dtm[j_idx, , drop = FALSE])           # block × W
+    L_block <- partition$L[j_idx]                              # block vector
+    rare_block <- rare_mask[j_idx, , drop = FALSE]             # block × W
+
+    # Compute expected counts: E_jw = L_j * Σ_k θ_jk φ_kw
+    E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
+    E_block <- pmax(E_block, eps)
+
+    # Baseline expected counts: B_jw = L_j * π_glob(w)
+    B_block <- outer(L_block, pi_row)                          # block × W
+    B_block <- pmax(B_block, eps)
+
+    # Vectorized chi-square computation using decomposition:
+    # D_K = χ²_full - χ²_rare + χ²_min
+
+    # Model discrepancy D_K
+    chisq_full <- rowSums((N_block - E_block)^2 / E_block)
+    chisq_rare <- rowSums(rare_block * (N_block - E_block)^2 / E_block)
+    N_min <- rowSums(rare_block * N_block)
+    E_min <- pmax(rowSums(rare_block * E_block), eps)
+    chisq_min <- (N_min - E_min)^2 / E_min
+    D_K[j_idx] <- chisq_full - chisq_rare + chisq_min
+
+    # Baseline discrepancy D_null
+    chisq_full_null <- rowSums((N_block - B_block)^2 / B_block)
+    chisq_rare_null <- rowSums(rare_block * (N_block - B_block)^2 / B_block)
+    B_min <- pmax(B_min_all[j_idx], eps)
+    chisq_min_null <- (N_min - B_min)^2 / B_min
+    D_null[j_idx] <- chisq_full_null - chisq_rare_null + chisq_min_null
+
+    # Per-document R²
+    r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
   }
 
   r2_micro <- 1 - sum(D_K) / sum(D_null)
@@ -520,23 +595,70 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   }
 
   # =========================================================================
-  # DOCUMENT-LEVEL AGGREGATION
+  # DOCUMENT-LEVEL AGGREGATION (block-based vectorization)
   # =========================================================================
 
-  D_K <- numeric(J); D_null <- numeric(J); r2_doc <- numeric(J)
-  for (j in 1:J) {
-    i_j <- as.numeric(theta[j, , drop=TRUE] %*% phi)
-    E_j <- partition$L[j] * i_j
-    rare_j <- partition$rare_mask[j, ]
-    # (optional) EM reopt of θ_j for deviance could go here
+  eps <- 1e-12
 
-    v <- .optop_doc_vectors(j, dtm, rare_j, partition$L[j], E_j,
-                            partition$L[j] * pi_row,
-                            partition$L[j] * sum(pi_row[rare_j]))
-    dev_k   <- .optop_disc_dev(v$N_nonrare, v$E_nonrare) + .optop_disc_dev(v$N_min, v$E_min)
-    dev_null<- .optop_disc_dev(v$N_nonrare, v$B_nonrare) + .optop_disc_dev(v$N_min, v$B_min)
-    D_K[j] <- dev_k; D_null[j] <- dev_null
-    r2_doc[j] <- if (dev_null > 0) 1 - dev_k / dev_null else 0
+  # Adaptive block size for documents: target ~500 MB per block matrix
+  block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
+
+  # Initialize output vectors
+  D_K <- numeric(J)
+  D_null <- numeric(J)
+  r2_doc <- numeric(J)
+
+  # Precompute B_min for all documents (vectorized)
+  rare_mask <- partition$rare_mask  # J × W logical matrix
+  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+
+  # Helper: safe deviance contribution (handles 0*log(0) = 0 convention)
+  safe_dev_contrib <- function(N, E) {
+    E <- pmax(E, eps)
+    result <- 2 * N * log(N / E)
+    result[N == 0] <- 0
+    result
+  }
+
+  for (start in seq(1L, J, by = block_size_doc)) {
+    end <- min(start + block_size_doc - 1L, J)
+    j_idx <- start:end
+
+    # Extract blocks: convert sparse DTM to dense for this block only
+    N_block <- as.matrix(dtm[j_idx, , drop = FALSE])           # block × W
+    L_block <- partition$L[j_idx]                              # block vector
+    rare_block <- rare_mask[j_idx, , drop = FALSE]             # block × W
+
+    # Compute expected counts: E_jw = L_j * Σ_k θ_jk φ_kw
+    E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
+
+    # Baseline expected counts: B_jw = L_j * π_glob(w)
+    B_block <- outer(L_block, pi_row)                          # block × W
+
+    # Vectorized deviance computation using decomposition:
+    # D_K = Dev_full - Dev_rare + Dev_min
+
+    # Model discrepancy D_K
+    dev_contrib_E <- safe_dev_contrib(N_block, E_block)        # block × W
+    dev_full <- rowSums(dev_contrib_E)
+    dev_rare <- rowSums(rare_block * dev_contrib_E)
+    N_min <- rowSums(rare_block * N_block)
+    E_min <- pmax(rowSums(rare_block * E_block), eps)
+    dev_min <- 2 * N_min * log(pmax(N_min, eps) / E_min)
+    dev_min[N_min == 0] <- 0
+    D_K[j_idx] <- dev_full - dev_rare + dev_min
+
+    # Baseline discrepancy D_null
+    dev_contrib_B <- safe_dev_contrib(N_block, B_block)        # block × W
+    dev_full_null <- rowSums(dev_contrib_B)
+    dev_rare_null <- rowSums(rare_block * dev_contrib_B)
+    B_min <- pmax(B_min_all[j_idx], eps)
+    dev_min_null <- 2 * N_min * log(pmax(N_min, eps) / B_min)
+    dev_min_null[N_min == 0] <- 0
+    D_null[j_idx] <- dev_full_null - dev_rare_null + dev_min_null
+
+    # Per-document R²
+    r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
   }
 
   r2_micro <- 1 - sum(D_K) / sum(D_null)
