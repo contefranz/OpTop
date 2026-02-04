@@ -1,3 +1,48 @@
+# OpTop 0.9.6
+
+### New Functions
+
+* **Discrepancy-based goodness-of-fit indices**: Four new functions implement regression-style 
+  $R^2$ indices for topic model evaluation:
+  - `optop_index_se()`: Squared-error index.
+  - `optop_index_chisq()`: Pearson chi-square index.
+  - `optop_index_deviance()`: Deviance index.
+  - `optop_index_table()`: Computes indices across a grid of models and returns a data.table.
+
+### Major Changes
+
+* **Word-level aggregation**: All index functions support `level = "word"` to compute per-word 
+  R² indices with Micro-Word (frequency-weighted) and Macro-Word (unweighted) aggregations. 
+  This reveals which words are well-captured vs. poorly modeled by the topic structure.
+
+* **Z-test for cross-document inference**: Setting `ztest = TRUE` tests whether the topic model 
+  provides statistically significant improvement over the no-topics baseline.
+
+* **Block-based processing**: All index functions now use memory-efficient block-based computation 
+  for both word-level and document-level aggregation. This enables processing of large corpora 
+  (100K+ documents) without memory issues. The `block_size` parameter controls word-level blocking;
+  document-level blocking is adaptive and computed internally. The `block_size` parameter is adaptive.
+
+* **Vectorized document-level computation**: Replaced per-document for loops with vectorized 
+  matrix operations using the decomposition $D = D_{full} - D_{rare} + D_{min}$, significantly 
+  improving performance on large corpora.
+
+
+### Minor Changes
+
+* Updated documentation to Markdown format with better rendering of mathematical equations.
+
+* Fixed CRAN notes and warnings.
+
+### Bug Fixes
+
+* Fixed S4 subscript error when using `quanteda::dfm` or `Matrix::dgCMatrix` inputs. The issue 
+  occurred because extracted values retained S4 class; now handled with explicit `as.numeric()` 
+  conversion.
+
+---
+
+
 # OpTop 0.9.5
 
 ### Major Changes
