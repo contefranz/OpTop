@@ -711,8 +711,9 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #'   returns document-level micro/macro indices. `"word"` returns word-level
 #'   Micro-Word and Macro-Word indices.
 #' @param block_size Integer or `NULL`; number of vocabulary terms to process at once
-#'   during word-level computation. If `NULL` (default), automatically chosen based on
-#'   corpus size. Only used when `level = "word"`.
+#'   during word-level computation. Smaller values use less memory but may be slower.
+#'   If `NULL` (default), automatically chosen based on corpus size to target ~1.5 GB
+#'   memory usage. Only used when `level = "word"`.
 #' @param ztest Logical; if `TRUE`, append Z-test statistics for cross-document inference.
 #'   Only applicable when `level = "document"`. Default: `FALSE`.
 #'
