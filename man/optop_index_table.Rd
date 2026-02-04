@@ -60,8 +60,9 @@ returns document-level micro/macro indices. \code{"word"} returns word-level
 Micro-Word and Macro-Word indices.}
 
 \item{block_size}{Integer or \code{NULL}; number of vocabulary terms to process at once
-during word-level computation. If \code{NULL} (default), automatically chosen based on
-corpus size. Only used when \code{level = "word"}.}
+during word-level computation. Smaller values use less memory but may be slower.
+If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
+memory usage. Only used when \code{level = "word"}.}
 
 \item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference.
 Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
