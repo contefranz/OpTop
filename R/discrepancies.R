@@ -127,8 +127,9 @@
 #' @aliases optop_index_se optop_index_chisq optop_index_deviance
 NULL
 #' @describeIn optop_index Squared-error index \eqn{R^2_{SE}}{R2_SE}.
-#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row to
-#'   guarantee non-negativity of \eqn{R^2}. Default: `TRUE`.
+#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row.
+#'   Combined with `reopt = "se"`, this guarantees non-negativity of \eqn{R^2}.
+#'   With `reopt = "none"` (default), the augmentation has no effect on results.
 #'   (Only for `optop_index_se()` and `optop_index_chisq()`).
 #' @export
 optop_index_se <- function(model, dtm, partition, baseline,
@@ -331,8 +332,9 @@ optop_index_se <- function(model, dtm, partition, baseline,
 }
 
 #' @describeIn optop_index Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq}.
-#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row to
-#' guarantee non-negativity of \eqn{R^2}. Default: `TRUE`.
+#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row.
+#'   Combined with `reopt = "se"`, this guarantees non-negativity of \eqn{R^2}.
+#'   With `reopt = "none"` (default), the augmentation has no effect on results.
 #' (Only for `optop_index_se()` and `optop_index_chisq()`).
 #'
 #' @export

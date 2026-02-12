@@ -64,8 +64,9 @@ the per-document indices). Default: \code{FALSE}.}
 Allowed values include \code{"none"} (default), \code{"se"}, \code{"pearson"}, and \code{"deviance"}.
 Unsupported values for a given metric are ignored.}
 
-\item{add_baseline_topic}{Logical; if \code{TRUE}, augment topics with a baseline row to
-guarantee non-negativity of \eqn{R^2}. Default: \code{TRUE}.
+\item{add_baseline_topic}{Logical; if \code{TRUE}, augment topics with a baseline row.
+Combined with \code{reopt = "se"}, this guarantees non-negativity of \eqn{R^2}.
+With \code{reopt = "none"} (default), the augmentation has no effect on results.
 (Only for \code{optop_index_se()} and \code{optop_index_chisq()}).}
 
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
