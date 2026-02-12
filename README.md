@@ -41,7 +41,7 @@ different topic counts directly comparable.
 
 - [Craig M. Lewis](https://business.vanderbilt.edu/bio/craig-lewis/)
 
-  Madison S. Wigginton Professor of Finance, Emeritus  
+  _Madison S. Wigginton Professor of Finance, Emeritus_  
   Owen Graduate School of Management | Vanderbilt University  
   Contact: craig.lewis@vanderbilt.edu  
 
