@@ -90,16 +90,16 @@ VEM_models <- lapply(
 ) 
 
 # 3) Choose the optimal K
-res_opt   <- optimal_topic(lda_models = lda_list, 
+res_opt   <- optimal_topic(lda_models = VEM_models, 
                            weighted_dfm = weighted_dfm,
                            q = 0.80, 
                            alpha = 0.05, 
                            do_plot = TRUE)
 
 # 4) Goodness-of-fit across K (use counts here)
-part      <- optop_make_partition(models = lda_list, dtm = dfm_counts, c = 5)
+part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 5)
 base      <- optop_make_baseline(dtm = dfm_counts)
-tab       <- optop_index_table(models = lda_list, 
+tab       <- optop_index_table(models = VEM_models, 
                                dtm = dfm_counts,
                                metrics = c("se","chisq","deviance"),
                                partition = part, 
