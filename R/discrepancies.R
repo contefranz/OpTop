@@ -140,29 +140,27 @@ optop_index_se <- function(model, dtm, partition, baseline,
                            ztest = FALSE) {
 
   level <- match.arg(level)
+  reopt <- match.arg(reopt)
+  .optop_index_se_impl(model, dtm, partition, baseline, macro, reopt,
+                       add_baseline_topic, level, block_size, ztest)
+}
+
+# Worker for optop_index_se(). `null_disc` optionally carries the
+# model-independent baseline discrepancy (per-document D_null when
+# level = "document", per-word SST when level = "word"), as computed by
+# .optop_index_null(), so that grid evaluations across K reuse it instead of
+# recomputing it for every model. It is ignored when reopt != "none" because
+# the SE re-optimization needs the full baseline counts per document.
+.optop_index_se_impl <- function(model, dtm, partition, baseline, macro, reopt,
+                                 add_baseline_topic, level, block_size, ztest,
+                                 null_disc = NULL) {
+
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
+  pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
-  if (!identical(colnames(dtm), vocab_model))
-    stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
-  # baseline alignment
-  if (!is.null(names(baseline$pi_glob))) {
-    pi_row <- baseline$pi_glob[vocab_model]
-    if (any(is.na(pi_row)))
-      stop("Baseline vocabulary does not match model. Recompute optop_make_baseline() on an aligned DTM.")
-  } else {
-    if (length(baseline$pi_glob) != ncol(tp$phi))
-      stop("Baseline length != model vocab. Recompute baseline on aligned DTM.")
-    pi_row <- baseline$pi_glob
-  }
+  if (reopt != "none") null_disc <- NULL
 
-  # partition alignment
-  if (is.null(colnames(partition$rare_mask)) ||
-      !identical(colnames(partition$rare_mask), vocab_model)) {
-    stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
-  }
-
-  reopt <- match.arg(reopt)
   theta <- tp$theta
   phi <- tp$phi
   J <- nrow(theta)
@@ -186,7 +184,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
     }
 
     SSE_w <- numeric(W)
-    SST_w <- numeric(W)
+    SST_w <- if (is.null(null_disc)) numeric(W) else null_disc
 
     for (start in seq(1L, W, by = block_size)) {
       end <- min(start + block_size - 1L, W)
@@ -199,12 +197,14 @@ optop_index_se <- function(model, dtm, partition, baseline,
       # Compute expected counts for this block: E_jw = L_j * Σ_k θ_jk φ_kw
       E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
 
-      # Baseline expected counts: B_jw = L_j * π_glob(w)
-      B_block <- outer(partition$L, pi_row[w_idx])
-
       # Squared-error discrepancies for this block
       SSE_w[w_idx] <- colSums((N_block - E_block)^2)
-      SST_w[w_idx] <- colSums((N_block - B_block)^2)
+
+      if (is.null(null_disc)) {
+        # Baseline expected counts: B_jw = L_j * π_glob(w)
+        B_block <- outer(partition$L, pi_row[w_idx])
+        SST_w[w_idx] <- colSums((N_block - B_block)^2)
+      }
     }
 
     # R² for each word
@@ -233,13 +233,15 @@ optop_index_se <- function(model, dtm, partition, baseline,
   # Initialize output vectors
 
   D_K <- numeric(J)
-  D_null <- numeric(J)
+  D_null <- if (is.null(null_disc)) numeric(J) else null_disc
   r2_doc <- numeric(J)
 
-  # Precompute B_min for all documents (vectorized)
-  # B_min[j] = L[j] * sum(pi_row[rare_j])
   rare_mask <- partition$rare_mask  # J × W logical matrix
-  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  if (is.null(null_disc)) {
+    # Precompute B_min for all documents (vectorized)
+    # B_min[j] = L[j] * sum(pi_row[rare_j])
+    B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  }
 
   for (start in seq(1L, J, by = block_size_doc)) {
     end <- min(start + block_size_doc - 1L, J)
@@ -254,8 +256,10 @@ optop_index_se <- function(model, dtm, partition, baseline,
     # Compute expected counts: E_jw = L_j * Σ_k θ_jk φ_kw
     E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
 
-    # Baseline expected counts: B_jw = L_j * π_glob(w)
-    B_block <- outer(L_block, pi_row)                          # block × W
+    if (is.null(null_disc)) {
+      # Baseline expected counts: B_jw = L_j * π_glob(w)
+      B_block <- outer(L_block, pi_row)                        # block × W
+    }
 
     if (reopt == "se") {
       # Re-optimization requires per-document lambda computation
@@ -296,7 +300,6 @@ optop_index_se <- function(model, dtm, partition, baseline,
       # where SSE_full = Σ_w (N-E)², SSE_rare = Σ_{rare w} (N-E)², SSE_min = (N_min - E_min)²
 
       diff_E2 <- (N_block - E_block)^2  # block × W
-      diff_B2 <- (N_block - B_block)^2  # block × W
 
       # Model discrepancy D_K
       SSE_full <- rowSums(diff_E2)
@@ -305,11 +308,14 @@ optop_index_se <- function(model, dtm, partition, baseline,
       E_min <- rowSums(rare_block * E_block)
       D_K[j_idx] <- SSE_full - SSE_rare + (N_min - E_min)^2
 
-      # Baseline discrepancy D_null
-      SST_full <- rowSums(diff_B2)
-      SST_rare <- rowSums(rare_block * diff_B2)
-      B_min <- B_min_all[j_idx]
-      D_null[j_idx] <- SST_full - SST_rare + (N_min - B_min)^2
+      if (is.null(null_disc)) {
+        # Baseline discrepancy D_null
+        diff_B2 <- (N_block - B_block)^2  # block × W
+        SST_full <- rowSums(diff_B2)
+        SST_rare <- rowSums(rare_block * diff_B2)
+        B_min <- B_min_all[j_idx]
+        D_null[j_idx] <- SST_full - SST_rare + (N_min - B_min)^2
+      }
 
       # Per-document R²
       r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
@@ -346,28 +352,21 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                               ztest = FALSE) {
 
   level <- match.arg(level)
+  reopt <- match.arg(reopt)
+  .optop_index_chisq_impl(model, dtm, partition, baseline, macro, reopt,
+                          add_baseline_topic, level, block_size, ztest)
+}
+
+# Worker for optop_index_chisq(). See .optop_index_se_impl() for the meaning
+# of `null_disc`.
+.optop_index_chisq_impl <- function(model, dtm, partition, baseline, macro,
+                                    reopt, add_baseline_topic, level,
+                                    block_size, ztest, null_disc = NULL) {
+
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
+  pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
-  if (!identical(colnames(dtm), vocab_model))
-    stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
-  # baseline alignment
-  if (!is.null(names(baseline$pi_glob))) {
-    pi_row <- baseline$pi_glob[vocab_model]
-    if (any(is.na(pi_row)))
-      stop("Baseline vocabulary does not match model. Recompute optop_make_baseline() on an aligned DTM.")
-  } else {
-    if (length(baseline$pi_glob) != ncol(tp$phi))
-      stop("Baseline length != model vocab. Recompute baseline on aligned DTM.")
-    pi_row <- baseline$pi_glob
-  }
-
-  # partition alignment
-  if (is.null(colnames(partition$rare_mask)) ||
-      !identical(colnames(partition$rare_mask), vocab_model)) {
-    stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
-  }
-  reopt <- match.arg(reopt)
   theta <- tp$theta
   phi <- tp$phi
   J <- nrow(theta); W <- ncol(phi)
@@ -389,7 +388,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
     }
 
     chisq_w <- numeric(W)
-    chisq_w_null <- numeric(W)
+    chisq_w_null <- if (is.null(null_disc)) numeric(W) else null_disc
 
     for (start in seq(1L, W, by = block_size)) {
       end <- min(start + block_size - 1L, W)
@@ -402,13 +401,15 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
       E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
       E_block <- pmax(E_block, eps)
 
-      # Baseline expected counts
-      B_block <- outer(partition$L, pi_row[w_idx])
-      B_block <- pmax(B_block, eps)
-
       # Chi-square discrepancies for this block
       chisq_w[w_idx] <- colSums((N_block - E_block)^2 / E_block)
-      chisq_w_null[w_idx] <- colSums((N_block - B_block)^2 / B_block)
+
+      if (is.null(null_disc)) {
+        # Baseline expected counts
+        B_block <- outer(partition$L, pi_row[w_idx])
+        B_block <- pmax(B_block, eps)
+        chisq_w_null[w_idx] <- colSums((N_block - B_block)^2 / B_block)
+      }
     }
 
     # R² for each word
@@ -438,12 +439,14 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
 
   # Initialize output vectors
   D_K <- numeric(J)
-  D_null <- numeric(J)
+  D_null <- if (is.null(null_disc)) numeric(J) else null_disc
   r2_doc <- numeric(J)
 
-  # Precompute B_min for all documents (vectorized)
   rare_mask <- partition$rare_mask  # J × W logical matrix
-  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  if (is.null(null_disc)) {
+    # Precompute B_min for all documents (vectorized)
+    B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  }
 
   for (start in seq(1L, J, by = block_size_doc)) {
     end <- min(start + block_size_doc - 1L, J)
@@ -458,10 +461,6 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
     E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
     E_block <- pmax(E_block, eps)
 
-    # Baseline expected counts: B_jw = L_j * π_glob(w)
-    B_block <- outer(L_block, pi_row)                          # block × W
-    B_block <- pmax(B_block, eps)
-
     # Vectorized chi-square computation using decomposition:
     # D_K = χ²_full - χ²_rare + χ²_min
 
@@ -474,13 +473,19 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
     chisq_min <- (N_min - E_min)^2 / E_min
     D_K[j_idx] <- chisq_full - chisq_rare + chisq_min
 
-    # Baseline discrepancy D_null
-    chisq_contrib_B <- (N_block - B_block)^2 / B_block  # block × W
-    chisq_full_null <- rowSums(chisq_contrib_B)
-    chisq_rare_null <- rowSums(rare_block * chisq_contrib_B)
-    B_min <- pmax(B_min_all[j_idx], eps)
-    chisq_min_null <- (N_min - B_min)^2 / B_min
-    D_null[j_idx] <- chisq_full_null - chisq_rare_null + chisq_min_null
+    if (is.null(null_disc)) {
+      # Baseline expected counts: B_jw = L_j * π_glob(w)
+      B_block <- outer(L_block, pi_row)                        # block × W
+      B_block <- pmax(B_block, eps)
+
+      # Baseline discrepancy D_null
+      chisq_contrib_B <- (N_block - B_block)^2 / B_block  # block × W
+      chisq_full_null <- rowSums(chisq_contrib_B)
+      chisq_rare_null <- rowSums(rare_block * chisq_contrib_B)
+      B_min <- pmax(B_min_all[j_idx], eps)
+      chisq_min_null <- (N_min - B_min)^2 / B_min
+      D_null[j_idx] <- chisq_full_null - chisq_rare_null + chisq_min_null
+    }
 
     # Per-document R²
     r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
@@ -513,28 +518,21 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
                                  ztest = FALSE) {
 
   level <- match.arg(level)
+  reopt <- match.arg(reopt)
+  .optop_index_deviance_impl(model, dtm, partition, baseline, macro, reopt,
+                             level, block_size, ztest)
+}
+
+# Worker for optop_index_deviance(). See .optop_index_se_impl() for the
+# meaning of `null_disc`.
+.optop_index_deviance_impl <- function(model, dtm, partition, baseline, macro,
+                                       reopt, level, block_size, ztest,
+                                       null_disc = NULL) {
+
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
+  pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
-  if (!identical(colnames(dtm), vocab_model))
-    stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
-  # baseline alignment
-  if (!is.null(names(baseline$pi_glob))) {
-    pi_row <- baseline$pi_glob[vocab_model]
-    if (any(is.na(pi_row)))
-      stop("Baseline vocabulary does not match model. Recompute optop_make_baseline() on an aligned DTM.")
-  } else {
-    if (length(baseline$pi_glob) != ncol(tp$phi))
-      stop("Baseline length != model vocab. Recompute baseline on aligned DTM.")
-    pi_row <- baseline$pi_glob
-  }
-
-  # partition alignment
-  if (is.null(colnames(partition$rare_mask)) ||
-      !identical(colnames(partition$rare_mask), vocab_model)) {
-    stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
-  }
-  reopt <- match.arg(reopt)
   theta <- tp$theta
   phi <- tp$phi
   J <- nrow(theta); W <- ncol(phi)
@@ -551,7 +549,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
     }
 
     dev_w <- numeric(W)
-    dev_w_null <- numeric(W)
+    dev_w_null <- if (is.null(null_disc)) numeric(W) else null_disc
 
     for (start in seq(1L, W, by = block_size)) {
       end <- min(start + block_size - 1L, W)
@@ -564,20 +562,21 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
       E_block <- (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
       E_block <- pmax(E_block, eps)
 
-      # Baseline expected counts
-      B_block <- outer(partition$L, pi_row[w_idx])
-      B_block <- pmax(B_block, eps)
-
       # Deviance contributions (0 * log(0) = 0 convention where N = 0)
       zero_N <- N_block == 0
       log_N <- log(N_block)
       contrib_E <- N_block * (log_N - log(E_block))
       contrib_E[zero_N] <- 0
-      contrib_B <- N_block * (log_N - log(B_block))
-      contrib_B[zero_N] <- 0
-
       dev_w[w_idx] <- 2 * colSums(contrib_E)
-      dev_w_null[w_idx] <- 2 * colSums(contrib_B)
+
+      if (is.null(null_disc)) {
+        # Baseline expected counts
+        B_block <- outer(partition$L, pi_row[w_idx])
+        B_block <- pmax(B_block, eps)
+        contrib_B <- N_block * (log_N - log(B_block))
+        contrib_B[zero_N] <- 0
+        dev_w_null[w_idx] <- 2 * colSums(contrib_B)
+      }
     }
 
     # R² for each word
@@ -607,12 +606,14 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 
   # Initialize output vectors
   D_K <- numeric(J)
-  D_null <- numeric(J)
+  D_null <- if (is.null(null_disc)) numeric(J) else null_disc
   r2_doc <- numeric(J)
 
-  # Precompute B_min for all documents (vectorized)
   rare_mask <- partition$rare_mask  # J × W logical matrix
-  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  if (is.null(null_disc)) {
+    # Precompute B_min for all documents (vectorized)
+    B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+  }
 
   # Helper: safe deviance contribution (handles 0*log(0) = 0 convention)
   safe_dev_contrib <- function(N, E) {
@@ -634,9 +635,6 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
     # Compute expected counts: E_jw = L_j * Σ_k θ_jk φ_kw
     E_block <- (theta[j_idx, , drop = FALSE] %*% phi) * L_block  # block × W
 
-    # Baseline expected counts: B_jw = L_j * π_glob(w)
-    B_block <- outer(L_block, pi_row)                          # block × W
-
     # Vectorized deviance computation using decomposition:
     # D_K = Dev_full - Dev_rare + Dev_min
 
@@ -650,14 +648,19 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
     dev_min[N_min == 0] <- 0
     D_K[j_idx] <- dev_full - dev_rare + dev_min
 
-    # Baseline discrepancy D_null
-    dev_contrib_B <- safe_dev_contrib(N_block, B_block)        # block × W
-    dev_full_null <- rowSums(dev_contrib_B)
-    dev_rare_null <- rowSums(rare_block * dev_contrib_B)
-    B_min <- pmax(B_min_all[j_idx], eps)
-    dev_min_null <- 2 * N_min * log(pmax(N_min, eps) / B_min)
-    dev_min_null[N_min == 0] <- 0
-    D_null[j_idx] <- dev_full_null - dev_rare_null + dev_min_null
+    if (is.null(null_disc)) {
+      # Baseline expected counts: B_jw = L_j * π_glob(w)
+      B_block <- outer(L_block, pi_row)                        # block × W
+
+      # Baseline discrepancy D_null
+      dev_contrib_B <- safe_dev_contrib(N_block, B_block)      # block × W
+      dev_full_null <- rowSums(dev_contrib_B)
+      dev_rare_null <- rowSums(rare_block * dev_contrib_B)
+      B_min <- pmax(B_min_all[j_idx], eps)
+      dev_min_null <- 2 * N_min * log(pmax(N_min, eps) / B_min)
+      dev_min_null[N_min == 0] <- 0
+      D_null[j_idx] <- dev_full_null - dev_rare_null + dev_min_null
+    }
 
     # Per-document R²
     r2_doc[j_idx] <- ifelse(D_null[j_idx] > 0, 1 - D_K[j_idx] / D_null[j_idx], 0)
@@ -809,6 +812,23 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   if (is.null(partition)) partition <- optop_make_partition(models, dtm, c = c)
   if (is.null(baseline))  baseline  <- optop_make_baseline(dtm)
 
+  # The baseline (no-topics) discrepancy does not depend on the fitted model:
+  # compute it once per metric and share it across the whole grid of K. The
+  # SE re-optimization path is excluded because it needs the full baseline
+  # counts per document.
+  null_cache <- list()
+  null_for <- function(metric) {
+    if (is.null(null_cache[[metric]])) {
+      pi_row <- .optop_validate_alignment(colnames(dtm), dtm, partition, baseline)
+      null_cache[[metric]] <<- .optop_index_null(dtm, partition, pi_row,
+                                                 metric = metric, level = level,
+                                                 block_size = block_size)
+    }
+    null_cache[[metric]]
+  }
+  reopt_se <- if (reopt == "se") "se" else "none"
+  null_se <- if ("se" %in% metrics && reopt_se == "none") null_for("se") else NULL
+
   rows <- list()
   for (m in models) {
     K <- optop_as_theta_phi(m)$K
@@ -817,35 +837,41 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     if (level == "word") {
       # Word-level indices
       if ("se" %in% metrics) {
-        x <- optop_index_se(m, dtm, partition, baseline,
-                            macro = FALSE, reopt = if (reopt=="se") "se" else "none",
-                            add_baseline_topic = add_baseline_topic,
-                            level = "word", block_size = block_size, ztest = FALSE)
+        x <- .optop_index_se_impl(m, dtm, partition, baseline,
+                                  macro = FALSE, reopt = reopt_se,
+                                  add_baseline_topic = add_baseline_topic,
+                                  level = "word", block_size = block_size,
+                                  ztest = FALSE, null_disc = null_se)
         res$R2_SE_micro_word <- x$r2_micro_word
         res$R2_SE_macro_word <- x$r2_macro_word
       }
       if ("chisq" %in% metrics) {
-        x <- optop_index_chisq(m, dtm, partition, baseline,
-                               macro = FALSE, reopt = if (reopt=="pearson") "pearson" else "none",
-                               add_baseline_topic = add_baseline_topic,
-                               level = "word", block_size = block_size, ztest = FALSE)
+        x <- .optop_index_chisq_impl(m, dtm, partition, baseline,
+                                     macro = FALSE,
+                                     reopt = if (reopt=="pearson") "pearson" else "none",
+                                     add_baseline_topic = add_baseline_topic,
+                                     level = "word", block_size = block_size,
+                                     ztest = FALSE, null_disc = null_for("chisq"))
         res$R2_chisq_micro_word <- x$r2_micro_word
         res$R2_chisq_macro_word <- x$r2_macro_word
       }
       if ("deviance" %in% metrics) {
-        x <- optop_index_deviance(m, dtm, partition, baseline,
-                                  macro = FALSE, reopt = if (reopt=="deviance") "deviance" else "none",
-                                  level = "word", block_size = block_size, ztest = FALSE)
+        x <- .optop_index_deviance_impl(m, dtm, partition, baseline,
+                                        macro = FALSE,
+                                        reopt = if (reopt=="deviance") "deviance" else "none",
+                                        level = "word", block_size = block_size,
+                                        ztest = FALSE, null_disc = null_for("deviance"))
         res$R2_dev_micro_word <- x$r2_micro_word
         res$R2_dev_macro_word <- x$r2_macro_word
       }
     } else {
       # Document-level indices
       if ("se" %in% metrics) {
-        x <- optop_index_se(m, dtm, partition, baseline,
-                            macro, reopt = if (reopt=="se") "se" else "none",
-                            add_baseline_topic = add_baseline_topic,
-                            level = "document", block_size = block_size, ztest = ztest)
+        x <- .optop_index_se_impl(m, dtm, partition, baseline,
+                                  macro = macro, reopt = reopt_se,
+                                  add_baseline_topic = add_baseline_topic,
+                                  level = "document", block_size = block_size,
+                                  ztest = ztest, null_disc = null_se)
         res$R2_SE <- x$r2
         if (macro) res$R2_SE_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -854,10 +880,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         }
       }
       if ("chisq" %in% metrics) {
-        x <- optop_index_chisq(m, dtm, partition, baseline,
-                               macro, reopt = if (reopt=="pearson") "pearson" else "none",
-                               add_baseline_topic = add_baseline_topic,
-                               level = "document", block_size = block_size, ztest = ztest)
+        x <- .optop_index_chisq_impl(m, dtm, partition, baseline,
+                                     macro = macro,
+                                     reopt = if (reopt=="pearson") "pearson" else "none",
+                                     add_baseline_topic = add_baseline_topic,
+                                     level = "document", block_size = block_size,
+                                     ztest = ztest, null_disc = null_for("chisq"))
         res$R2_chisq <- x$r2
         if (macro) res$R2_chisq_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -866,9 +894,11 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         }
       }
       if ("deviance" %in% metrics) {
-        x <- optop_index_deviance(m, dtm, partition, baseline,
-                                  macro, reopt = if (reopt=="deviance") "deviance" else "none",
-                                  level = "document", block_size = block_size, ztest = ztest)
+        x <- .optop_index_deviance_impl(m, dtm, partition, baseline,
+                                        macro = macro,
+                                        reopt = if (reopt=="deviance") "deviance" else "none",
+                                        level = "document", block_size = block_size,
+                                        ztest = ztest, null_disc = null_for("deviance"))
         res$R2_dev <- x$r2
         if (macro) res$R2_dev_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -883,6 +913,114 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   data.table::setDT(out)
 }
 
+
+# Shared alignment validation for the index functions: the dtm, baseline and
+# partition must all match the model vocabulary (same features, same order).
+# Returns the baseline probabilities ordered as `vocab_model`.
+.optop_validate_alignment <- function(vocab_model, dtm, partition, baseline) {
+  if (!identical(colnames(dtm), vocab_model))
+    stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
+  # baseline alignment
+  if (!is.null(names(baseline$pi_glob))) {
+    pi_row <- baseline$pi_glob[vocab_model]
+    if (any(is.na(pi_row)))
+      stop("Baseline vocabulary does not match model. Recompute optop_make_baseline() on an aligned DTM.")
+  } else {
+    if (length(baseline$pi_glob) != length(vocab_model))
+      stop("Baseline length != model vocab. Recompute baseline on aligned DTM.")
+    pi_row <- baseline$pi_glob
+  }
+
+  # partition alignment
+  if (is.null(colnames(partition$rare_mask)) ||
+      !identical(colnames(partition$rare_mask), vocab_model)) {
+    stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
+  }
+  pi_row
+}
+
+# Baseline (no-topics) discrepancy for one metric. This quantity does not
+# depend on the fitted model, only on the observed counts, the harmonized
+# partition and the global baseline, so grid evaluations across K can compute
+# it once and pass it to the index workers via their `null_disc` argument.
+# Returns the per-document D_null vector when level = "document" and the
+# per-word null discrepancy vector when level = "word". Formulas, eps floors
+# and blocking mirror the corresponding index workers exactly.
+.optop_index_null <- function(dtm, partition, pi_row,
+                              metric = c("se", "chisq", "deviance"),
+                              level = c("document", "word"),
+                              block_size = NULL, eps = 1e-12) {
+  metric <- match.arg(metric)
+  level <- match.arg(level)
+  J <- nrow(dtm)
+  W <- ncol(dtm)
+
+  if (level == "word") {
+    if (is.null(block_size)) {
+      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+    }
+    d_null <- numeric(W)
+    for (start in seq(1L, W, by = block_size)) {
+      end <- min(start + block_size - 1L, W)
+      w_idx <- start:end
+      N_block <- as.matrix(dtm[, w_idx, drop = FALSE])
+      B_block <- outer(partition$L, pi_row[w_idx])
+      if (metric == "se") {
+        d_null[w_idx] <- colSums((N_block - B_block)^2)
+      } else if (metric == "chisq") {
+        B_block <- pmax(B_block, eps)
+        d_null[w_idx] <- colSums((N_block - B_block)^2 / B_block)
+      } else {
+        B_block <- pmax(B_block, eps)
+        contrib_B <- N_block * (log(N_block) - log(B_block))
+        contrib_B[N_block == 0] <- 0
+        d_null[w_idx] <- 2 * colSums(contrib_B)
+      }
+    }
+    return(d_null)
+  }
+
+  # document level
+  block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
+  D_null <- numeric(J)
+  rare_mask <- partition$rare_mask
+  B_min_all <- partition$L * as.numeric(rare_mask %*% pi_row)
+
+  for (start in seq(1L, J, by = block_size_doc)) {
+    end <- min(start + block_size_doc - 1L, J)
+    j_idx <- start:end
+    N_block <- as.matrix(dtm[j_idx, , drop = FALSE])
+    L_block <- partition$L[j_idx]
+    rare_block <- rare_mask[j_idx, , drop = FALSE]
+    B_block <- outer(L_block, pi_row)
+    N_min <- rowSums(rare_block * N_block)
+
+    if (metric == "se") {
+      diff_B2 <- (N_block - B_block)^2
+      SST_full <- rowSums(diff_B2)
+      SST_rare <- rowSums(rare_block * diff_B2)
+      B_min <- B_min_all[j_idx]
+      D_null[j_idx] <- SST_full - SST_rare + (N_min - B_min)^2
+    } else if (metric == "chisq") {
+      B_block <- pmax(B_block, eps)
+      chisq_contrib_B <- (N_block - B_block)^2 / B_block
+      chisq_full_null <- rowSums(chisq_contrib_B)
+      chisq_rare_null <- rowSums(rare_block * chisq_contrib_B)
+      B_min <- pmax(B_min_all[j_idx], eps)
+      D_null[j_idx] <- chisq_full_null - chisq_rare_null + (N_min - B_min)^2 / B_min
+    } else {
+      dev_contrib_B <- 2 * N_block * log(N_block / pmax(B_block, eps))
+      dev_contrib_B[N_block == 0] <- 0
+      dev_full_null <- rowSums(dev_contrib_B)
+      dev_rare_null <- rowSums(rare_block * dev_contrib_B)
+      B_min <- pmax(B_min_all[j_idx], eps)
+      dev_min_null <- 2 * N_min * log(pmax(N_min, eps) / B_min)
+      dev_min_null[N_min == 0] <- 0
+      D_null[j_idx] <- dev_full_null - dev_rare_null + dev_min_null
+    }
+  }
+  D_null
+}
 
 #' @keywords internal
 # Build observed/fitted/baseline vectors on fixed support {w ∉ C*_j} ∪ {min}
