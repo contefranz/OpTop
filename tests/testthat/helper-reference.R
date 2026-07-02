@@ -1,0 +1,161 @@
+# Naive reference implementation of the OpTop discrepancy indices.
+#
+# This mirrors the definitions of the methodological paper as directly as
+# possible: explicit per-document (or per-word) loops on the harmonized support
+# {w not in C*_j} U {min}, with no blocking, no rowSums decomposition tricks and
+# no vectorized shortcuts. The optimized package code must reproduce these
+# numbers exactly (up to floating-point noise); any disagreement is a red flag
+# to be reported, not papered over.
+#
+# Conventions replicated from the package code:
+# * chisq: expected counts are floored at eps element-wise BEFORE any use;
+#   the collapsed "min" bin uses the sum of the floored elements, itself
+#   floored at eps. The baseline min bin, however, is L_j * sum(pi[rare])
+#   computed from the UNfloored pi, then floored at eps.
+# * deviance: contributions are 2 * N * log(N / max(E, eps)) with the
+#   0 * log(0) = 0 convention; the min bin uses the sum of UNfloored expected
+#   counts, floored at eps, and log(max(N_min, eps) / E_min).
+# * se: no eps flooring anywhere.
+
+ref_theta_phi <- function(model) {
+  p <- topicmodels::posterior(model)
+  list(theta = p$topics, phi = p$terms, K = ncol(p$topics))
+}
+
+# Expected counts E (J x W): E_jw = L_j * sum_k theta_jk phi_kw
+ref_expected <- function(theta, phi, L) {
+  E <- theta %*% phi
+  E * L  # column-major recycling scales row j by L[j]
+}
+
+ref_dev_contrib <- function(N, E, eps = 1e-12) {
+  out <- 2 * N * log(N / pmax(E, eps))
+  out[N == 0] <- 0
+  out
+}
+
+# Document-level indices, one slow loop per document.
+ref_index_document <- function(model, dtm, partition, baseline,
+                               metric = c("se", "chisq", "deviance"),
+                               reopt = "none", eps = 1e-12) {
+  metric <- match.arg(metric)
+  tp <- ref_theta_phi(model)
+  vocab <- colnames(tp$phi)
+  pi_row <- baseline$pi_glob[vocab]
+  N <- as.matrix(dtm)
+  L <- partition$L
+  J <- nrow(N)
+  E <- ref_expected(tp$theta, tp$phi, L)
+
+  D_K <- numeric(J)
+  D_null <- numeric(J)
+  r2_doc <- numeric(J)
+
+  for (j in seq_len(J)) {
+    rare <- partition$rare_mask[j, ]
+    N_j <- N[j, ]
+    E_j <- E[j, ]
+    B_j <- L[j] * pi_row
+    N_min <- sum(N_j[rare])
+
+    if (metric == "se") {
+      if (identical(reopt, "se")) {
+        # lambda blending of E towards B on the harmonized support
+        num <- sum((N_j[!rare] - B_j[!rare]) * (E_j[!rare] - B_j[!rare])) +
+          (N_min - sum(B_j[rare])) * (sum(E_j[rare]) - sum(B_j[rare]))
+        den <- sum((E_j[!rare] - B_j[!rare])^2) +
+          (sum(E_j[rare]) - sum(B_j[rare]))^2
+        lambda <- if (den <= 0) 0 else max(0, min(1, num / den))
+        E_j <- lambda * E_j + (1 - lambda) * B_j
+      }
+      dK <- sum((N_j[!rare] - E_j[!rare])^2) + (N_min - sum(E_j[rare]))^2
+      dnull <- sum((N_j[!rare] - B_j[!rare])^2) + (N_min - sum(B_j[rare]))^2
+    } else if (metric == "chisq") {
+      E_f <- pmax(E_j, eps)
+      B_f <- pmax(B_j, eps)
+      E_min <- max(sum(E_f[rare]), eps)
+      B_min <- max(L[j] * sum(pi_row[rare]), eps)
+      dK <- sum((N_j[!rare] - E_f[!rare])^2 / E_f[!rare]) +
+        (N_min - E_min)^2 / E_min
+      dnull <- sum((N_j[!rare] - B_f[!rare])^2 / B_f[!rare]) +
+        (N_min - B_min)^2 / B_min
+    } else { # deviance
+      E_min <- max(sum(E_j[rare]), eps)
+      B_min <- max(L[j] * sum(pi_row[rare]), eps)
+      dK_min <- if (N_min == 0) 0 else 2 * N_min * log(max(N_min, eps) / E_min)
+      dnull_min <- if (N_min == 0) 0 else 2 * N_min * log(max(N_min, eps) / B_min)
+      dK <- sum(ref_dev_contrib(N_j[!rare], E_j[!rare], eps)) + dK_min
+      dnull <- sum(ref_dev_contrib(N_j[!rare], B_j[!rare], eps)) + dnull_min
+    }
+
+    D_K[j] <- dK
+    D_null[j] <- dnull
+    r2_doc[j] <- if (dnull > 0) 1 - dK / dnull else 0
+  }
+
+  list(r2 = 1 - sum(D_K) / sum(D_null),
+       r2_macro = mean(r2_doc[D_null > 0]),
+       r2_doc = r2_doc,
+       D_K = D_K, D_null = D_null,
+       K = tp$K, metric = metric)
+}
+
+# Word-level indices, one slow loop per word. The harmonized partition plays
+# no role here beyond providing document lengths L.
+ref_index_word <- function(model, dtm, partition, baseline,
+                           metric = c("se", "chisq", "deviance"),
+                           eps = 1e-12) {
+  metric <- match.arg(metric)
+  tp <- ref_theta_phi(model)
+  vocab <- colnames(tp$phi)
+  pi_row <- baseline$pi_glob[vocab]
+  N <- as.matrix(dtm)
+  L <- partition$L
+  W <- ncol(N)
+  E <- ref_expected(tp$theta, tp$phi, L)
+
+  d_w <- numeric(W)
+  d_w_null <- numeric(W)
+
+  for (w in seq_len(W)) {
+    N_w <- N[, w]
+    E_w <- E[, w]
+    B_w <- L * pi_row[w]
+    if (metric == "se") {
+      d_w[w] <- sum((N_w - E_w)^2)
+      d_w_null[w] <- sum((N_w - B_w)^2)
+    } else if (metric == "chisq") {
+      E_f <- pmax(E_w, eps)
+      B_f <- pmax(B_w, eps)
+      d_w[w] <- sum((N_w - E_f)^2 / E_f)
+      d_w_null[w] <- sum((N_w - B_f)^2 / B_f)
+    } else { # deviance
+      idx <- N_w > 0
+      if (any(idx)) {
+        d_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(E_w, eps)[idx])))
+        d_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(B_w, eps)[idx])))
+      }
+    }
+  }
+
+  r2_word <- ifelse(d_w_null > 0, 1 - d_w / d_w_null, 0)
+  names(r2_word) <- vocab
+
+  list(r2_word = r2_word,
+       r2_micro_word = sum((d_w_null / sum(d_w_null)) * r2_word),
+       r2_macro_word = mean(r2_word[d_w_null > 0]),
+       K = tp$K, metric = metric)
+}
+
+# Reference for the cross-document Z-test.
+ref_ztest <- function(r2_doc_valid) {
+  J <- length(r2_doc_valid)
+  m <- mean(r2_doc_valid)
+  se <- sqrt(sum((r2_doc_valid - m)^2) / (J - 1)) / sqrt(J)
+  z <- m / se
+  list(z = z,
+       pval = stats::pnorm(z, lower.tail = FALSE),
+       se = se,
+       ci = m + c(-1, 1) * stats::qnorm(0.975) * se,
+       J = J)
+}

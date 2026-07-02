@@ -27,6 +27,8 @@ Imports:
     Matrix,
     methods,
     topicmodels
-Suggests: 
-    lifecycle
+Suggests:
+    lifecycle,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo
