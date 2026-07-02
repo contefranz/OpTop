@@ -28,11 +28,27 @@
   improving performance on large corpora.
 
 
+* **Baseline discrepancy computed once per grid**: `optop_index_table()` now computes the 
+  model-independent no-topics discrepancy $D_{null}$ once per metric and reuses it across the 
+  whole grid of $K$, roughly halving the per-model cost on large corpora. Results are unchanged.
+
 ### Minor Changes
+
+* Added a `testthat` suite covering the partition, baseline, and all index functions (document 
+  and word level, macro, Z-test, re-optimization, block-size invariance, alignment guards), 
+  including an independent naive reference implementation of the indices that follows the 
+  paper's definitions with explicit loops.
+
+* Vectorized the word-level deviance computation and removed redundant temporaries in the 
+  document-level blocks; numerically identical results.
+
+* `optop_index_table()` now returns its `data.table` visibly, so the result prints at the console.
 
 * Updated documentation to Markdown format with better rendering of mathematical equations.
 
 * Fixed CRAN notes and warnings.
+
+* Removed unused internal helpers and dead code in `optop_make_partition()`.
 
 ### Bug Fixes
 
