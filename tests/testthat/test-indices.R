@@ -124,6 +124,37 @@ test_that("macro and ztest components are only returned when requested", {
   expect_true(res_macro$ztest$pval >= 0 && res_macro$ztest$pval <= 1)
 })
 
+test_that("precomputed null discrepancies reproduce the self-computed ones", {
+  fx <- optop_test_fixture()
+  m <- fx$models[[2]]
+  pi_row <- fx$baseline$pi_glob[colnames(fx$dtm)]
+  impls <- list(se = OpTop:::.optop_index_se_impl,
+                chisq = OpTop:::.optop_index_chisq_impl,
+                deviance = OpTop:::.optop_index_deviance_impl)
+
+  for (metric in names(impls)) {
+    impl <- impls[[metric]]
+    args_common <- if (metric == "deviance") {
+      list(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE, reopt = "none")
+    } else {
+      list(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE, reopt = "none",
+           add_baseline_topic = TRUE)
+    }
+
+    for (lvl in c("document", "word")) {
+      null_disc <- OpTop:::.optop_index_null(fx$dtm, fx$partition, pi_row,
+                                             metric = metric, level = lvl)
+      plain <- do.call(impl, c(args_common, list(level = lvl, block_size = NULL,
+                                                 ztest = FALSE)))
+      hoisted <- do.call(impl, c(args_common, list(level = lvl, block_size = NULL,
+                                                   ztest = FALSE,
+                                                   null_disc = null_disc)))
+      expect_identical(hoisted, plain,
+                       info = sprintf("metric=%s level=%s", metric, lvl))
+    }
+  }
+})
+
 test_that("misaligned inputs raise the documented errors", {
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
