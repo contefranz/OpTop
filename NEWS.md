@@ -1,3 +1,34 @@
+# OpTop 0.9.7
+
+### Major Changes
+
+* **`optimal_topic()` core rewritten around blocked matrix products**: the per-document
+  hot loop used to build a dense $W \times K$ temporary and row-sum it; that row sum is one
+  row of $\gamma \, e^{\beta}$, so each block of documents now needs a single BLAS product
+  per model. Documents are densified from a transposed copy of the dfm in contiguous
+  column blocks instead of element-by-element sparse row reads (which were also redone
+  for every model). Results are unchanged; see `AUDIT.md` for benchmarks.
+
+### Bug Fixes
+
+* **Document alignment in `optimal_topic()`**: only *membership* of the dfm documents in
+  the models' `@documents` was checked, never *order*, so a dfm whose rows were permuted
+  relative to the fitted models was silently mis-scored. Each dfm row is now paired with
+  its `@gamma` row by document identifier.
+
+### Minor Changes
+
+* Extended the `testthat` suite to `optimal_topic()`, with a naive per-document reference
+  implementation mirroring the C++ semantics, document-permutation and document-removal
+  invariance checks, and input validation tests.
+
+* Re-documented with `roxygen2` 8.0.0 and fixed a typo in the maintainer's email address
+  in `DESCRIPTION`.
+
+* Added `AUDIT.md` tracking the audit of the optimal-topic pipeline: what is fixed, what
+  is methodological and deliberately unchanged (lower-tail p-value, rounded cumulative-mass
+  cutoff), and what is deferred (OpenMP, model-class generalizability).
+
 # OpTop 0.9.6
 
 ### New Functions

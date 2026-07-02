@@ -1,7 +1,7 @@
 Package: OpTop
 Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for LDA Models
-Version: 0.9.6
+Version: 0.9.7
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 

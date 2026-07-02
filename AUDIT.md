@@ -66,5 +66,29 @@ the `optimal-topic-core` branch, and what is deliberately deferred.
 
 ## Benchmark
 
-_To be filled in: before/after timings of `optimal_topic()` on a simulated
-corpus (J ≈ 2000, W ≈ 5000, grid of K), same machine, `do_plot = FALSE`._
+Timings of `optimal_topic(..., do_plot = FALSE)` on an Apple Silicon Mac
+(R 4.6.1, Apple clang 21, `-O2`, reference BLAS), median of 3 runs, before
+(commit `d44317f`, pre-rewrite) vs after the blocked-gemm rewrite. Outputs
+agree to ~1e-14 in both settings.
+
+| Corpus | Models | Before | After | Speedup |
+|---|---|---|---|---|
+| J = 1000, W = 4000 (VEM fits) | K ∈ {3, 5, 8, 12} | 1.41 s | 0.98 s | 1.4× |
+| J = 2000, W = 8000 (synthetic weights) | K ∈ {5, 10, 20, 40, 80} | 6.43 s | 3.83 s | 1.7× |
+
+**Where the time goes now.** The full grid's `gamma %*% exp(beta)` products
+account for only ~0.14 s of the 3.83 s in the large setting: after the
+rewrite, the per-document *sorting* machinery (`sort_index` over W elements,
+J × n_models times) dominates the runtime, not the algebra. Consequences:
+
+- The headline gain of the rewrite is asymptotic in K (the removed temporary
+  was W × K per document) and in sparsity handling; at small K the sort was
+  already the bottleneck.
+- **OpenMP over the document loop is now the highest-leverage follow-up**:
+  documents are independent and the per-model reductions are two scalars, so
+  the sort-dominated loop should scale near-linearly with cores.
+- A further algorithmic option: the chi-square statistic only needs the
+  *set* of top-`icut` words (sums are order-independent), so a
+  partial-sort/selection scheme could replace the full descending sort —
+  but the `round(cum * 1e4)` cutoff must be reproduced exactly, so this
+  needs care.
