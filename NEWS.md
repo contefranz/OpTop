@@ -16,6 +16,11 @@
   relative to the fitted models was silently mis-scored. Each dfm row is now paired with
   its `@gamma` row by document identifier.
 
+* **Plotting warnings removed**: `optimal_topic()` and `topic_stability()` plots no longer
+  trigger the ggplot2 `size`-for-lines deprecation (now `linewidth`) nor the length-1
+  aesthetics warning (the optimum marker is drawn with `annotate()`). The ggplot2
+  requirement is now `>= 3.4.0`.
+
 ### Minor Changes
 
 * Extended the `testthat` suite to `optimal_topic()`, with a naive per-document reference

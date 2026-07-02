@@ -170,10 +170,10 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
     x_min = best_topic$topic
     y_min = best_topic$OpTop
     p1 = ggplot( Chi_K ) +
-      geom_line( aes( x = topic, y = OpTop ), size = 0.8, color = "royalblue" ) +
+      geom_line( aes( x = topic, y = OpTop ), linewidth = 0.8, color = "royalblue" ) +
       geom_hline( yintercept = y_min, color = "black", linetype = 2L ) +
       geom_vline( xintercept = x_min, color = "black", linetype = 2L ) +
-      geom_point( aes( x = x_min, y_min ), color = "red", shape = 4L, size = 4L ) +
+      annotate( "point", x = x_min, y = y_min, color = "red", shape = 4L, size = 4L ) +
       xlab( "Topics" ) + ylab( expression(OpTop[J]^{"K"}) ) +
       ggtitle( "Optimal Topic Plot" ) +
       theme_OpTop
