@@ -1,99 +1,125 @@
-[![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.5-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.5)
+[![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
+[![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
+[![release](https://img.shields.io/badge/release-v0.9.8-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.8)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
-[![DOI](https://zenodo.org/badge/138142794.svg)](https://zenodo.org/badge/latestdoi/138142794)
 
-# OpTop: detect the optimal number of topics from a pool of LDA models
+# OpTop
 
-## Overview
+OpTop provides principled, statistically grounded tools to select the optimal number of topics and 
+to assess goodness-of-fit for Latent Dirichlet Allocation (LDA) models. 
+It implements fast parametric tests and discrepancy indices that make comparisons across 
+different topic counts directly comparable.
 
-__OpTop__ is an `R` package that implements the testing approach described in 
-the paper _A Statistical Approach for Optimal Topic Model Identification_ 
-by Lewis and Grossetti (2019). 
+### What It Does
 
-Latent Dirichlet Allocation (LDA) was developed by Blei, Ng, and Jordan in 
-2003 [Blei et al., (2003)] and is based on the idea that a corpus can be 
-represented by a set of topics. LDA has been used extensively in computational 
-linguistics, is replicable, and is automated so it cannot be influenced by 
-researcher prejudice. LDA uses a likelihood approach to discover clusters of 
-text, namely topics that frequently appear in a corpus.
+- **Optimal K selection**  
+  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`). The legacy redundant-topic diagnostics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`) are deprecated as of v0.9.8 and scheduled for removal.
 
-One of the open challenges in topic modeling is to rigorously determine the 
-optimal number of topics for a corpus. Extant research relies on heuristic 
-approaches such as iterative trial-and-error procedures to select the number 
-of topics. For example, a standard approach is to determine which specification 
-is the least perplexed by the test sets. Perplexity is based on the intuition 
-that a high degree of similarity, identified as a low level of perplexity, can 
-be used to determine the appropriate number of topics [Blei et al., (2003); 
-Hornik and Grün, (2011)].
+- **Model goodness-of-fit**  
+  Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 
+  as micro/macro $R^2$ analogues (`optop_index_se()`, `optop_index_chisq()`, `optop_index_deviance()`), 
+  plus a convenience table across a grid (`optop_index_table()`).
 
-__OpTop__ introduces a set of parametric tests to identify the optimal number of topics from a 
-collection of LDA models. OpTop also includes several tests to explore topic stability and redundancy.
+- **Harmonized comparisons across K**  
+  Rare words are collapsed via a fixed, document-specific partition so all indices are evaluated on a common support (`optop_make_partition()`), with a fixed corpus baseline for fair normalization (`optop_make_baseline()`).
 
+- **Performance at scale**  
+  Core routines are implemented in C/C++ for large vocabularies and model grids. As of
+  v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
+  documents with the fitted models by identifier, so the dfm row order no longer matters.
 
-## Installation
+- **Current support and extensions**  
+  `optimal_topic()` currently requires **VEM** fits from the package **topicmodels** 
+  (class `LDA_VEM`). The discrepancy indices accept both **VEM and Gibbs** fits via 
+  internal adapters (`optop_as_theta_phi()`). Adapters for further implementations — 
+  topicmodels' `CTM`, **seededlda**, **NLPstudio**, and *WarpLDA* from **text2vec** — 
+  are planned.
+  
+### Authors
 
-The package is not on CRAN yet. You can install the development version as follows:
-``` r
-# Install the development version from Github:
-devtools::install_github("contefranz/OpTop")
+- [Francesco Grossetti](https://accounting.unibocconi.eu/people/francesco-grossetti) 
+
+  _Assistant Professor of Accounting Analytics and Data Science_  
+  Department of Accounting | Bocconi University  
+  Fellow at Bocconi Institute for Data Science and Analytics ([BIDSA](https://www.bidsa.unibocconi.eu/wps/wcm/connect/Site/Bidsa/Home))  
+  Contact: francesco.grossetti@unibocconi.it
+
+- [Craig M. Lewis](https://business.vanderbilt.edu/bio/craig-lewis/)
+
+  _Madison S. Wigginton Professor of Finance, Emeritus_  
+  Owen Graduate School of Management | Vanderbilt University  
+  Contact: craig.lewis@vanderbilt.edu  
+
+### References
+
+1. Lewis, C. M. and Grossetti, F. (2022). 
+[*A statistical approach for optimal topic model identification*](https://www.jmlr.org/papers/volume23/19-297/19-297.pdf). 
+Journal of Machine Learning Research, 23(58), 1–20.
+2. Grün, B. and Hornik, K. (2011). 
+[*topicmodels: An R package for fitting topic models.*](https://www.jstatsoft.org/article/view/v040i13) 
+Journal of Statistical Software, 40, 1-30.
+3. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). 
+[*Latent Dirichlet Allocation*.](https://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf)
+Journal of Machine Learning Research, 3(Jan):993–1022.
+  
+
+### Installation
+
+```r
+# From GitHub
+# install.packages("remotes")
+remotes::install_github("contefranz/OpTop")
 ```
 
-## Functions
+### Quick Start
 
-All the procedures described in the paper will be implemented in this package.
-The package is in beta stage and contains the following functions whose most of the internals 
-are in `C++` and `C` to increase the performance.
+```r
+library(OpTop)
+library(quanteda)
+library(topicmodels)
 
-* `get_topic_models()`: handy function to immediately get the list of topic models
-the user wants to process from a specified environment;
+# 0) Get a quanteda corpus object
+corpus_texts = data_corpus_inaugural
 
-* `optimal_topic()`: implements _Test 1_ of optimality from the methodological 
-paper [Lewis and Grossetti (2019)].
+# 1) Build a weighted dfm (row-wise proportions) for optimal-K selection
+dfm_counts   <- dfm(tokens(corpus_texts))                    # counts
+weighted_dfm <- dfm_weight(dfm_counts, scheme = "prop")      # proportions
 
-* `topic_stability()`: implements _Test 2_ of topic stability from the 
-methodological paper [Lewis and Grossetti (2019)].
+# 2) Fit a grid of LDA models (e.g., K = 10:50 by 5)
+set.seed(123)
+K_grid    <- seq(10, 50, by = 5)
+VEM_models <- lapply(
+  K_grid, function(k) {
+    lda = topicmodels::LDA(x = dfm_counts, k = k, method = "VEM")
+  }
+) 
 
-* `agg_topic_stability()`: implements _Test 3_ of aggregate topic stability 
-from the methodological paper [Lewis and Grossetti (2019)].
+# 3) Choose the optimal K (verbose = TRUE reports progress and the selection)
+res_opt   <- optimal_topic(lda_models = VEM_models, 
+                           weighted_dfm = weighted_dfm,
+                           q = 0.80, 
+                           alpha = 0.05, 
+                           do_plot = TRUE,
+                           verbose = TRUE)
 
-* `agg_document_stability()`: implements _Test 4_ of overall topic stability and
-_Test 5_ of relative topic importance from the methodological paper 
-[Lewis and Grossetti (2019)].
+# 4) Goodness-of-fit across K (use counts here)
+part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 5)
+base      <- optop_make_baseline(dtm = dfm_counts)
+tab       <- optop_index_table(models = VEM_models, 
+                               dtm = dfm_counts,
+                               metrics = c("se","chisq","deviance"),
+                               partition = part, 
+                               baseline = base, 
+                               macro = TRUE)
+tab
+```
 
-* `sim_dfm()`: convenient function to simulate a **quanteda** `dfm` object from a given 
-LDA model of class `LDA_VEM` from **topicmodels**.
-
-## Bug Reporting
+### Bug Reporting
 
 Bugs and issues can be reported at
 [https://github.com/contefranz/OpTop/issues](https://github.com/contefranz/OpTop/issues).
 
-## Authors
-
-* [Francesco Grossetti](http://faculty.unibocconi.eu/francescogiovannigrossetti/) 
-
-  Assistant Professor of Data Science and Accounting Information Systems  
-  Bocconi Institute for Data Science and Analytics ([BIDSA](https://www.bidsa.unibocconi.eu/wps/wcm/connect/Site/Bidsa/Home))  
-  Accounting Department, Bocconi University.  
-  Contact Francesco at: francesco.grossetti@unibocconi.it.  
-
-* [Craig M. Lewis](https://business.vanderbilt.edu/bio/craig-lewis/)
-
-  Madison S. Wigginton Professor of Finance  
-  Owen Business School, Vanderbilt University.  
-  Contact Craig at: craig.lewis@owen.vanderbilt.edu.  
-
-## Bibliography
-
-1. Lewis, C. and Grossetti, F. (2022): _A Statistical Approach
-for Optimal Topic Model Identification_ (forthcoming on Journal of Machine Learning Research)
-2. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). _Latent Dirichlet Allocation_.
-Journal of Machine Learning Research, 3(Jan):993–1022.
-3. Benoit K., Watanabe K., Wang H., Nulty P., Obeng A., M&uuml;ller S., Matsuo A.
-(2018): _`quanteda`: An R package for the
-quantitative analysis of textual data_. Journal of Open Source Software, 3(30), 774. doi: 10.21105/joss.00774
-(URL: http://doi.org/10.21105/joss.00774), URL: https://quanteda.io)
 
 ***
   

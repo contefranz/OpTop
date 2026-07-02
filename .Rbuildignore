@@ -1,2 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^test\.R$
+^\.DS_Store$
+^\.github$
+^\.claude$
+^AUDIT\.md$
+^codecov\.yml$

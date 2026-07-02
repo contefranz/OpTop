@@ -1,29 +1,37 @@
 Package: OpTop
 Type: Package
-Title: Optimal topic specification for latent dirichlet allocation models
-Version: 0.9.5
+Title: Optimal Topic Selection and Goodness-of-Fit for LDA Models
+Version: 0.9.8
 Authors@R: c( 
-    person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
+    person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
     person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
-Description: A set of fast parametric tests to detect the optimal number 
-    of topics from a pool of Latent Dirichlet Allocation models.
+Description: Implements statistical tests and discrepancy indices to select the optimal number of
+    topics and compare goodness-of-fit across Latent Dirichlet Allocation models, following
+    the optimal topic identification approach of Lewis and Grossetti (2022)
+    <https://jmlr.org/papers/v23/19-297.html>.
 License: GPL-3
 Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
 LazyData: true
 URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-RoxygenNote: 7.1.1
 Depends: R (>= 3.1)
-Imports: 
+Imports:
+    cli (>= 3.6.2),
     data.table (>= 1.11.0),
+    lifecycle,
     quanteda (>= 2.0.0),
     tibble (>= 2.1.0),
     LDATS (>= 0.2.7),
-    ggplot2 (>= 3.1.0),
+    ggplot2 (>= 3.4.0),
     patchwork (>= 1.1.1),
-    lifecycle,
-    Rcpp (>= 0.11.0)
+    Matrix,
+    methods,
+    topicmodels
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo
-SystemRequirements: C++11
+Config/roxygen2/version: 8.0.0

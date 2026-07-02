@@ -2,7 +2,7 @@
 % Please edit documentation in R/agg_document_stability.R
 \name{agg_document_stability}
 \alias{agg_document_stability}
-\title{Compute aggregate document stability and F-test}
+\title{Compute Aggregate Document Stability and F-test}
 \usage{
 agg_document_stability(
   lda_models,
@@ -15,71 +15,91 @@ agg_document_stability(
 )
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as estimated by
-\code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
-according to the number of topics.}
+\item{lda_models}{A list of fitted \code{topicmodels::LDA} objects (VEM). The
+list must contain models with increasing numbers of topics.}
 
-\item{weighted_dfm}{A weighted \code{\link[quanteda]{dfm}} containing word proportions.
-It is recommended that \code{weighted_dfm} has the corresponding internal variable that can be
-accessed with \code{docid}. See ?\code{\link[OpTop]{optimal_topic}} for more details.}
+\item{weighted_dfm}{A weighted \code{quanteda::dfm} containing word proportions
+for each document (rows). Ideally includes a document identifier accessible
+via \code{docid()}.}
 
-\item{optimal_model}{A number corresponding to the optimal topic model.}
+\item{optimal_model}{Integer; the number of topics for the optimal model
+(must match one element in \code{lda_models}).}
 
-\item{q}{Set a cutoff for important words as the quantile of the expected
-cumulative probability of word weights. Default to 0.80, meaning that the 
-function reaches 80\% of the distribution mass and leaves out the remaining
-20\%.}
+\item{q}{Numeric in \verb{(0, 1]}; cumulative mass used to define the “best-pair”
+envelope (default \code{0.80}).}
 
-\item{alpha}{Alpha level to identify informative words from the Cumulative
-Distribution Function over the cosine similarities in the Topic Word Weights
-matrix. Default to 0.05.}
+\item{alpha}{Significance level used when assessing average/smoothed stability
+(default \code{0.05}).}
 
-\item{smoothed}{A logical to control whether the test is performed on each 
-document for each LDA model or on the smoothed chi-square statistic. 
-This is the aggregated version which gives the overall behavior across all
-documents in the corpus. Default is \code{TRUE}.}
+\item{smoothed}{Logical; if \code{TRUE}, apply a LOESS smoother to informative
+chi-square values across documents prior to testing (default \code{TRUE}).}
 
-\item{do_plot}{Plot the chi-square statistic and the F-statistic as functions of the number of 
-topics. Default to \code{TRUE}.}
+\item{do_plot}{Logical; if \code{TRUE}, print the chi-square and F-statistic plots
+as functions of the number of topics (default \code{TRUE}).}
 }
 \value{
-A \code{data.table} containing the following columns:
-
-\item{\code{topic}}{An integer giving the number of topics.}
-\item{\code{id_doc}}{An integer document id as given in the original corpus.}
-\item{\code{chisq_inform_std}}{A numeric giving the standardized chi-square statistic
-for the informative component.}
-\item{\code{chisq_uninform_std}}{A numeric giving the standardized chi-square statistic
-for the uninformative component.}
-\item{\code{pval_inform}}{A numeric giving the p-value of the chi-square test
-over the informative component.}
-\item{\code{pval_uninform}}{A numeric giving the p-value of the chi-square test
-over the uninformative component.}
-\item{\code{Fstat}}{A numeric giving the standardized F statistic
-of the ratio \code{chisq_inform_std}/\code{chisq_uninform_std}.}
-\item{\code{pval_Fstat}}{A numeric giving the p-value of the F test.}
+A \code{data.table} with the following columns:
+\itemize{
+\item \code{topic}: integer number of topics.
+\item \code{id_doc}: integer document id (row index after alignment).
+\item \code{chisq_inform_std}: standardized chi-square for the informative component.
+\item \code{chisq_uninform_std}: standardized chi-square for the uninformative component.
+\item \code{pval_inform}: p-value of the informative chi-square test.
+\item \code{pval_uninform}: p-value of the uninformative chi-square test.
+\item \code{Fstat}: standardized F-statistic, i.e.,
+\code{chisq_inform_std / chisq_uninform_std}.
+\item \code{pval_Fstat}: p-value of the F-test.
+}
 }
 \description{
-Detects informative and uninformative components to compute aggregate document
-stability. Performs a chi-square test to evaluate document stability, 
-Also, computes a F-test to further evaluate deviation from optimal model.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+As of OpTop 0.9.8, \code{agg_document_stability()} is deprecated and scheduled
+for removal: the package is converging on the discrepancy-index API (see
+\code{\link[=optop_index_table]{optop_index_table()}}).
+
+Compute aggregate document stability by splitting each model’s fit into
+\emph{informative} and \emph{uninformative} components relative to the chosen
+optimal model, and test whether documents remain stable as the number of
+topics increases. The function reports per-document chi-square statistics
+for the informative and uninformative components and an F-statistic that
+compares them. Optional plots show how these diagnostics evolve with topics.
+}
+\details{
+\itemize{
+\item \strong{Setup.} Let \code{optimal_model} be the number of topics (an integer) for the
+model identified as optimal. Documents are matched to the optimal model’s
+\verb{@documents} index; rows not present there are dropped once (with a message).
+\item \strong{Weighted input.} \code{weighted_dfm} must be a weighted \code{quanteda::dfm}
+of word proportions (row-wise). It is recommended that it carries a
+document identifier retrievable via \code{docid()}, so the function can align
+with the LDA fits (see \code{\link[=optimal_topic]{optimal_topic()}}).
+\item \strong{Stability diagnostics.} For each model \code{k > optimal_model} and each
+document, the function builds three vectors: the optimal model fit,
+the cumulative fit of the first \code{optimal_model} topics (\emph{informative}),
+and the cumulative fit of the remaining topics (\emph{uninformative}). It then
+forms a "best-pair" envelope up to the cumulative mass \code{q} and computes
+standardized chi-square statistics for the two components and their ratio
+(F-statistic). Optionally, a LOESS smoother (\code{smoothed = TRUE}) is used
+to summarize across documents before testing.
+\item \strong{Output.} Results are returned in a \code{data.table} with one row per
+document–model pair and include standardized statistics and p-values.
+\item \strong{Plots.} If \code{do_plot = TRUE}, two panels are printed: (i) the informative
+chi-square vs. topics and (ii) the F-statistic vs. topics, with either
+per-document trajectories or smoothed curves, depending on \code{smoothed}.
+}
 }
 \examples{
 \dontrun{
-test4 <- agg_document_stability( lda_models = lda_list,
-                                 weighted_dfm = weighted_dfm,
-                                 smoothed = TRUE, do_plot = TRUE )
+test4 <- agg_document_stability(
+  lda_models   = lda_list,
+  weighted_dfm = weighted_dfm,  # proportions dfm
+  optimal_model = 20,
+  q = 0.80, alpha = 0.05,
+  smoothed = TRUE, do_plot = TRUE
+)
 }
-}
-\references{
-Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-A Statistical Approach for Optimal Topic Model Identification.
 }
 \seealso{
-\code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-}
-\author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}.
-
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
+\code{\link[=optimal_topic]{optimal_topic()}}, \code{\link[=agg_topic_stability]{agg_topic_stability()}}
 }

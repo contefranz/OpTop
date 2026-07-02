@@ -1,40 +1,82 @@
 if ( getRversion() >= "2.15.1" ) {
   utils::globalVariables( c( "chisq_std", "df", ".") )
 }
-#' Compute aggregate topic stability
+#' Compute Aggregate Topic Stability
 #'
-#' Compute aggregate topic and perform a chi-square test to evaluate topic
-#' stability for above optimal models.
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `agg_topic_stability()` is deprecated and scheduled for
+#' removal: the package is converging on the discrepancy-index API (see
+#' [optop_index_table()]).
+#'
+#' Compute aggregate topic stability and perform a chi-square test to evaluate
+#' how topic structure changes for models with more topics than the selected
+#' optimal model. The function produces a standardized chi-square statistic
+#' per document and model, and optional plots showing how stability varies with
+#' the number of topics.
 #' 
-#' @inheritParams topic_stability
-#' @param smoothed A logical to control whether the test is performed on each 
-#' document for each LDA model or on the smoothed chi-square statistic. 
-#' This is the aggregated version which gives the overall behavior across all
-#' documents in the corpus. Default is \code{TRUE}.
-#' @return A \code{data.table} containing the following columns:
+#' @param lda_models A list of fitted `topicmodels::LDA` models (VEM), typically
+#'   ordered by increasing number of topics and including `optimal_model`.
+#' @param optimal_model Integer giving the number of topics for the optimal model;
+#'   must match one entry in `lda_models`.
+#' @param q Numeric in `(0, 1]`; cumulative mass used to define the best-pair
+#'   envelope (default `0.80`).
+#' @param alpha Numeric significance level used when assessing stability
+#'   (default `0.05`).
+#' @param smoothed Logical; if `TRUE`, apply LOESS smoothing across documents
+#'   before testing (default `TRUE`). If `FALSE`, use pointwise document-level
+#'   values.
+#' @param do_plot Logical; if `TRUE`, print the chi-square plot as a function of
+#'   the number of topics (default `TRUE`).
 #'
-#' \item{\code{topic}}{An integer giving the number of topics.}
-#' \item{\code{id_doc}}{An integer document id as given in the original corpus.}
-#' \item{\code{chisq_std}}{A numeric giving the standardized chi-square.}
-#' \item{\code{pval}}{A numeric giving the p-value of the test.}
+#' @details
+#' For each model with `k > optimal_model`, the routine compares the best-matching
+#' topics to the reference structure at `optimal_model` and builds, for each
+#' document, a cumulative “best-pair” envelope up to mass `q`. The standardized
+#' chi-square statistic is then computed on that envelope, and a p-value is
+#' obtained from the chi-square distribution with one degree of freedom.
+#'
+#' When `smoothed = TRUE`, a LOESS smoother is fit to the document-level
+#' chi-square values across topics; inference is then based on the smoothed
+#' series. When `smoothed = FALSE`, inference is based on the pointwise
+#' document-level values. If `do_plot = TRUE`, the function prints a plot of
+#' the standardized chi-square against the number of topics (with either
+#' per-document trajectories or a smoothed curve, depending on `smoothed`).
+#'
+#' Inputs are expected to be fitted [topicmodels::LDA] objects (VEM). The
+#' `optimal_model` must match one of the topic counts present in `lda_models`.
+#' If the optimal model is already the last element (largest k) in `lda_models`,
+#' there is nothing to evaluate above it and the function returns `NULL`
+#' with a message.
+#' 
+#' @return A `data.table` with one row per document–model pair and the columns:
+#' - `topic`: integer number of topics.
+#' - `id_doc`: integer document id (row index in the aligned data).
+#' - `chisq_std`: standardized chi-square statistic.
+#' - `pval`: p-value of the chi-square test.
+#' 
 #' @examples
 #'\dontrun{
 #' test4 <- agg_topic_stability( lda_models = lda_list,
 #'                               optimal_model = test1)
 #' }
-#' @seealso \code{\link[topicmodels]{LDA}} \code{\link[data.table]{data.table}}
-#' @references Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-#' A Statistical Approach for Optimal Topic Model Identification.
-#' @author Francesco Grossetti \email{francesco.grossetti@@unibocconi.it}
-#' @author Craig M. Lewis \email{craig.lewis@@owen.vanderbilt.edu}
+#' 
+#' @seealso [optimal_topic()] [topicmodels::LDA()]
+#' 
 #' @import data.table
 #' @export
 
-agg_topic_stability <- function( lda_models, optimal_model, 
+agg_topic_stability <- function( lda_models, optimal_model,
                                  q = 0.80, alpha = 0.05,
                                  smoothed = TRUE,
                                  do_plot = TRUE ) {
-  
+
+  lifecycle::deprecate_warn(
+    when = "0.9.8", what = "agg_topic_stability()",
+    details = paste( "OpTop is converging on the discrepancy-index API",
+                     "(see optop_index_table()); this function will be",
+                     "removed in a future release." )
+  )
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }

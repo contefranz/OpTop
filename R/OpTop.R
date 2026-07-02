@@ -8,9 +8,12 @@
 #' of topics in a collection of LDA models. OpTop also includes several 
 #' tests to explore topic stability and redundancy.
 #'
+#' @name OpTop-package
+#' @aliases OpTop
 #' @docType package
-#' @name OpTop
-#' @useDynLib OpTop, .registration = TRUE
-#' @importFrom Rcpp sourceCpp
+#' @keywords internal
+"_PACKAGE"
+
+## usethis namespace: start
+## usethis namespace: end
 NULL
-#> NULL

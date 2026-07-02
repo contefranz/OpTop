@@ -1,3 +1,139 @@
+# OpTop 0.9.8
+
+### Major Changes
+
+* **`optimal_topic()` is silent by default and reports via `cli`**: the new `verbose`
+  argument (default `FALSE`) replaces the old always-on console chatter. With
+  `verbose = TRUE` the function shows a `cli` header, a setup summary, a live progress
+  bar across the model grid (one bar instead of one line per model — relevant for large
+  grids such as K = 10..500), the selected model with the selection rule, and the elapsed
+  time. Dropping documents that the models never saw is always signalled, regardless of
+  `verbose`. The C++ core no longer prints anything.
+
+### Deprecations
+
+* `topic_stability()`, `agg_topic_stability()`, `agg_document_stability()` and
+  `get_topic_models()` are deprecated (with `lifecycle` warnings and badges) and
+  scheduled for removal in a future release, together with the internal `topic_match()`.
+  The package is converging on the discrepancy-index API (`optop_index_*()`).
+
+### Minor Changes
+
+* Style modernization in the optimal-topic and discrepancy files: `<-` for assignment
+  and fully qualified `pkg::fun()` calls instead of `@importFrom` (the `data.table`
+  import stays for its non-standard evaluation).
+
+* `cli` joins the imports; `lifecycle` moves from Suggests to Imports.
+
+* README: release badge updated, `verbose` shown in the Quick Start, and the "Current
+  support and extensions" section rewritten to reflect the actual implementation
+  (`optimal_topic()` requires VEM fits; the discrepancy indices accept VEM and Gibbs
+  fits via `optop_as_theta_phi()` adapters; further adapters are planned).
+
+* `DESCRIPTION` now cites the methodological reference, Lewis and Grossetti (2022)
+  <https://jmlr.org/papers/v23/19-297.html>, following CRAN guidelines.
+
+* Continuous integration: GitHub Actions workflows for `R CMD check` (Windows, macOS
+  and Ubuntu across oldrel/release/devel) and test coverage via `covr`/Codecov, with
+  the corresponding badges in the README.
+
+# OpTop 0.9.7
+
+### Major Changes
+
+* **`optimal_topic()` core rewritten around blocked matrix products**: the per-document
+  hot loop used to build a dense $W \times K$ temporary and row-sum it; that row sum is one
+  row of $\gamma \, e^{\beta}$, so each block of documents now needs a single BLAS product
+  per model. Documents are densified from a transposed copy of the dfm in contiguous
+  column blocks instead of element-by-element sparse row reads (which were also redone
+  for every model). Results are unchanged; see `AUDIT.md` for benchmarks.
+
+### Bug Fixes
+
+* **Document alignment in `optimal_topic()`**: only *membership* of the dfm documents in
+  the models' `@documents` was checked, never *order*, so a dfm whose rows were permuted
+  relative to the fitted models was silently mis-scored. Each dfm row is now paired with
+  its `@gamma` row by document identifier.
+
+* **Plotting warnings removed**: `optimal_topic()` and `topic_stability()` plots no longer
+  trigger the ggplot2 `size`-for-lines deprecation (now `linewidth`) nor the length-1
+  aesthetics warning (the optimum marker is drawn with `annotate()`). The ggplot2
+  requirement is now `>= 3.4.0`.
+
+### Minor Changes
+
+* Extended the `testthat` suite to `optimal_topic()`, with a naive per-document reference
+  implementation mirroring the C++ semantics, document-permutation and document-removal
+  invariance checks, and input validation tests.
+
+* Re-documented with `roxygen2` 8.0.0 and fixed a typo in the maintainer's email address
+  in `DESCRIPTION`.
+
+* Added `AUDIT.md` tracking the audit of the optimal-topic pipeline: what is fixed, what
+  is methodological and deliberately unchanged (lower-tail p-value, rounded cumulative-mass
+  cutoff), and what is deferred (OpenMP, model-class generalizability).
+
+# OpTop 0.9.6
+
+### New Functions
+
+* **Discrepancy-based goodness-of-fit indices**: Four new functions implement regression-style 
+  $R^2$ indices for topic model evaluation:
+  - `optop_index_se()`: Squared-error index.
+  - `optop_index_chisq()`: Pearson chi-square index.
+  - `optop_index_deviance()`: Deviance index.
+  - `optop_index_table()`: Computes indices across a grid of models and returns a data.table.
+
+### Major Changes
+
+* **Word-level aggregation**: All index functions support `level = "word"` to compute per-word 
+  R² indices with Micro-Word (frequency-weighted) and Macro-Word (unweighted) aggregations. 
+  This reveals which words are well-captured vs. poorly modeled by the topic structure.
+
+* **Z-test for cross-document inference**: Setting `ztest = TRUE` tests whether the topic model 
+  provides statistically significant improvement over the no-topics baseline.
+
+* **Block-based processing**: All index functions now use memory-efficient block-based computation 
+  for both word-level and document-level aggregation. This enables processing of large corpora 
+  (100K+ documents) without memory issues. The `block_size` parameter controls word-level blocking;
+  document-level blocking is adaptive and computed internally. The `block_size` parameter is adaptive.
+
+* **Vectorized document-level computation**: Replaced per-document for loops with vectorized 
+  matrix operations using the decomposition $D = D_{full} - D_{rare} + D_{min}$, significantly 
+  improving performance on large corpora.
+
+
+* **Baseline discrepancy computed once per grid**: `optop_index_table()` now computes the 
+  model-independent no-topics discrepancy $D_{null}$ once per metric and reuses it across the 
+  whole grid of $K$, roughly halving the per-model cost on large corpora. Results are unchanged.
+
+### Minor Changes
+
+* Added a `testthat` suite covering the partition, baseline, and all index functions (document 
+  and word level, macro, Z-test, re-optimization, block-size invariance, alignment guards), 
+  including an independent naive reference implementation of the indices that follows the 
+  paper's definitions with explicit loops.
+
+* Vectorized the word-level deviance computation and removed redundant temporaries in the 
+  document-level blocks; numerically identical results.
+
+* `optop_index_table()` now returns its `data.table` visibly, so the result prints at the console.
+
+* Updated documentation to Markdown format with better rendering of mathematical equations.
+
+* Fixed CRAN notes and warnings.
+
+* Removed unused internal helpers and dead code in `optop_make_partition()`.
+
+### Bug Fixes
+
+* Fixed S4 subscript error when using `quanteda::dfm` or `Matrix::dgCMatrix` inputs. The issue 
+  occurred because extracted values retained S4 class; now handled with explicit `as.numeric()` 
+  conversion.
+
+---
+
+
 # OpTop 0.9.5
 
 ### Major Changes

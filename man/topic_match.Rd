@@ -7,13 +7,13 @@
 topic_match(lda_models, optimal_model, var_correction = TRUE)
 }
 \arguments{
-\item{lda_models}{A list of ordered LDA models as estimated by
-\code{\link[topicmodels]{LDA}}. The LDA models must be in ascending order
-according to the number of topics.}
+\item{lda_models}{A list of \code{topicmodels::LDA} objects (VEM), ordered by
+increasing number of topics. The grid should span the candidate values of \code{K}.}
 
-\item{optimal_model}{A number corresponding to the optimal topic model.}
+\item{optimal_model}{Integer giving the number of topics of the optimal model;
+must match one entry in \code{lda_models}.}
 
-\item{var_correction}{Use the unbiased estimator of the co-variance for 
+\item{var_correction}{Use the unbiased estimator of the co-variance for
 i.i.d. observations by applying n - 1 in the denominator. Default is \code{TRUE}.}
 }
 \value{
@@ -21,6 +21,14 @@ A named list with the informative and uninformative components given
 as matrices.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+}
+\details{
+As of OpTop 0.9.8, \code{topic_match()} is deprecated together with the
+stability helpers that call it, and is scheduled for removal. No runtime
+warning is emitted here to avoid double-warning through
+\code{agg_topic_stability()}.
+
 For above-optimal topics, detect and extract informative and uninformative
 components in terms of cosine similarities with the optimal topic model.
 }

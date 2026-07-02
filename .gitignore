@@ -5,6 +5,6 @@
 .RData
 .rda
 .Ruserdata
-test*.R
+/test*.R
 .Rproj.user
-utils.R
+/utils.R

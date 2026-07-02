@@ -6,99 +6,98 @@
 arma::mat optimal_topic_core(const Rcpp::List& lda_models,
                              const arma::sp_mat& weighted_dfm,
                              double q,
-                             const Rcpp::CharacterVector& docs,
-                             int n_docs,
-                             int n_features)
+                             const arma::uvec& doc_map)
 {
-    // this is the output of this method
-    arma::mat Chi_K(lda_models.size(), 3);
+    const arma::uword n_models = lda_models.size();
+    const arma::uword n_docs = weighted_dfm.n_rows;
+
+    // documents are processed in fixed-size blocks: one BLAS product per
+    // (model, block) replaces the former dense W x K temporary per document,
+    // while keeping memory bounded for large corpora
+    const arma::uword block_size = 256;
+
+    // transposed copy (W x J): a document becomes a contiguous CSC column, so
+    // densifying a block of documents is a cheap column-range extraction
+    // instead of element-by-element sparse row reads
+    const arma::sp_mat dfm_t = weighted_dfm.t();
+
+    // this is the output of this method: one row per model with the number of
+    // topics (the "topic" column consumed by the caller), the standardized
+    // chi-square statistic and its p-value
+    arma::mat Chi_K(n_models, 3);
+
+    const arma::uword max_gamma_row = doc_map.max();
 
     // loop LDA models
-    arma::mat regstats(n_docs, 4);
-    for (std::size_t i_mod = 0; i_mod < lda_models.size(); ++i_mod)
+    for (arma::uword i_mod = 0; i_mod < n_models; ++i_mod)
     {
         Rcpp::checkUserInterrupt();
 
         // getting the document word weights
         const Rcpp::S4& current_lda = lda_models[i_mod];
-        const arma::mat& dtw = current_lda.slot("gamma");
-        const arma::mat& beta = current_lda.slot("beta");
-        arma::mat tww = exp(beta).t();
-        int current_k = dtw.n_cols;
-        // TODO TODO TODO
-        // TODO current_k is useless, actually; there used to be a check at the
-        // end when computing chi_out returns, that returned true for all rows;
-        // I'm keeping current_k in Chi_J just because the calling function
-        // expects a column "topic" in the matrix returned, and I don't know if
-        // that's really needed and why
-        // TODO TODO TODO
+        const arma::mat dtw = current_lda.slot("gamma");
+        const arma::mat beta = current_lda.slot("beta");
+        const arma::mat tww = arma::exp(beta).t();
+        const arma::uword current_k = dtw.n_cols;
 
-        Rcpp::Rcout << "---" << std::endl;
-        Rcpp::Rcout << "# # # Processing LDA with k = " << current_k << std::endl;
+        if (max_gamma_row >= dtw.n_rows) {
+            Rcpp::stop("document mapping points past the rows of @gamma: "
+                       "the dfm and the LDA models are misaligned");
+        }
 
-        // looping over each document (k) in each model (j);
-        // this is the loop that needs to be parallelized
-        // Rcpp::Rcout << "--> Processing documents" << std::endl;
-        for (std::size_t j_doc = 0; j_doc < n_docs; ++j_doc)
+        double sum_chi = 0.0;
+        double sum_icut = 0.0;
+
+        for (arma::uword block_start = 0; block_start < n_docs; block_start += block_size)
         {
             Rcpp::checkUserInterrupt();
 
-            // subsetting dtw based on id_doc
-            // TODO TODO TODO
-            // TODO is there a way to make this sparse?? there should be; why are
-            // we using all the zeros in the computation of chi_sq_fit below??
-            // That way, we could use a reference to the row instead
-            // TODO TODO TODO
-            arma::vec weighted_dfm_j_doc(weighted_dfm.n_cols);
-            const auto& row_j = weighted_dfm.row(j_doc);
-            for (std::size_t row_index = 0; row_index < weighted_dfm_j_doc.size(); ++row_index)
+            const arma::uword block_end = std::min(block_start + block_size, n_docs) - 1;
+
+            // W x b slabs, one column per document
+            const arma::mat dfm_block(dfm_t.cols(block_start, block_end));
+            const arma::uvec gamma_rows = doc_map.subvec(block_start, block_end);
+            const arma::mat X_block = tww * arma::mat(dtw.rows(gamma_rows)).t();
+
+            for (arma::uword j_col = 0; j_col < X_block.n_cols; ++j_col)
             {
-                weighted_dfm_j_doc(row_index) = row_j(row_index);
+                // get cumulative sum of sorted word probabilities
+                arma::vec X = X_block.col(j_col);
+                arma::vec weighted_dfm_j_doc = dfm_block.col(j_col);
+
+                arma::uvec sort_indices = arma::sort_index(X, "descend");
+                X = X(sort_indices);
+                arma::vec X_cumsum = arma::cumsum(X);
+                weighted_dfm_j_doc = weighted_dfm_j_doc(sort_indices);
+
+                // find elements with estimated probability lower than quantile
+                auto first_greater_than_q = std::find_if(X_cumsum.begin(),
+                                                         X_cumsum.end(),
+                                                         [&q](double val) {return round(val * 1e4) / 1e4 > q;});
+                std::size_t icut = std::distance(X_cumsum.begin(), first_greater_than_q);
+                std::size_t n_cut_elements = X.size() - icut;
+
+                // Pearson terms on the kept elements plus one pooled term for
+                // the truncated tail
+                const arma::vec head_diff = weighted_dfm_j_doc.head(icut) - X.head(icut);
+                const double tail_X = arma::sum(X.tail(n_cut_elements));
+                const double tail_diff = arma::sum(weighted_dfm_j_doc.tail(n_cut_elements)) - tail_X;
+                const double chi_sq_fit = icut * (
+                    arma::sum(head_diff % head_diff / X.head(icut))
+                    +
+                    tail_diff * tail_diff / tail_X
+                );
+
+                sum_chi += chi_sq_fit;
+                sum_icut += double(icut);
             }
-
-            // element-wise multiplication
-            // TODO this is the bottleneck now! But both tww and dtw are full, aren't they? There's
-            // not much we can do
-            arma::mat tww_dtw = tww.each_row() % dtw.row(j_doc);
-
-            // get cumulative sum of sorted sums of rows of tww_dtw
-            arma::vec X = arma::sum(tww_dtw, 1);
-            // TODO second bottleneck (roughly half the time as tww_dtw)
-            arma::uvec sort_indices = arma::sort_index(X, "descend");
-
-            X = X(sort_indices);
-            arma::vec X_cumsum = arma::cumsum(X);
-            weighted_dfm_j_doc = weighted_dfm_j_doc(sort_indices);
-
-            // find elements with estimated probability lower than quantile
-            auto first_greater_than_q = std::find_if(X_cumsum.begin(),
-                                                     X_cumsum.end(),
-                                                     [&q](double val) {return round(val * 1e4) / 1e4 > q;});
-            std::size_t icut = std::distance(X_cumsum.begin(), first_greater_than_q);
-            std::size_t n_cut_elements = X.size() - icut;
-
-            // compute the sum of the rest of the elements
-            double sum_of_cut_weighted_dfm = arma::sum(weighted_dfm_j_doc.tail(n_cut_elements));
-            double sum_of_cut_X = arma::sum(X.tail(n_cut_elements));
-            double chi_sq_fit = icut * (
-                arma::sum(
-                          (
-                           (weighted_dfm_j_doc.head(icut) - X.head(icut))
-                           %
-                           (weighted_dfm_j_doc.head(icut) - X.head(icut))
-                          ) / X.head(icut)
-                         )
-                +
-                (sum_of_cut_weighted_dfm - sum_of_cut_X) * (sum_of_cut_weighted_dfm - sum_of_cut_X) / sum_of_cut_X
-            );
-
-            regstats.row(j_doc) = arma::rowvec({double(current_k), double(j_doc), chi_sq_fit, double(icut)});
         }
 
+        const double stat = sum_chi / sum_icut;
         Chi_K.row(i_mod) = arma::rowvec({
             double(current_k),
-            arma::sum(regstats.col(2)) / arma::sum(regstats.col(3)),
-            R::pchisq(arma::sum(regstats.col(2)) / arma::sum(regstats.col(3)), 1, true, false)
+            stat,
+            R::pchisq(stat, 1, true, false)
         });
     }
 
