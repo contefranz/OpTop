@@ -295,19 +295,19 @@ optop_index_se <- function(model, dtm, partition, baseline,
       # D_K = SSE_full - SSE_rare + SSE_min
       # where SSE_full = Σ_w (N-E)², SSE_rare = Σ_{rare w} (N-E)², SSE_min = (N_min - E_min)²
 
-      diff_E <- N_block - E_block  # block × W
-      diff_B <- N_block - B_block  # block × W
+      diff_E2 <- (N_block - E_block)^2  # block × W
+      diff_B2 <- (N_block - B_block)^2  # block × W
 
       # Model discrepancy D_K
-      SSE_full <- rowSums(diff_E^2)
-      SSE_rare <- rowSums(rare_block * diff_E^2)
+      SSE_full <- rowSums(diff_E2)
+      SSE_rare <- rowSums(rare_block * diff_E2)
       N_min <- rowSums(rare_block * N_block)
       E_min <- rowSums(rare_block * E_block)
       D_K[j_idx] <- SSE_full - SSE_rare + (N_min - E_min)^2
 
       # Baseline discrepancy D_null
-      SST_full <- rowSums(diff_B^2)
-      SST_rare <- rowSums(rare_block * diff_B^2)
+      SST_full <- rowSums(diff_B2)
+      SST_rare <- rowSums(rare_block * diff_B2)
       B_min <- B_min_all[j_idx]
       D_null[j_idx] <- SST_full - SST_rare + (N_min - B_min)^2
 
@@ -466,16 +466,18 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
     # D_K = χ²_full - χ²_rare + χ²_min
 
     # Model discrepancy D_K
-    chisq_full <- rowSums((N_block - E_block)^2 / E_block)
-    chisq_rare <- rowSums(rare_block * (N_block - E_block)^2 / E_block)
+    chisq_contrib_E <- (N_block - E_block)^2 / E_block  # block × W
+    chisq_full <- rowSums(chisq_contrib_E)
+    chisq_rare <- rowSums(rare_block * chisq_contrib_E)
     N_min <- rowSums(rare_block * N_block)
     E_min <- pmax(rowSums(rare_block * E_block), eps)
     chisq_min <- (N_min - E_min)^2 / E_min
     D_K[j_idx] <- chisq_full - chisq_rare + chisq_min
 
     # Baseline discrepancy D_null
-    chisq_full_null <- rowSums((N_block - B_block)^2 / B_block)
-    chisq_rare_null <- rowSums(rare_block * (N_block - B_block)^2 / B_block)
+    chisq_contrib_B <- (N_block - B_block)^2 / B_block  # block × W
+    chisq_full_null <- rowSums(chisq_contrib_B)
+    chisq_rare_null <- rowSums(rare_block * chisq_contrib_B)
     B_min <- pmax(B_min_all[j_idx], eps)
     chisq_min_null <- (N_min - B_min)^2 / B_min
     D_null[j_idx] <- chisq_full_null - chisq_rare_null + chisq_min_null
