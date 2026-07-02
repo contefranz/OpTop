@@ -63,7 +63,7 @@ document-level values. If \code{do_plot = TRUE}, the function prints a plot of
 the standardized chi-square against the number of topics (with either
 per-document trajectories or a smoothed curve, depending on \code{smoothed}).
 
-Inputs are expected to be fitted \link[topicmodels:lda]{topicmodels::LDA} objects (VEM). The
+Inputs are expected to be fitted \link[topicmodels:LDA]{topicmodels::LDA} objects (VEM). The
 \code{optimal_model} must match one of the topic counts present in \code{lda_models}.
 If the optimal model is already the last element (largest k) in \code{lda_models},
 there is nothing to evaluate above it and the function returns \code{NULL}
@@ -77,5 +77,5 @@ test4 <- agg_topic_stability( lda_models = lda_list,
 
 }
 \seealso{
-\code{\link[=optimal_topic]{optimal_topic()}} \code{\link[topicmodels:lda]{topicmodels::LDA()}}
+\code{\link[=optimal_topic]{optimal_topic()}} \code{\link[topicmodels:LDA]{topicmodels::LDA()}}
 }

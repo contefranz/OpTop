@@ -3,7 +3,7 @@ Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for LDA Models
 Version: 0.9.6
 Authors@R: c( 
-    person("Francesco", "Grossetti", email = "francesco.grosssetti@unibocconi.it", 
+    person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
     person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
@@ -15,7 +15,6 @@ Roxygen: list(markdown = TRUE)
 LazyData: true
 URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-RoxygenNote: 7.3.3
 Depends: R (>= 3.1)
 Imports: 
     data.table (>= 1.11.0),
@@ -32,3 +31,4 @@ Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo
+Config/roxygen2/version: 8.0.0

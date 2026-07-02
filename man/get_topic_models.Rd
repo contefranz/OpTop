@@ -9,14 +9,14 @@ get_topic_models(object_type, pattern, envir = globalenv())
 \arguments{
 \item{object_type}{A character specifying the class of objects to extract.
 Default to \code{LDA_VEM} as given by the virtual class
-\code{\link[topicmodels:tm-class]{topicmodels::TopicModel-class()}}.}
+\code{\link[topicmodels:TopicModel-class]{topicmodels::TopicModel-class()}}.}
 
 \item{pattern}{an optional \link[base]{regular expression}.  Only names
     matching \code{pattern} are returned.  \code{\link{glob2rx}} can be
     used to convert wildcard patterns to regular expressions.}
 
 \item{envir}{The environment where to search for topic models. Default to
-\code{\link[base:environment]{base::globalenv()}}.}
+\code{\link[base:globalenv]{base::globalenv()}}.}
 }
 \value{
 A named list containing the objects of specified class.

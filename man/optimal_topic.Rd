@@ -68,5 +68,5 @@ test1 = optimal_topic( lda_models = lda_list,
 
 }
 \seealso{
-\code{\link[topicmodels:lda]{topicmodels::LDA()}}
+\code{\link[topicmodels:LDA]{topicmodels::LDA()}}
 }
