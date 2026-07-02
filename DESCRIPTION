@@ -7,8 +7,10 @@ Authors@R: c(
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
     person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
-Description: Implements statistical tests and discrepancy indices to select the optimal number of 
-    topics and compare goodness-of-fit across Latent Dirichlet Allocation models.
+Description: Implements statistical tests and discrepancy indices to select the optimal number of
+    topics and compare goodness-of-fit across Latent Dirichlet Allocation models, following
+    the optimal topic identification approach of Lewis and Grossetti (2022)
+    <https://jmlr.org/papers/v23/19-297.html>.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

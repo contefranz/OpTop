@@ -5,3 +5,4 @@
 ^\.github$
 ^\.claude$
 ^AUDIT\.md$
+^codecov\.yml$

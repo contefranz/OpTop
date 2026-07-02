@@ -30,6 +30,13 @@
   (`optimal_topic()` requires VEM fits; the discrepancy indices accept VEM and Gibbs
   fits via `optop_as_theta_phi()` adapters; further adapters are planned).
 
+* `DESCRIPTION` now cites the methodological reference, Lewis and Grossetti (2022)
+  <https://jmlr.org/papers/v23/19-297.html>, following CRAN guidelines.
+
+* Continuous integration: GitHub Actions workflows for `R CMD check` (Windows, macOS
+  and Ubuntu across oldrel/release/devel) and test coverage via `covr`/Codecov, with
+  the corresponding badges in the README.
+
 # OpTop 0.9.7
 
 ### Major Changes
