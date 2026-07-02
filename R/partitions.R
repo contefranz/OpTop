@@ -69,7 +69,6 @@
 #' str(part$rare_mask)
 #' }
 #'
-#' @importFrom Matrix rowSums
 #' @export
 optop_make_partition <- function(models, dtm, c = 5, block = 5000) {
   stopifnot(length(models) >= 1)
@@ -136,7 +135,6 @@ optop_make_partition <- function(models, dtm, c = 5, block = 5000) {
 #' sum(base$pi_glob)  # ~ 1
 #' }
 #' 
-#' @importFrom Matrix colSums
 #' @export
 optop_make_baseline <- function(dtm) {
   N_tot <- Matrix::colSums(dtm)

@@ -11,7 +11,6 @@ is.LDA_VEM <- function( x ) {
 optop_as_theta_phi <- function(model) UseMethod("optop_as_theta_phi")
 
 #' @keywords internal
-#' @importFrom topicmodels posterior
 #' @exportS3Method optop_as_theta_phi LDA
 optop_as_theta_phi.LDA <- function(model) {
   p <- topicmodels::posterior(model)
@@ -43,8 +42,6 @@ optop_as_theta_phi.LDA_t2v <- function(model) {
   stop("text2vec adapter not implemented yet.")
 }
 
-#' @importFrom methods as
-#' @importFrom quanteda dfm_select dfm_match
 #' @keywords internal
 optop_align_dtm_to_models <- function(dtm, models) {
   # collect model vocabularies
@@ -69,11 +66,13 @@ optop_align_dtm_to_models <- function(dtm, models) {
 
 
 # this declare my personal ggplot theme
-font_size = 10
-theme_OpTop <- theme( title = element_text( face = "bold", size = 8 ),
-                      axis.title.x = element_text( face = "bold", size = font_size ),
-                      axis.title.y = element_text( face = "bold", size = font_size ),
-                      axis.text.x = element_text( size = font_size ),
-                      axis.text.y = element_text( size = font_size ),
-                      legend.text = element_text( size = 8 ),
-                      legend.position = "bottom" )
+font_size <- 10
+theme_OpTop <- ggplot2::theme(
+  title = ggplot2::element_text( face = "bold", size = 8 ),
+  axis.title.x = ggplot2::element_text( face = "bold", size = font_size ),
+  axis.title.y = ggplot2::element_text( face = "bold", size = font_size ),
+  axis.text.x = ggplot2::element_text( size = font_size ),
+  axis.text.y = ggplot2::element_text( size = font_size ),
+  legend.text = ggplot2::element_text( size = 8 ),
+  legend.position = "bottom"
+)
