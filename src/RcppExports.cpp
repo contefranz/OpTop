@@ -12,18 +12,16 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // optimal_topic_core
-arma::mat optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const Rcpp::CharacterVector& docs, int n_docs, int n_features);
-RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP docsSEXP, SEXP n_docsSEXP, SEXP n_featuresSEXP) {
+arma::mat optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const arma::uvec& doc_map);
+RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP doc_mapSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Rcpp::List& >::type lda_models(lda_modelsSEXP);
     Rcpp::traits::input_parameter< const arma::sp_mat& >::type weighted_dfm(weighted_dfmSEXP);
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::CharacterVector& >::type docs(docsSEXP);
-    Rcpp::traits::input_parameter< int >::type n_docs(n_docsSEXP);
-    Rcpp::traits::input_parameter< int >::type n_features(n_featuresSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(lda_models, weighted_dfm, q, docs, n_docs, n_features));
+    Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
+    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(lda_models, weighted_dfm, q, doc_map));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -54,7 +52,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 6},
+    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 4},
     {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
     {NULL, NULL, 0}

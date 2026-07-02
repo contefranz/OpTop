@@ -64,7 +64,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' 
 #' @import data.table ggplot2
 #' @importFrom tibble as_tibble
-#' @importFrom quanteda ndoc nfeat is.dfm docid
+#' @importFrom quanteda ndoc is.dfm docid
 #' @export
 
 optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_plot = TRUE ) {
@@ -92,10 +92,9 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
   }
   
   tic = proc.time()
-  # compute the number of docs and features in the vocabulary
+  # compute the number of docs in the corpus
   docs = as.character( docid( weighted_dfm ) )
   n_docs = ndoc( weighted_dfm )
-  n_features = nfeat( weighted_dfm )
   
   # get the list of documents to work on, by removing those which are not in the LDA models
   # ASSUMPTION: we assume that whenever the LDA fails to estimate topics in a given document, 
@@ -131,9 +130,12 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
   # }
   ######### DEPRECATED CODE WHICH WILL BE PROBABLY REMOVED ############
   
+  # map each dfm row to the corresponding row of @gamma (0-based for C++)
+  doc_map = seq_len( n_docs ) - 1L
+
   # cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )
-  Chi_K = .Call(`_OpTop_optimal_topic_core`, lda_models, weighted_dfm, q, docs, n_docs, n_features)
+  Chi_K = optimal_topic_core( lda_models, weighted_dfm, q, doc_map )
   # cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Computations done!\n" )
   cat( "---\n" )
