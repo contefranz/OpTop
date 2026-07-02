@@ -2,9 +2,8 @@ name: Test coverage
 
 on:
   push:
-    branches: [main, discrepancy]
-  pull_request:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
