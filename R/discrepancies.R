@@ -566,18 +566,16 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
       B_block <- outer(partition$L, pi_row[w_idx])
       B_block <- pmax(B_block, eps)
 
-      # Deviance for each word in block (only where N > 0)
-      for (i in seq_along(w_idx)) {
-        w <- w_idx[i]
-        N_w <- N_block[, i]
-        E_w <- E_block[, i]
-        B_w <- B_block[, i]
-        idx <- N_w > 0
-        if (any(idx)) {
-          dev_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(E_w[idx])))
-          dev_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(B_w[idx])))
-        }
-      }
+      # Deviance contributions (0 * log(0) = 0 convention where N = 0)
+      zero_N <- N_block == 0
+      log_N <- log(N_block)
+      contrib_E <- N_block * (log_N - log(E_block))
+      contrib_E[zero_N] <- 0
+      contrib_B <- N_block * (log_N - log(B_block))
+      contrib_B[zero_N] <- 0
+
+      dev_w[w_idx] <- 2 * colSums(contrib_E)
+      dev_w_null[w_idx] <- 2 * colSums(contrib_B)
     }
 
     # R² for each word
