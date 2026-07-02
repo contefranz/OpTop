@@ -11,10 +11,10 @@ optop_wprop_fixture <- function(fx) {
   list(wdfm = wdfm, W_prop = W_prop)
 }
 
+# numeric tests run silent: verbose defaults to FALSE and the unconditional
+# document-drop alert is muffled where it is not the behavior under test
 run_optimal_topic <- function(...) {
-  res <- NULL
-  capture.output(res <- optimal_topic(..., do_plot = FALSE))
-  res
+  suppressMessages(optimal_topic(..., do_plot = FALSE))
 }
 
 test_that("optimal_topic() matches the naive reference", {
@@ -63,6 +63,30 @@ test_that("optimal_topic() is invariant to document order in the dfm", {
 
   expect_equal(got$OpTop, ref$OpTop, tolerance = 1e-10)
   expect_equal(got$pval, ref$pval, tolerance = 1e-10)
+})
+
+test_that("optimal_topic() is silent by default and chatty with verbose = TRUE", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+
+  expect_no_message(optimal_topic(fx$models, wp$wdfm, do_plot = FALSE))
+  expect_message(
+    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = TRUE),
+    "Optimal model has"
+  )
+})
+
+test_that("dropping unmatched documents is signalled even when silent", {
+  fx <- optop_test_fixture()
+
+  counts_extra <- rbind(fx$counts, docXX = fx$counts[1, ])
+  wdfm_extra <- quanteda::dfm_weight(quanteda::as.dfm(counts_extra),
+                                     scheme = "prop")
+
+  expect_message(
+    optimal_topic(fx$models, wdfm_extra, do_plot = FALSE),
+    "Removed 1 document"
+  )
 })
 
 test_that("optimal_topic() validates its inputs", {

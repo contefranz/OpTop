@@ -4,7 +4,14 @@
 \alias{optimal_topic}
 \title{Find the optimal number of topics from a pool of LDA models}
 \usage{
-optimal_topic(lda_models, weighted_dfm, q = 0.8, alpha = 0.05, do_plot = TRUE)
+optimal_topic(
+  lda_models,
+  weighted_dfm,
+  q = 0.8,
+  alpha = 0.05,
+  do_plot = TRUE,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{lda_models}{A list of \code{topicmodels::LDA} objects (VEM), ordered by
@@ -22,6 +29,11 @@ envelope (default \code{0.80}).}
 
 \item{do_plot}{Logical; if \code{TRUE}, plot the statistic versus topics with
 vertical and horizontal guides at the selected optimum (default \code{TRUE}).}
+
+\item{verbose}{Logical; if \code{TRUE}, report progress (a \code{cli} progress bar
+across the model grid) and a selection summary (default \code{FALSE}).
+Regardless of \code{verbose}, dropping documents that the models never saw is
+always signalled with a warning.}
 }
 \value{
 A \code{data.table} with columns:
@@ -51,7 +63,7 @@ statistic is selected. Setting \code{alpha = 0} forces the global-minimum rule.
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
 proportions (row-wise). Document identifiers are taken from
 \code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
-present in the first model’s \verb{@documents} slot are dropped (with a message)
+present in the first model’s \verb{@documents} slot are dropped (with a warning)
 to ensure alignment. The remaining documents are paired with the rows of
 \verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
 follow the order in which the models saw the documents.
@@ -62,10 +74,11 @@ to handle high-dimensional vocabularies efficiently.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-test1 = optimal_topic( lda_models = lda_list,
+test1 <- optimal_topic( lda_models = lda_list,
                         weighted_dfm = weighted_dfm,
                         q = 0.80,
-                        alpha = 0.05 )
+                        alpha = 0.05,
+                        verbose = TRUE )
 }
 
 }

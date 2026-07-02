@@ -16,8 +16,10 @@ LazyData: true
 URL: https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
 Depends: R (>= 3.1)
-Imports: 
+Imports:
+    cli (>= 3.6.2),
     data.table (>= 1.11.0),
+    lifecycle,
     quanteda (>= 2.0.0),
     tibble (>= 2.1.0),
     LDATS (>= 0.2.7),
@@ -27,7 +29,6 @@ Imports:
     methods,
     topicmodels
 Suggests:
-    lifecycle,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo

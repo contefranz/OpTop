@@ -45,9 +45,6 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
                        "the dfm and the LDA models are misaligned");
         }
 
-        Rcpp::Rcout << "---" << std::endl;
-        Rcpp::Rcout << "# # # Processing LDA with k = " << current_k << std::endl;
-
         double sum_chi = 0.0;
         double sum_icut = 0.0;
 
