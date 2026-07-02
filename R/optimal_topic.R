@@ -41,7 +41,9 @@ if ( getRversion() >= "2.15.1" ) {
 #' proportions (row-wise). Document identifiers are taken from
 #' `quanteda::docid(weighted_dfm)` and matched to the LDA fits; documents not
 #' present in the first model’s `@documents` slot are dropped (with a message)
-#' to ensure alignment.
+#' to ensure alignment. The remaining documents are paired with the rows of
+#' `@gamma` by identifier, so the row order of `weighted_dfm` does not need to
+#' follow the order in which the models saw the documents.
 #'
 #' **Performance note.** The core computation is delegated to C++ compiled code
 #' to handle high-dimensional vocabularies efficiently.
@@ -109,6 +111,7 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
     if ( length( id_toremove ) < length( doc_check ) ) {
       cat("Removing unmatched documents\n" )
       weighted_dfm = weighted_dfm[ -id_toremove, ]
+      docs = docs[ -id_toremove ]
       # update number of docs
       n_docs = ndoc( weighted_dfm )
     } else {
@@ -130,8 +133,9 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
   # }
   ######### DEPRECATED CODE WHICH WILL BE PROBABLY REMOVED ############
   
-  # map each dfm row to the corresponding row of @gamma (0-based for C++)
-  doc_map = seq_len( n_docs ) - 1L
+  # map each dfm row to the corresponding row of @gamma (0-based for C++);
+  # membership was checked above, so no NA can survive the match
+  doc_map = match( docs, lda_models[[ 1L ]]@documents ) - 1L
 
   # cat( "# # # # # # # # # # # # # # # # # # # #\n" )
   cat( "Beginning computations...\n" )

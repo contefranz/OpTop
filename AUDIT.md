@@ -32,8 +32,9 @@ the `optimal-topic-core` branch, and what is deliberately deferred.
   of `docid(weighted_dfm)` in `lda_models[[1]]@documents`, never *order*.
   Row *j* of the dfm was assumed to correspond to row *j* of `@gamma`; a dfm
   whose rows were permuted relative to the fitted models was silently
-  mis-scored. The dfm rows are now reordered to match the model's document
-  order before the C++ core runs.
+  mis-scored. Each dfm row is now paired with its `@gamma` row by document
+  identifier (a `doc_map` index vector passed to the C++ core), and the core
+  stops if the mapping points past the rows of `@gamma`.
 
 ### Confirmed, deliberately unchanged (methodological — author's call)
 

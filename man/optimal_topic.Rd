@@ -52,7 +52,9 @@ statistic is selected. Setting \code{alpha = 0} forces the global-minimum rule.
 proportions (row-wise). Document identifiers are taken from
 \code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
 present in the first model’s \verb{@documents} slot are dropped (with a message)
-to ensure alignment.
+to ensure alignment. The remaining documents are paired with the rows of
+\verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
+follow the order in which the models saw the documents.
 
 \strong{Performance note.} The core computation is delegated to C++ compiled code
 to handle high-dimensional vocabularies efficiently.

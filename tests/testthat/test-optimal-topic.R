@@ -50,8 +50,6 @@ test_that("documents missing from the models are dropped, order preserved", {
 })
 
 test_that("optimal_topic() is invariant to document order in the dfm", {
-  skip("document-order alignment fix pending (see AUDIT.md)")
-
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
