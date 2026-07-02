@@ -829,8 +829,9 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   reopt_se <- if (reopt == "se") "se" else "none"
   null_se <- if ("se" %in% metrics && reopt_se == "none") null_for("se") else NULL
 
-  rows <- list()
-  for (m in models) {
+  rows <- vector("list", length(models))
+  for (i_mod in seq_along(models)) {
+    m <- models[[i_mod]]
     K <- optop_as_theta_phi(m)$K
     res <- list(K = K)
 
@@ -907,10 +908,10 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         }
       }
     }
-    rows[[length(rows)+1]] <- as.data.frame(res, check.names = FALSE)
+    rows[[i_mod]] <- as.data.frame(res, check.names = FALSE)
   }
   out <- do.call(rbind, rows)
-  data.table::setDT(out)
+  data.table::setDT(out)[]
 }
 
 
@@ -1020,32 +1021,6 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     }
   }
   D_null
-}
-
-#' @keywords internal
-# Build observed/fitted/baseline vectors on fixed support {w ∉ C*_j} ∪ {min}
-.optop_doc_vectors <- function(j, dtm, rare_mask_row, L_j, E_row, B_nonrare, B_min) {
-  # indices for non-rare words
-  nonrare <- which(!rare_mask_row)
-  # observed counts (as.numeric ensures plain vector even from S4 dfm/dgCMatrix)
-  Nj_nonrare <- as.numeric(dtm[j, nonrare, drop = TRUE])
-  Nj_min     <- sum(as.numeric(dtm[j, rare_mask_row, drop = TRUE]))
-  # fitted expected counts (already E_row = L_j * i_j)
-  EK_nonrare <- E_row[nonrare]
-  EK_min     <- sum(E_row[rare_mask_row])
-  list(N_nonrare = Nj_nonrare, N_min = Nj_min,
-       E_nonrare = EK_nonrare, E_min = EK_min,
-       B_nonrare = B_nonrare[nonrare], B_min = B_min)
-}
-
-.optop_disc_se <- function(N, E) sum((N - E)^2)
-.optop_disc_chisq <- function(N, E, eps = 1e-12) {
-  E <- pmax(E, eps); sum((N - E)^2 / E)
-}
-.optop_disc_dev <- function(N, E, eps = 1e-12) {
-
-  E <- pmax(E, eps); idx <- N > 0
-  2 * sum(N[idx] * (log(N[idx]) - log(E[idx])))
 }
 
 #' Z-test for cross-document inference on Macro R² index

@@ -59,6 +59,15 @@ test_that("optop_index_table reproduces the single-model word indices", {
   }
 })
 
+test_that("optop_index_table returns its result visibly", {
+  fx <- optop_test_fixture()
+  vis <- withVisible(optop_index_table(fx$models[1], fx$dtm, metrics = "se",
+                                       partition = fx$partition,
+                                       baseline = fx$baseline))
+  expect_true(vis$visible)
+  expect_s3_class(vis$value, "data.table")
+})
+
 test_that("metric subsets control which columns appear", {
   fx <- optop_test_fixture()
   tab <- optop_index_table(fx$models[1:2], fx$dtm, metrics = "se",

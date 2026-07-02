@@ -80,14 +80,10 @@ optop_make_partition <- function(models, dtm, c = 5, block = 5000) {
   J <- nrow(theta_phi[[1]]$theta); W <- ncol(theta_phi[[1]]$phi)
   i_min <- matrix(Inf, nrow = J, ncol = W)
   
-  # after you create i_min (J x W) and before computing rare_mask:
+  # label i_min so that rare_mask inherits the vocabulary and document names
   colnames(i_min) <- colnames(theta_phi[[1]]$phi)
   rownames(i_min) <- rownames(theta_phi[[1]]$theta)
-  
-  rare_mask <- i_min < tau
-  colnames(rare_mask) <- colnames(i_min)   # <- ensure present
-  rownames(rare_mask) <- rownames(i_min)
-  
+
   for (tp in theta_phi) {
     theta <- tp$theta; phi <- tp$phi
     for (start in seq(1, W, by = block)) {
