@@ -43,13 +43,19 @@ A \code{data.table} with one row per document–model pair and the columns:
 }
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+}
+\details{
+As of OpTop 0.9.8, \code{agg_topic_stability()} is deprecated and scheduled for
+removal: the package is converging on the discrepancy-index API (see
+\code{\link[=optop_index_table]{optop_index_table()}}).
+
 Compute aggregate topic stability and perform a chi-square test to evaluate
 how topic structure changes for models with more topics than the selected
 optimal model. The function produces a standardized chi-square statistic
 per document and model, and optional plots showing how stability varies with
 the number of topics.
-}
-\details{
+
 For each model with \code{k > optimal_model}, the routine compares the best-matching
 topics to the reference structure at \code{optimal_model} and builds, for each
 document, a cumulative “best-pair” envelope up to mass \code{q}. The standardized

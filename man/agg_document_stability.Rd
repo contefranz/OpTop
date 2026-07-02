@@ -52,6 +52,12 @@ A \code{data.table} with the following columns:
 }
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+As of OpTop 0.9.8, \code{agg_document_stability()} is deprecated and scheduled
+for removal: the package is converging on the discrepancy-index API (see
+\code{\link[=optop_index_table]{optop_index_table()}}).
+
 Compute aggregate document stability by splitting each model’s fit into
 \emph{informative} and \emph{uninformative} components relative to the chosen
 optimal model, and test whether documents remain stable as the number of

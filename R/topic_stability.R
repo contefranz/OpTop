@@ -3,6 +3,12 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Topic stability for Over–optimal Topic Specifications
 #'
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `topic_stability()` is deprecated and scheduled for
+#' removal: the package is converging on the discrepancy-index API (see
+#' [optop_index_table()]).
+#'
 #' Evaluate the stability of redundant topics when the number of topics exceeds
 #' the selected `optimal_model`. The routine implements a fast chi-square–like
 #' test that compares each above–optimal model to the reference structure and
@@ -53,7 +59,13 @@ if ( getRversion() >= "2.15.1" ) {
 topic_stability <- function( lda_models, optimal_model,
                              q = 0.80, alpha = 0.05,
                              do_plot = TRUE ) {
-  
+
+  lifecycle::deprecate_warn(
+    when = "0.9.8", what = "topic_stability()",
+    details = paste( "OpTop is converging on the discrepancy-index API",
+                     "(see optop_index_table()); this function will be",
+                     "removed in a future release." )
+  )
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }

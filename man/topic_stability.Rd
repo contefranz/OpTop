@@ -36,12 +36,18 @@ A \code{data.table} with one row per model and columns:
 }
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+}
+\details{
+As of OpTop 0.9.8, \code{topic_stability()} is deprecated and scheduled for
+removal: the package is converging on the discrepancy-index API (see
+\code{\link[=optop_index_table]{optop_index_table()}}).
+
 Evaluate the stability of redundant topics when the number of topics exceeds
 the selected \code{optimal_model}. The routine implements a fast chi-square–like
 test that compares each above–optimal model to the reference structure and
 summarizes the departure as a standardized chi-square per model.
-}
-\details{
+
 For each model with \code{k > optimal_model}, the function:
 \enumerate{
 \item normalizes topic–word distributions and computes cosine similarities to the

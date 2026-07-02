@@ -3,6 +3,13 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Define informative and uninformative components
 #'
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `topic_match()` is deprecated together with the
+#' stability helpers that call it, and is scheduled for removal. No runtime
+#' warning is emitted here to avoid double-warning through
+#' `agg_topic_stability()`.
+#'
 #' For above-optimal topics, detect and extract informative and uninformative
 #' components in terms of cosine similarities with the optimal topic model.
 #' 

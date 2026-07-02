@@ -22,6 +22,12 @@ Default to \code{LDA_VEM} as given by the virtual class
 A named list containing the objects of specified class.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+}
+\details{
+As of OpTop 0.9.8, \code{get_topic_models()} is deprecated and scheduled for
+removal.
+
 Easily get the list of topic models from a specific class. This is a handy
 feature to facilitate the identification of only the objects the user wants
 to process.

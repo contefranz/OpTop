@@ -6,7 +6,13 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Compute Aggregate Document Stability and F-test
 #'
-#' @description 
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `agg_document_stability()` is deprecated and scheduled
+#' for removal: the package is converging on the discrepancy-index API (see
+#' [optop_index_table()]).
+#'
 #' Compute aggregate document stability by splitting each model’s fit into
 #' *informative* and *uninformative* components relative to the chosen
 #' optimal model, and test whether documents remain stable as the number of
@@ -80,11 +86,17 @@ if ( getRversion() >= "2.15.1" ) {
 #' @importFrom patchwork wrap_plots
 #' @export
 
-agg_document_stability <- function( lda_models, weighted_dfm, 
-                                    optimal_model, 
-                                    q = 0.80, alpha = 0.05, 
+agg_document_stability <- function( lda_models, weighted_dfm,
+                                    optimal_model,
+                                    q = 0.80, alpha = 0.05,
                                     smoothed = TRUE, do_plot = TRUE ) {
-  
+
+  lifecycle::deprecate_warn(
+    when = "0.9.8", what = "agg_document_stability()",
+    details = paste( "OpTop is converging on the discrepancy-index API",
+                     "(see optop_index_table()); this function will be",
+                     "removed in a future release." )
+  )
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }

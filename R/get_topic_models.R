@@ -1,5 +1,10 @@
 #' Get the list of topic models from a specified environment
 #'
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `get_topic_models()` is deprecated and scheduled for
+#' removal.
+#'
 #' Easily get the list of topic models from a specific class. This is a handy
 #' feature to facilitate the identification of only the objects the user wants
 #' to process.
@@ -15,6 +20,10 @@
 
 get_topic_models <- function( object_type, pattern, envir = globalenv() ) {
 
+  lifecycle::deprecate_warn(
+    when = "0.9.8", what = "get_topic_models()",
+    details = "This function will be removed in a future release."
+  )
   if( !missing( object_type ) && !is.character( object_type ) ) {
     stop( "object_type must be a character" )
   }

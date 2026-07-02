@@ -3,6 +3,12 @@ if ( getRversion() >= "2.15.1" ) {
 }
 #' Compute Aggregate Topic Stability
 #'
+#' `r lifecycle::badge("deprecated")`
+#'
+#' As of OpTop 0.9.8, `agg_topic_stability()` is deprecated and scheduled for
+#' removal: the package is converging on the discrepancy-index API (see
+#' [optop_index_table()]).
+#'
 #' Compute aggregate topic stability and perform a chi-square test to evaluate
 #' how topic structure changes for models with more topics than the selected
 #' optimal model. The function produces a standardized chi-square statistic
@@ -60,11 +66,17 @@ if ( getRversion() >= "2.15.1" ) {
 #' @import data.table
 #' @export
 
-agg_topic_stability <- function( lda_models, optimal_model, 
+agg_topic_stability <- function( lda_models, optimal_model,
                                  q = 0.80, alpha = 0.05,
                                  smoothed = TRUE,
                                  do_plot = TRUE ) {
-  
+
+  lifecycle::deprecate_warn(
+    when = "0.9.8", what = "agg_topic_stability()",
+    details = paste( "OpTop is converging on the discrepancy-index API",
+                     "(see optop_index_table()); this function will be",
+                     "removed in a future release." )
+  )
   if ( !is.list( lda_models ) ) {
     stop( "lda_models must be a list" )
   }

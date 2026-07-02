@@ -21,6 +21,14 @@ A named list with the informative and uninformative components given
 as matrices.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+}
+\details{
+As of OpTop 0.9.8, \code{topic_match()} is deprecated together with the
+stability helpers that call it, and is scheduled for removal. No runtime
+warning is emitted here to avoid double-warning through
+\code{agg_topic_stability()}.
+
 For above-optimal topics, detect and extract informative and uninformative
 components in terms of cosine similarities with the optimal topic model.
 }
