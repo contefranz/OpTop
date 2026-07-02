@@ -65,8 +65,7 @@ if ( getRversion() >= "2.15.1" ) {
 #' @seealso [topicmodels::LDA()]
 #' 
 #' @import data.table ggplot2
-#' @importFrom tibble as_tibble
-#' @importFrom quanteda ndoc is.dfm docid
+#' @importFrom quanteda is.dfm docid
 #' @export
 
 optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_plot = TRUE ) {
@@ -94,45 +93,23 @@ optimal_topic = function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05, do_p
   }
   
   tic = proc.time()
-  # compute the number of docs in the corpus
   docs = as.character( docid( weighted_dfm ) )
-  n_docs = ndoc( weighted_dfm )
-  
-  # get the list of documents to work on, by removing those which are not in the LDA models
-  # ASSUMPTION: we assume that whenever the LDA fails to estimate topics in a given document, 
-  # that document is dropped unconditionally on LDA specifications. That is, if we set k = 2 or
-  # k = 10, the same document wil be dropped. Hence, the original loop over "lda_models" does not
-  # make sense anymore. 
-  # 
-  # SOLUTION: we only check once and for all on the first element of "lda_models"
+
+  # drop documents the models never saw; all models are assumed to share the
+  # document set of the first one (a document the LDA drops is dropped for
+  # every k), so the check runs against lda_models[[ 1L ]] only
   doc_check = docs %in% lda_models[[ 1L ]]@documents
-  if ( !all(doc_check) ) {
-    id_toremove = which( doc_check == FALSE )
+  if ( !all( doc_check ) ) {
+    id_toremove = which( !doc_check )
     if ( length( id_toremove ) < length( doc_check ) ) {
       cat("Removing unmatched documents\n" )
       weighted_dfm = weighted_dfm[ -id_toremove, ]
       docs = docs[ -id_toremove ]
-      # update number of docs
-      n_docs = ndoc( weighted_dfm )
     } else {
       stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
     }
   }
-  ######### DEPRECATED CODE WHICH WILL BE PROBABLY REMOVED ############
-  # for ( i_mod in seq_along( lda_models ) ) {
-  #   doc_check = docs %in% lda_models[[ i_mod ]]@documents
-  #   if ( !all(doc_check) ) {
-  #     id_toremove = which( doc_check == FALSE )
-  #     if ( length( id_toremove ) < length( doc_check ) ) {
-  #       cat("Removing unmatched documents\n" )
-  #       weighted_dfm = weighted_dfm[ -id_toremove, ]
-  #     } else {
-  #       stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
-  #     }
-  #   }
-  # }
-  ######### DEPRECATED CODE WHICH WILL BE PROBABLY REMOVED ############
-  
+
   # map each dfm row to the corresponding row of @gamma (0-based for C++);
   # membership was checked above, so no NA can survive the match
   doc_map = match( docs, lda_models[[ 1L ]]@documents ) - 1L

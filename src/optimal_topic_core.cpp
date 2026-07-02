@@ -21,8 +21,12 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
     // instead of element-by-element sparse row reads
     const arma::sp_mat dfm_t = weighted_dfm.t();
 
-    // this is the output of this method
+    // this is the output of this method: one row per model with the number of
+    // topics (the "topic" column consumed by the caller), the standardized
+    // chi-square statistic and its p-value
     arma::mat Chi_K(n_models, 3);
+
+    const arma::uword max_gamma_row = doc_map.max();
 
     // loop LDA models
     for (arma::uword i_mod = 0; i_mod < n_models; ++i_mod)
@@ -35,15 +39,8 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
         const arma::mat beta = current_lda.slot("beta");
         const arma::mat tww = arma::exp(beta).t();
         const arma::uword current_k = dtw.n_cols;
-        // TODO TODO TODO
-        // TODO current_k is useless, actually; there used to be a check at the
-        // end when computing chi_out returns, that returned true for all rows;
-        // I'm keeping current_k in Chi_J just because the calling function
-        // expects a column "topic" in the matrix returned, and I don't know if
-        // that's really needed and why
-        // TODO TODO TODO
 
-        if (doc_map.max() >= dtw.n_rows) {
+        if (max_gamma_row >= dtw.n_rows) {
             Rcpp::stop("document mapping points past the rows of @gamma: "
                        "the dfm and the LDA models are misaligned");
         }
@@ -83,19 +80,15 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
                 std::size_t icut = std::distance(X_cumsum.begin(), first_greater_than_q);
                 std::size_t n_cut_elements = X.size() - icut;
 
-                // compute the sum of the rest of the elements
-                double sum_of_cut_weighted_dfm = arma::sum(weighted_dfm_j_doc.tail(n_cut_elements));
-                double sum_of_cut_X = arma::sum(X.tail(n_cut_elements));
-                double chi_sq_fit = icut * (
-                    arma::sum(
-                              (
-                               (weighted_dfm_j_doc.head(icut) - X.head(icut))
-                               %
-                               (weighted_dfm_j_doc.head(icut) - X.head(icut))
-                              ) / X.head(icut)
-                             )
+                // Pearson terms on the kept elements plus one pooled term for
+                // the truncated tail
+                const arma::vec head_diff = weighted_dfm_j_doc.head(icut) - X.head(icut);
+                const double tail_X = arma::sum(X.tail(n_cut_elements));
+                const double tail_diff = arma::sum(weighted_dfm_j_doc.tail(n_cut_elements)) - tail_X;
+                const double chi_sq_fit = icut * (
+                    arma::sum(head_diff % head_diff / X.head(icut))
                     +
-                    (sum_of_cut_weighted_dfm - sum_of_cut_X) * (sum_of_cut_weighted_dfm - sum_of_cut_X) / sum_of_cut_X
+                    tail_diff * tail_diff / tail_X
                 );
 
                 sum_chi += chi_sq_fit;
