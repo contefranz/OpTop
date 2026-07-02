@@ -1,5 +1,5 @@
-[![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://www.tidyverse.org/lifecycle/#maturing)
-[![release](https://img.shields.io/badge/release-v0.9.6-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.6)
+[![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![release](https://img.shields.io/badge/release-v0.9.7-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.7)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -23,7 +23,9 @@ different topic counts directly comparable.
   Rare words are collapsed via a fixed, document-specific partition so all indices are evaluated on a common support (`optop_make_partition()`), with a fixed corpus baseline for fair normalization (`optop_make_baseline()`).
 
 - **Performance at scale**  
-  Core routines are implemented in C/C++ for large vocabularies and model grids.
+  Core routines are implemented in C/C++ for large vocabularies and model grids. As of
+  v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
+  documents with the fitted models by identifier, so the dfm row order no longer matters.
 
 - **Current support and extensions**  
   Works with VEM/Gibbs methods from the package **topicmodels**. 
