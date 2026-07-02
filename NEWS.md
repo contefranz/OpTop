@@ -1,3 +1,35 @@
+# OpTop 0.9.8
+
+### Major Changes
+
+* **`optimal_topic()` is silent by default and reports via `cli`**: the new `verbose`
+  argument (default `FALSE`) replaces the old always-on console chatter. With
+  `verbose = TRUE` the function shows a `cli` header, a setup summary, a live progress
+  bar across the model grid (one bar instead of one line per model — relevant for large
+  grids such as K = 10..500), the selected model with the selection rule, and the elapsed
+  time. Dropping documents that the models never saw is always signalled, regardless of
+  `verbose`. The C++ core no longer prints anything.
+
+### Deprecations
+
+* `topic_stability()`, `agg_topic_stability()`, `agg_document_stability()` and
+  `get_topic_models()` are deprecated (with `lifecycle` warnings and badges) and
+  scheduled for removal in a future release, together with the internal `topic_match()`.
+  The package is converging on the discrepancy-index API (`optop_index_*()`).
+
+### Minor Changes
+
+* Style modernization in the optimal-topic and discrepancy files: `<-` for assignment
+  and fully qualified `pkg::fun()` calls instead of `@importFrom` (the `data.table`
+  import stays for its non-standard evaluation).
+
+* `cli` joins the imports; `lifecycle` moves from Suggests to Imports.
+
+* README: release badge updated, `verbose` shown in the Quick Start, and the "Current
+  support and extensions" section rewritten to reflect the actual implementation
+  (`optimal_topic()` requires VEM fits; the discrepancy indices accept VEM and Gibbs
+  fits via `optop_as_theta_phi()` adapters; further adapters are planned).
+
 # OpTop 0.9.7
 
 ### Major Changes

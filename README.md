@@ -1,5 +1,5 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![release](https://img.shields.io/badge/release-v0.9.7-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.7)
+[![release](https://img.shields.io/badge/release-v0.9.8-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/0.9.8)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -12,7 +12,7 @@ different topic counts directly comparable.
 ### What It Does
 
 - **Optimal K selection**  
-  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with diagnostics for redundant topics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`).
+  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`). The legacy redundant-topic diagnostics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`) are deprecated as of v0.9.8 and scheduled for removal.
 
 - **Model goodness-of-fit**  
   Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 
@@ -28,9 +28,11 @@ different topic counts directly comparable.
   documents with the fitted models by identifier, so the dfm row order no longer matters.
 
 - **Current support and extensions**  
-  Works with VEM/Gibbs methods from the package **topicmodels**. 
-  Adapters for other LDA implementations can be added; alignment helpers are included. 
-  *WarpLDA* model class support from the package **text2vec** is currently under development.
+  `optimal_topic()` currently requires **VEM** fits from the package **topicmodels** 
+  (class `LDA_VEM`). The discrepancy indices accept both **VEM and Gibbs** fits via 
+  internal adapters (`optop_as_theta_phi()`). Adapters for further implementations — 
+  topicmodels' `CTM`, **seededlda**, **NLPstudio**, and *WarpLDA* from **text2vec** — 
+  are planned.
   
 ### Authors
 
@@ -91,12 +93,13 @@ VEM_models <- lapply(
   }
 ) 
 
-# 3) Choose the optimal K
+# 3) Choose the optimal K (verbose = TRUE reports progress and the selection)
 res_opt   <- optimal_topic(lda_models = VEM_models, 
                            weighted_dfm = weighted_dfm,
                            q = 0.80, 
                            alpha = 0.05, 
-                           do_plot = TRUE)
+                           do_plot = TRUE,
+                           verbose = TRUE)
 
 # 4) Goodness-of-fit across K (use counts here)
 part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 5)
