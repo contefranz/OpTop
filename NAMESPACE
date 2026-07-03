@@ -3,6 +3,7 @@
 S3method(optop_as_theta_phi,LDA)
 S3method(optop_as_theta_phi,LDA_Gibbs)
 S3method(optop_as_theta_phi,LDA_VEM)
+S3method(optop_as_theta_phi,LDA_t2v)
 S3method(optop_as_theta_phi,TopicModel)
 export(agg_document_stability)
 export(agg_topic_stability)

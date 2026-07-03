@@ -1,3 +1,31 @@
+# OpTop 0.10.0
+
+### New Features — calibrated p-values for Test 1
+
+* **`optimal_topic()` gains a `calibrate` argument** replacing the chi-square yardstick
+  with the distribution of the statistic under the *fitted-model null* (each document
+  multinomial of its own length with the model's fitted word probabilities, Θ and Φ held
+  fixed):
+  - `calibrate = "bootstrap"`: parametric bootstrap drawn exactly on the collapsed
+    envelope bins (`n_boot` replicates, optional `seed`), empirical upper-tail p-value
+    with the `(1 + #{T* >= T}) / (n_boot + 1)` correction. With calibration, `alpha` is a
+    genuine Type-I error rate under the conditional null.
+  - `calibrate = "moment"`: exact Haldane (1937) multinomial moments matched to a
+    Satterthwaite scaled chi-square — closed form, no simulation.
+  - New `doc_lengths` argument (e.g. `quanteda::ntoken()` of the counts dfm) supplies the
+    document lengths the null depends on; `pval` carries the calibrated value the
+    selection rules use, with the asymptotic `pval_chisq` kept alongside.
+  - The C++ core exports the per-document envelope (additive `return_envelope` flag; the
+    hot path is untouched), and the bootstrap costs about `n_boot x df` vectorized flops
+    per model. The man page documents the full statistical reasoning, including the
+    fixed-Θ̂Φ̂ caveat.
+
+### Major Changes
+
+* **`verbose = TRUE` is the new default** of `optimal_topic()` (reversing the 0.9.8
+  silent default): the cli report — setup, calibration announcement, progress bar,
+  selection summary, timing — is now shown unless `verbose = FALSE`.
+
 # OpTop 0.9.10
 
 ### New Features

@@ -5,6 +5,7 @@ author: "Francesco Grossetti"
 output:
   rmarkdown::html_vignette:
     toc: true
+    math_method: katex
 vignette: >
   %\VignetteIndexEntry{Selecting K with OpTop}
   %\VignetteEngine{knitr::rmarkdown}
@@ -63,6 +64,8 @@ if (have_models) {
   chi_seq <- res$inaugural$chi_by_q[["q0.95"]]
   chi_min <- data.table::copy(chi_seq)
   chi_by_q <- res$inaugural$chi_by_q
+  chi_cal <- res$inaugural$chi_cal
+  chi_cal_mm <- res$inaugural$chi_cal_mm
 }
 ```
 
@@ -121,6 +124,52 @@ above are unseeded, so re-running the pipeline can shift individual
 statistics slightly; the numbers quoted in this vignette come from one such
 run.
 
+## The Test 1 statistic
+
+The test rests on the multinomial structure that LDA itself assumes. A fitted
+$K$-topic model describes document $j$ by a vector of document–topic weights
+$\theta_j^K$ and every topic by a distribution over the $P$ vocabulary words,
+collected in the topic–word matrix $\phi^K$. The model's fitted probability
+of word $p$ in document $j$ is therefore
+
+$$
+I_{jp}^{K} \;=\; \sum_{k=1}^{K} \theta_{jk}^{K}\,\phi_{kp}^{K},
+$$
+
+and the paper's Equation 4 views the observed word-proportion vector $d_j$ as
+this fitted distribution plus multinomial sampling noise. If the $K$-topic
+model fully characterizes the corpus, the observed and fitted word
+distributions should be statistically indistinguishable — a classical
+goodness-of-fit situation.
+
+Because most of the vocabulary carries near-zero fitted probability, the
+comparison is made on a per-document **envelope**: sort $I_{jp}^K$ in
+decreasing order and keep the smallest head whose cumulative mass exceeds
+$q$ — these are the $P_j$ "relatively important" words — while the remaining
+words are collapsed into a single bin with fitted mass
+$I^K_{j,\min} = \sum_{p \notin \text{head}} I^K_{jp} < 1 - q$ and observed
+mass $D_{j,\min}$ (Equations 5–7; the paper's numerical setting
+$I^K = 0.05$ corresponds to `q = 0.95`). Test 1 (Equation 8) then aggregates
+the Pearson discrepancies over documents:
+
+$$
+\mathrm{OpTop}_J^K \;=\; \sum_{j=1}^{J} \left[\, (P_j + 1) \left(
+\sum_{p=1}^{P_j} \frac{\bigl(D_{jp} - I_{jp}^K\bigr)^2}{I_{jp}^K}
+\;+\; \frac{\bigl(D_{j,\min} - I_{j,\min}^K\bigr)^2}{I_{j,\min}^K}
+\right) \right]
+\;\sim\; \chi^2_{P_J},
+\qquad P_J = \sum_{j=1}^{J} P_j .
+$$
+
+Misspecification — a $K$ too coarse to reproduce the word distributions —
+can only inflate the statistic, so evidence against adequacy lives in the
+upper tail. The package reports the **standardized** statistic
+$\mathrm{OpTop}_J^K / P_J$ (the version plotted in the paper's Figure 2,
+fluctuating around 1 under a model that fits) in the `OpTop` column, the
+degrees of freedom $P_J$ in `df`, and the upper-tail p-value in `pval`.
+
+## Running the test
+
 `optimal_topic()` consumes **word proportions** (`weighted_dfm` above), while
 the discrepancy indices of the second part consume the raw **counts** — keep
 both objects around. With `verbose = TRUE` the function reports its setup,
@@ -134,8 +183,7 @@ chi_seq <- optimal_topic(lda_models = VEM_models,
                          selection = "sequential",
                          q = 0.95,
                          alpha = 0.01,
-                         do_plot = FALSE,
-                         verbose = TRUE)
+                         do_plot = FALSE)
 ```
 
 ```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
@@ -149,8 +197,7 @@ chi_min <- optimal_topic(lda_models = VEM_models,
                          selection = "min",
                          q = 0.95,
                          alpha = 0.01,
-                         do_plot = FALSE,
-                         verbose = TRUE)
+                         do_plot = FALSE)
 ```
 
 ```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
@@ -247,6 +294,177 @@ ggplot(chi_seq, aes(x = topic, y = OpTop)) +
                           seq_pick, min_pick)) +
   theme_bw()
 ```
+
+## Calibrated p-values
+
+The saturation above has a precise cause: the $\chi^2_{P_J}$ reference is a
+yardstick, not the exact null law of the statistic. Write $k_j = P_j + 1$ for
+the number of envelope bins of document $j$ and $N_j$ for its length in
+tokens. The classical Pearson statistic on *counts*,
+$X^2_j = N_j \sum_b (d_{jb} - p_{jb})^2 / p_{jb}$, is the object with the
+textbook $\chi^2_{k_j - 1}$ asymptotics; the document term of Equation 8 is
+instead
+
+$$
+S_j \;=\; (P_j + 1) \sum_b \frac{(d_{jb} - p_{jb})^2}{p_{jb}}
+\;=\; \frac{k_j}{N_j}\, X^2_j ,
+$$
+
+off from the calibrated object by the factor $k_j / N_j$ — and on top of
+that, the fitted probabilities are estimated from the same data they are
+tested against. Calibration therefore replaces the $\chi^2$ reference with
+the distribution of $T = \sum_j S_j$ under the **conditional fitted-model
+null**
+
+$$
+c_j \;\sim\; \mathrm{Multinomial}\bigl(N_j,\; I_j^K\bigr),
+\qquad j = 1, \dots, J,
+$$
+
+with $\hat\theta$ and $\hat\phi$ held fixed at their estimates. Two
+properties make this exact and fast: the envelope depends only on the model
+(never on the data), and a multinomial collapsed over bins is multinomial on
+the collapsed probabilities — so the null replicates can be drawn *directly
+on the $k_j$ bins* $p_j = (I^K_{j1}, \dots, I^K_{jP_j}, I^K_{j,\min})$,
+which is equivalent to simulating whole documents over the vocabulary at a
+tiny fraction of the cost. The only new ingredient the user supplies is the
+vector of document lengths $N_j$:
+
+```{r optimal-call-cal, eval = have_models}
+doc_lens <- quanteda::ntoken(mydfm_sub)
+
+chi_cal <- optimal_topic(lda_models = VEM_models,
+                         weighted_dfm = weighted_dfm,
+                         q = 0.95,
+                         alpha = 0.01,
+                         calibrate = "bootstrap",
+                         n_boot = 200,
+                         doc_lengths = doc_lens,
+                         seed = 20260703,
+                         do_plot = FALSE)
+```
+
+```{r optimal-call-cal-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_cal, sep = "\n")
+```
+
+With `calibrate = "bootstrap"`, $B$ = `n_boot` null replicates
+$T^{*}_1, \dots, T^{*}_B$ are drawn as above and the reported p-value is the
+empirical upper tail with the standard finite-sample correction,
+
+$$
+\hat{p} \;=\; \frac{1 + \#\{\, b : T^{*}_b \ge T \,\}}{B + 1},
+$$
+
+so `alpha` is a genuine Type-I error rate with respect to the conditional
+null, at resolution $1/(B+1)$. The table now carries two p-value columns:
+`pval` (calibrated — what the selection rules use) and `pval_chisq` (the
+asymptotic value, kept for comparison):
+
+```{r cal-table}
+head(chi_cal)
+```
+
+The bootstrap is the reference method; `calibrate = "moment"` targets the
+same null in closed form. Haldane (1937) gives the exact multinomial moments
+of the count-based Pearson statistic over $k_j$ bins:
+
+$$
+\mathrm{E}\bigl[X^2_j\bigr] = k_j - 1,
+\qquad
+\mathrm{Var}\bigl[X^2_j\bigr] = 2(k_j - 1) +
+\frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+$$
+
+Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
+and variance of $T$ follow by scaling and summing,
+$\mu = \sum_j (k_j/N_j)(k_j - 1)$ and
+$\sigma^2 = \sum_j (k_j/N_j)^2\,\mathrm{Var}[X^2_j]$, and the reference is
+the Satterthwaite scaled chi-square matching them:
+
+$$
+T \;\overset{\text{approx}}{\sim}\; a\,\chi^2_\nu,
+\qquad a = \frac{\sigma^2}{2\mu},
+\qquad \nu = \frac{2\mu^2}{\sigma^2},
+\qquad \hat{p} = \Pr\!\left(\chi^2_\nu \ge T/a\right).
+$$
+
+No simulation, no seed — a fast approximation that corrects the location and
+scale of the reference but not its higher moments:
+
+```{r optimal-call-mm, eval = have_models}
+chi_cal_mm <- optimal_topic(lda_models = VEM_models,
+                            weighted_dfm = weighted_dfm,
+                            q = 0.95,
+                            alpha = 0.01,
+                            calibrate = "moment",
+                            doc_lengths = doc_lens,
+                            do_plot = FALSE)
+```
+
+```{r optimal-call-mm-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_cal_mm, sep = "\n")
+```
+
+The three references side by side make the point visually:
+
+```{r cal-plot}
+pv <- melt(
+  data.table(topic = chi_cal$topic,
+             `chi-square` = chi_cal$pval_chisq,
+             bootstrap = chi_cal$pval,
+             moment = chi_cal_mm$pval),
+  id.vars = "topic", variable.name = "reference", value.name = "pvalue"
+)
+
+ggplot(pv, aes(x = topic, y = pvalue, color = reference)) +
+  geom_line(linewidth = 0.7) +
+  geom_hline(yintercept = alpha, linetype = 3) +
+  labs(x = "Topics", y = "p-value",
+       title = "Calibration replaces a saturated reference with a usable one",
+       subtitle = sprintf("dotted line: alpha = %.2f", alpha)) +
+  theme_bw()
+```
+
+Because the p-values themselves do not depend on `alpha`, scanning the
+conventional thresholds is a one-liner per method on the tables we already
+have:
+
+```{r cal-alpha-sweep}
+alphas <- c(0.01, 0.05, 0.10)
+
+picks_alpha <- data.table(
+  alpha = alphas,
+  bootstrap = sapply(alphas, function(a) chi_cal[pval > a, topic][1]),
+  moment = sapply(alphas, function(a) chi_cal_mm[pval > a, topic][1]),
+  `chi-square` = sapply(alphas, function(a) chi_seq[pval > a, topic][1])
+)
+
+knitr::kable(picks_alpha,
+             caption = "Sequential pick by reference distribution as alpha varies")
+```
+
+How should this be read? The calibrated sequential pick answers a precise
+question: *what is the smallest K whose leftover discrepancy could plausibly
+be produced by multinomial sampling noise alone, if the fitted model were the
+truth?* On this corpus that happens already at
+K = `r chi_cal[pval > alpha, topic][1]`. The fit does keep improving beyond
+that — the `OpTop` curve keeps falling until its minimum at
+K = `r min_pick` — but from there onward the improvements are smaller than
+what sampling noise can account for at the chosen `alpha`. The uncalibrated
+scan stopped at K = `r seq_pick` not because that value is statistically
+special but because its reference distribution had the wrong scale. Raising
+`alpha` demands stronger evidence of adequacy, so the pick moves (weakly)
+upward, as the table shows — and `alpha` is now a real Type-I error rate with
+respect to the fitted-model null (at bootstrap resolution
+`1 / (n_boot + 1)`). In short: the calibrated sequential rule identifies the
+most parsimonious *statistically adequate* K, while the global-minimum rule
+and the discrepancy indices below quantify *maximal descriptive fit* — two
+different questions, and it is worth knowing which one you are asking.
+
+One caveat applies to both calibrations: they hold the estimated `theta` and
+`phi` fixed, so they do not account for estimation noise in the LDA
+parameters themselves (see `?optimal_topic`).
 
 ## The role of `q`
 
@@ -445,6 +663,9 @@ with the discrepancy indices quantifying what each candidate buys you.
   package's `AUDIT.md` for the technical background.
 
 ## References
+
+Haldane, J. B. S. (1937). The exact value of the moments of the distribution
+of chi-square. *Biometrika*, 29, 133–143.
 
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. *Journal of Machine Learning Research*, 23(58),

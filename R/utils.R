@@ -36,7 +36,10 @@ optop_as_theta_phi.TopicModel <- function(model) {
 }
 
 #' @keywords internal
-# text2vec::LDA (placeholder — second priority)
+#' @exportS3Method optop_as_theta_phi LDA_t2v
+# text2vec::LDA (placeholder — second priority); registered like its siblings
+# so roxygen2 recognizes it as an S3 method, failing informatively until the
+# adapter is implemented
 optop_as_theta_phi.LDA_t2v <- function(model) {
   # TODO: map model$doc_topic_distr -> theta; model$topic_word_distribution -> phi (rows sum to 1)
   stop("text2vec adapter not implemented yet.")

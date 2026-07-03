@@ -68,32 +68,40 @@ branch, with the old pipeline frozen behind `selection = "legacy"`
   study uses the min rule. Establishing a sharper null law (asymptotics or
   simulation calibration) remains future methodological work for the paper.
 
+## Null calibration for Test 1 (implemented in 0.10.0)
+
+The χ² reference of Eq. (8) is a yardstick, not an exact null law: the
+classical Pearson asymptotics require the statistic to be scaled by the
+document *length* `N_j` (counts), whereas Eq. (8) works on proportions scaled
+by the bin count `P_j + 1` — a per-document scale gap of roughly
+`N_j / (P_j + 1)` — and the expected probabilities are estimated by VEM from
+the same data. Hence the saturated p-values documented in `?optimal_topic`.
+
+Implemented via `optimal_topic(calibrate = ...)` (see the Calibration section
+of the man page for the full reasoning):
+
+1. **`"bootstrap"`** — parametric bootstrap under the conditional
+   fitted-model null. Because the envelope is data-free and a multinomial
+   collapsed over bins is multinomial on the collapsed probabilities, null
+   replicates are drawn directly on the `P_j + 1` bins exported by the C++
+   core (`return_envelope`), at ~`n_boot × df` flops per model; empirical
+   p-value `(1 + #{T* ≥ T})/(n_boot + 1)`.
+2. **`"moment"`** — exact Haldane (1937) multinomial moments of each
+   document's Pearson term, summed and Satterthwaite-matched to `a·χ²_ν`.
+   Closed form; validated in the test suite against the bootstrap's empirical
+   moments.
+
+Both are conditional on the fitted Θ̂, Φ̂ (no per-replicate refit — the double
+bootstrap remains out of scope). The per-document bootstrap loop lives in R
+on C-level primitives; it is the designated C++/OpenMP port if corpora with
+J ≫ 10⁴ ever make it the bottleneck.
+
 ## Deferred
 
-- **Null calibration for Test 1 (planned, dedicated release).** The χ²
-  reference of Eq. (8) is a yardstick, not an exact null law: the classical
-  Pearson asymptotics require the statistic to be scaled by the document
-  *length* `N_j` (counts), whereas Eq. (8) works on proportions scaled by the
-  bin count `P_j + 1` — a per-document scale gap of roughly `N_j / (P_j + 1)`
-  — and the expected probabilities are estimated by VEM from the same data.
-  Hence the saturated p-values documented in `?optimal_topic`. Proposal, in
-  order of preference:
-  1. **Parametric bootstrap null**: simulate M corpora from the fitted
-     K-model (each document multinomial of its own length with probabilities
-     `I^K_j`), recompute the statistic per replicate, report empirical
-     p-values. Conditional on the fitted Θ, Φ (refitting per replicate would
-     be the exact but brutal double bootstrap); makes `alpha` a true Type-I
-     error rate under that conditional null. Cheap with the blocked core;
-     embarrassingly parallel. Sketch: `optimal_topic(..., calibrate =
-     "bootstrap", n_boot = 200)` or a standalone `optop_calibrate()`.
-  2. **Moment-matched reference**: analytic null mean/variance of each
-     document's Pearson-on-proportions term under multinomial sampling,
-     matched to a scaled chi-square a·χ²_b (Satterthwaite). No simulation;
-     corrects the scale gap; less exact.
-  3. **Count-based statistic option**: the orthodox Pearson on counts
-     (O = N_j·d, E = N_j·I), for which χ²_{P_j} is the textbook asymptotic —
-     a different statistic than the published Eq. (8), so an alternative
-     alongside it, not a replacement.
+- **Count-based statistic option**: the orthodox Pearson on counts
+  (O = N_j·d, E = N_j·I), for which χ²_{P_j} is the textbook asymptotic —
+  a different statistic than the published Eq. (8), so an alternative
+  alongside it, not a replacement.
 
 - **OpenMP over the document loop.** Correct parallelization axis, but only
   worth adding after the `gemm` rewrite is benchmarked: it requires a

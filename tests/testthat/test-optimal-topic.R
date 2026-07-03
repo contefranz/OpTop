@@ -3,16 +3,9 @@
 # Eq. (8) for the "sequential"/"min" rules and the frozen pre-0.9.9 pipeline
 # for the deprecated "legacy" rule.
 
-# Row-wise word proportions as a weighted quanteda dfm and as the plain dense
-# matrix the reference implementations consume.
-optop_wprop_fixture <- function(fx) {
-  wdfm <- quanteda::dfm_weight(quanteda::as.dfm(fx$counts), scheme = "prop")
-  W_prop <- sweep(fx$counts, 1, rowSums(fx$counts), "/")
-  list(wdfm = wdfm, W_prop = W_prop)
-}
-
-# numeric tests run silent: verbose defaults to FALSE and the unconditional
-# document-drop alert is muffled where it is not the behavior under test
+# numeric tests run silent (the wprop fixture lives in helper-fixtures.R):
+# the unconditional document-drop alert is muffled where it is not the
+# behavior under test
 run_optimal_topic <- function(...) {
   suppressMessages(optimal_topic(..., do_plot = FALSE))
 }
@@ -124,13 +117,14 @@ test_that("optimal_topic() is invariant to document order in the dfm", {
   expect_equal(got$pval, ref$pval, tolerance = 1e-10)
 })
 
-test_that("optimal_topic() is silent by default and chatty with verbose = TRUE", {
+test_that("optimal_topic() is chatty by default and silent with verbose = FALSE", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_no_message(optimal_topic(fx$models, wp$wdfm, do_plot = FALSE))
+  expect_no_message(optimal_topic(fx$models, wp$wdfm, do_plot = FALSE,
+                                  verbose = FALSE))
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = TRUE),
+    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE),
     "Optimal model has"
   )
 })
