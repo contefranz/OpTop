@@ -12,8 +12,13 @@
   (1997) join `?optimal_topic`, and the index/partition pages now cite Lewis & Grossetti
   (2022) and Agresti (1996).
 
-* Dead code removed: eleven stale `utils::globalVariables()` declarations referenced by
+* Dead code removed: ten stale `utils::globalVariables()` declarations referenced by
   no live or deprecated code, plus a dangling roxygen fragment in `R/utils.R`.
+
+* **Package overview rewritten**: `?OpTop-package` now presents the current toolkit
+  (Test 1 with its selection rules and calibration, the discrepancy indices, the
+  harmonized partition) and cites Lewis and Grossetti (2022) — the previous page still
+  referenced a 2019 preprint and predated the index family.
 
 # OpTop 0.10.0
 

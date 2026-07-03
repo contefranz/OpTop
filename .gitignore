@@ -9,3 +9,5 @@
 .Rproj.user
 /utils.R
 data-raw/*.rds
+vignettes/*.html
+vignettes/*.R
