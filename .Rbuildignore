@@ -6,3 +6,4 @@
 ^\.claude$
 ^AUDIT\.md$
 ^codecov\.yml$
+^data-raw$
