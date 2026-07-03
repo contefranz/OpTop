@@ -70,6 +70,31 @@ branch, with the old pipeline frozen behind `selection = "legacy"`
 
 ## Deferred
 
+- **Null calibration for Test 1 (planned, dedicated release).** The χ²
+  reference of Eq. (8) is a yardstick, not an exact null law: the classical
+  Pearson asymptotics require the statistic to be scaled by the document
+  *length* `N_j` (counts), whereas Eq. (8) works on proportions scaled by the
+  bin count `P_j + 1` — a per-document scale gap of roughly `N_j / (P_j + 1)`
+  — and the expected probabilities are estimated by VEM from the same data.
+  Hence the saturated p-values documented in `?optimal_topic`. Proposal, in
+  order of preference:
+  1. **Parametric bootstrap null**: simulate M corpora from the fitted
+     K-model (each document multinomial of its own length with probabilities
+     `I^K_j`), recompute the statistic per replicate, report empirical
+     p-values. Conditional on the fitted Θ, Φ (refitting per replicate would
+     be the exact but brutal double bootstrap); makes `alpha` a true Type-I
+     error rate under that conditional null. Cheap with the blocked core;
+     embarrassingly parallel. Sketch: `optimal_topic(..., calibrate =
+     "bootstrap", n_boot = 200)` or a standalone `optop_calibrate()`.
+  2. **Moment-matched reference**: analytic null mean/variance of each
+     document's Pearson-on-proportions term under multinomial sampling,
+     matched to a scaled chi-square a·χ²_b (Satterthwaite). No simulation;
+     corrects the scale gap; less exact.
+  3. **Count-based statistic option**: the orthodox Pearson on counts
+     (O = N_j·d, E = N_j·I), for which χ²_{P_j} is the textbook asymptotic —
+     a different statistic than the published Eq. (8), so an alternative
+     alongside it, not a replacement.
+
 - **OpenMP over the document loop.** Correct parallelization axis, but only
   worth adding after the `gemm` rewrite is benchmarked: it requires a
   `src/Makevars` with `$(SHLIB_OPENMP_CXXFLAGS)` and keeping
@@ -82,6 +107,21 @@ branch, with the old pipeline frozen behind `selection = "legacy"`
   C++, with new adapter methods for `CTM_VEM`, seededlda's `textmodel_lda`,
   and NLPstudio's `nlp_topic_fit` (dtw → theta, tww → phi). Planned as a
   follow-up branch once the efficiency work is merged.
+
+## Vignette build design (CRAN-ready)
+
+The vignette's `optimal_topic()` calls evaluate **live** when the local model
+cache (`data-raw/VEM_models_inaugural.rds`, ~170 MB, git- and build-ignored)
+is present — the maintainer's `R CMD build` therefore ships an HTML with
+genuine console output — and fall back to **replaying the captured console
+streams** stored in the shipped 10 KB results bundle when the cache is absent
+(CI checkouts, CRAN's re-building of vignette outputs inside the pruned
+tarball). Both paths produce the same numbers because the bundle is derived
+from the same cached fits. This conditional-evaluation pattern is standard,
+CRAN-sanctioned practice for expensive vignettes; if CRAN's rebuild
+environment ever becomes a problem, the fallback plan is the rOpenSci
+"precompiled vignette" pattern (`OpTop.Rmd.orig` knitted locally into a fully
+static `OpTop.Rmd`).
 
 ## Benchmark
 

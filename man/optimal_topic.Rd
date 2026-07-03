@@ -36,7 +36,8 @@ by \code{"min"}.}
 \code{"sequential"} (default), \code{"min"}, or \code{"legacy"} (deprecated).}
 
 \item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
-topics with vertical and horizontal guides at the selected optimum
+topics with vertical and horizontal guides at the selected optimum and a
+subtitle reporting the selection method and the selected \code{K}
 (default \code{TRUE}).}
 
 \item{verbose}{Logical; if \code{TRUE}, report progress (a \code{cli} progress bar
@@ -108,12 +109,12 @@ to handle high-dimensional vocabularies efficiently.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-test1 <- optimal_topic( lda_models = lda_list,
-                        weighted_dfm = weighted_dfm,
-                        q = 0.95,
-                        alpha = 0.05,
-                        selection = "sequential",
-                        verbose = TRUE )
+test1 <- optimal_topic(lda_models = lda_list,
+                       weighted_dfm = weighted_dfm,
+                       q = 0.95,
+                       alpha = 0.05,
+                       selection = "sequential",
+                       verbose = TRUE)
 }
 
 }

@@ -1,7 +1,7 @@
 Package: OpTop
 Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for LDA Models
-Version: 0.9.9
+Version: 0.9.10
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
@@ -31,7 +31,10 @@ Imports:
     methods,
     topicmodels
 Suggests:
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RcppArmadillo
 Config/roxygen2/version: 8.0.0

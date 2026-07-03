@@ -8,3 +8,4 @@
 /test*.R
 .Rproj.user
 /utils.R
+data-raw/*.rds

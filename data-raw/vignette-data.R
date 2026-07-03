@@ -1,0 +1,224 @@
+# Generates the data behind vignettes/OpTop.Rmd.
+#
+# The fitted LDA grid is heavy (~170 MB) and stays in data-raw/ (git-ignored;
+# re-running this script regenerates it, but note the fits are unseeded, so
+# exact numbers can shift). Only the small derived tables — plus the captured
+# console output of the optimal_topic() calls, used by the vignette as a
+# fallback when the model cache is absent — ship with the package in
+# inst/extdata/optop-vignette-results.rds.
+#
+# CRAN mechanics (deliberate design): data-raw/ is .Rbuildignore'd, so the
+# model cache never enters the tarball. The maintainer's R CMD build runs the
+# vignette LIVE against the cache and ships that HTML in inst/doc; CRAN's
+# "re-building of vignette outputs" re-knits inside the pruned tarball, where
+# have_models is FALSE, so the vignette takes the fast replay path (the
+# captured console streams stored in the bundle) and rebuilds in seconds with
+# identical numbers. Should CRAN's rebuild environment ever become a problem,
+# the fallback plan is the rOpenSci "precompiled vignette" pattern
+# (OpTop.Rmd.orig knitted locally into a fully static OpTop.Rmd).
+#
+# Run from the package root: Rscript data-raw/vignette-data.R
+
+library(OpTop)
+
+ncores <- 6
+
+## Part 1 -- U.S. Presidential Inaugural Address corpus -----------------------
+
+# Tokenize
+toks <- quanteda::data_corpus_inaugural |>
+  quanteda::tokens(remove_punct = TRUE,
+                   remove_symbols = TRUE,
+                   remove_numbers = TRUE) |>
+  quanteda::tokens_tolower() |>
+  quanteda::tokens_remove(quanteda::stopwords())
+
+# Create DFM (raw counts - DO NOT weight, OpTop expects counts not proportions)
+mydfm        <- quanteda::dfm(toks)
+mydfm_sub    <- quanteda::dfm_trim(mydfm, min_termfreq = 5)
+weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
+
+K_grid <- seq(2, 200, by = 2)
+
+models_path <- file.path("data-raw", "VEM_models_inaugural.rds")
+if (file.exists(models_path)) {
+  message("Reusing cached ", models_path)
+  VEM_models <- readRDS(models_path)
+} else {
+  # Estimate VEM models
+  VEM_models <- parallel::mclapply(
+    K_grid,
+    function(k) {
+      message("Estimating LDA with K = ", k)
+      topicmodels::LDA(x = mydfm_sub, k = k)
+    },
+    mc.cores = ncores
+  )
+  saveRDS(VEM_models, models_path)
+}
+
+alpha <- 0.01
+
+# capture the cli console stream of a call: the vignette replays it verbatim
+# when the model cache is not available to evaluate the call live
+capture_cli <- function(expr) {
+  msgs <- character()
+  out <- withCallingHandlers(
+    expr,
+    message = function(m) {
+      msgs <<- c(msgs, cli::ansi_strip(conditionMessage(m)))
+      invokeRestart("muffleMessage")
+    }
+  )
+  msgs <- gsub("\r", "", msgs)
+  msgs <- unlist(strsplit(msgs, "\n", fixed = TRUE))
+  list(value = out, console = msgs[nzchar(msgs)])
+}
+
+seq_run <- capture_cli(
+  optimal_topic(lda_models = VEM_models,
+                weighted_dfm = weighted_dfm,
+                selection = "sequential",
+                q = 0.95,
+                alpha = alpha,
+                do_plot = FALSE,
+                verbose = TRUE)
+)
+min_run <- capture_cli(
+  optimal_topic(lda_models = VEM_models,
+                weighted_dfm = weighted_dfm,
+                selection = "min",
+                q = 0.95,
+                alpha = alpha,
+                do_plot = FALSE,
+                verbose = TRUE)
+)
+
+# the returned table does not depend on the selection rule, so one call per q
+# is enough for the sweep; the picks mirror the documented rules
+q_sweep <- c(0.80, 0.90, 0.95, 0.99)
+
+pick_sequential <- function(tab, alpha) {
+  k <- tab$topic[tab$pval > alpha][1]
+  if (is.na(k)) tab$topic[which.min(tab$OpTop)] else k
+}
+pick_min <- function(tab) tab$topic[which.min(tab$OpTop)]
+
+chi_by_q <- lapply(q_sweep, function(q) {
+  if (q == 0.95) return(seq_run$value)
+  optimal_topic(VEM_models, weighted_dfm, q = q, alpha = alpha,
+                do_plot = FALSE, verbose = TRUE)
+})
+names(chi_by_q) <- sprintf("q%.2f", q_sweep)
+
+picks <- data.frame(
+  q = q_sweep,
+  sequential = vapply(chi_by_q, pick_sequential, numeric(1), alpha = alpha),
+  min = vapply(chi_by_q, pick_min, numeric(1))
+)
+
+## Part 1b -- discrepancy indices on the inaugural corpus ---------------------
+
+dtm_counts <- methods::as(mydfm_sub, "CsparseMatrix")
+partition <- optop_make_partition(VEM_models, dtm_counts, c = 5)
+baseline <- optop_make_baseline(dtm_counts)
+index_tab <- optop_index_table(VEM_models, dtm_counts,
+                               metrics = c("se", "chisq", "deviance"),
+                               partition = partition, baseline = baseline,
+                               macro = TRUE)
+
+# word-level snapshot at the sequential pick (q = 0.95): best and worst words
+k_star <- picks$sequential[picks$q == 0.95]
+m_star <- VEM_models[[which(K_grid == k_star)]]
+word_idx <- optop_index_chisq(m_star, dtm_counts, partition, baseline,
+                              level = "word")
+r2w <- sort(word_idx$r2_word)
+word_snapshot <- list(k = k_star,
+                      worst = utils::head(r2w, 10),
+                      best = utils::tail(r2w, 10),
+                      micro = word_idx$r2_micro_word,
+                      macro = word_idx$r2_macro_word)
+
+## Part 2 -- simulation with known true K -------------------------------------
+
+set.seed(20260703)
+true_K <- 10L
+J_sim <- 100L
+W_sim <- 1500L
+
+rdirichlet <- function(n, alpha) {
+  g <- matrix(rgamma(n * length(alpha), shape = alpha, rate = 1),
+              nrow = n, byrow = TRUE)
+  g / rowSums(g)
+}
+
+Theta_true <- rdirichlet(J_sim, rep(0.3, true_K))          # J x K
+Beta_true <- rdirichlet(true_K, rep(0.05, W_sim))          # K x W, rows sum to 1
+colnames(Beta_true) <- sprintf("w%04d", seq_len(W_sim))
+doc_len <- sample(500:1500, J_sim, replace = TRUE)
+
+sim_corpus <- sim_dfm(DTW = Theta_true, TWW = Beta_true,
+                      doc_length = doc_len, seed = 42)
+
+sim_grid <- seq(2, 20, by = 2)
+sim_models <- parallel::mclapply(
+  sim_grid,
+  function(k) {
+    message("Estimating simulated LDA with K = ", k)
+    topicmodels::LDA(x = sim_corpus, k = k, control = list(seed = 2000 + k))
+  },
+  mc.cores = ncores
+)
+
+sim_weighted <- quanteda::dfm_weight(sim_corpus, scheme = "prop")
+sim_chi <- optimal_topic(sim_models, sim_weighted, q = 0.95, alpha = alpha,
+                         do_plot = FALSE, verbose = TRUE)
+sim_picks <- data.frame(
+  sequential = pick_sequential(sim_chi, alpha),
+  min = pick_min(sim_chi)
+)
+
+sim_dtm <- methods::as(sim_corpus, "CsparseMatrix")
+sim_partition <- optop_make_partition(sim_models, sim_dtm, c = 5)
+sim_baseline <- optop_make_baseline(sim_dtm)
+sim_index_tab <- optop_index_table(sim_models, sim_dtm,
+                                   metrics = c("se", "chisq", "deviance"),
+                                   partition = sim_partition,
+                                   baseline = sim_baseline,
+                                   macro = TRUE)
+
+## Bundle ----------------------------------------------------------------------
+
+bundle <- list(
+  meta = list(
+    generated = Sys.time(),
+    K_grid = K_grid,
+    q_sweep = q_sweep,
+    alpha = alpha,
+    ndoc = quanteda::ndoc(mydfm_sub),
+    nfeat_full = quanteda::nfeat(mydfm),
+    nfeat_trimmed = quanteda::nfeat(mydfm_sub),
+    true_K = true_K,
+    J_sim = J_sim,
+    W_sim = W_sim,
+    sim_grid = sim_grid
+  ),
+  inaugural = list(
+    chi_by_q = chi_by_q,
+    picks = picks,
+    console_seq = seq_run$console,
+    console_min = min_run$console,
+    index_table = index_tab,
+    word_snapshot = word_snapshot
+  ),
+  sim = list(
+    chi = sim_chi,
+    picks = sim_picks,
+    index_table = sim_index_tab
+  )
+)
+
+out_path <- file.path("inst", "extdata", "optop-vignette-results.rds")
+dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
+saveRDS(bundle, out_path, compress = "xz")
+message("Saved ", out_path, " (", round(file.size(out_path) / 1024), " KB)")

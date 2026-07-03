@@ -1,0 +1,451 @@
+---
+title: "Selecting K with OpTop"
+subtitle: "Parametric tests and discrepancy indices for LDA models"
+author: "Francesco Grossetti"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Selecting K with OpTop}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+/* the html_vignette theme styles section h4s with a left margin and a bottom
+   border; the author/date lines are h4s too and would inherit both */
+h4.author, h4.date { margin-left: 0; border-bottom: none; }
+</style>
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.2,
+  fig.align = "center"
+)
+library(OpTop)
+library(data.table)
+library(ggplot2)
+
+# Precomputed results shipped with the package (a few KB): tables derived from
+# the full fitted grid, plus the captured console output of the optimal_topic()
+# calls below.
+res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
+                           package = "OpTop"))
+meta <- res$meta
+idx_tab <- res$inaugural$index_table
+word_r2 <- res$inaugural$word_snapshot
+sim_chi <- res$sim$chi
+sim_picks <- res$sim$picks
+sim_idx_tab <- res$sim$index_table
+
+# The fitted grid itself (~170 MB) cannot ship with the package and lives in
+# data-raw/ on the maintainer's machine. When it is available, every
+# optimal_topic() call below runs live; when it is not (e.g. R CMD check
+# re-building the vignette from the pruned tarball), the same objects are
+# assigned from the shipped results and the calls' captured console output is
+# replayed, so the rendered document is the same either way.
+models_path <- file.path("..", "data-raw", "VEM_models_inaugural.rds")
+have_models <- file.exists(models_path)
+if (have_models) {
+  VEM_models <- readRDS(models_path)
+  toks <- quanteda::data_corpus_inaugural |>
+    quanteda::tokens(remove_punct = TRUE,
+                     remove_symbols = TRUE,
+                     remove_numbers = TRUE) |>
+    quanteda::tokens_tolower() |>
+    quanteda::tokens_remove(quanteda::stopwords())
+  mydfm_sub <- quanteda::dfm_trim(quanteda::dfm(toks), min_termfreq = 5)
+  weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
+} else {
+  chi_seq <- res$inaugural$chi_by_q[["q0.95"]]
+  chi_min <- data.table::copy(chi_seq)
+  chi_by_q <- res$inaugural$chi_by_q
+}
+```
+
+OpTop implements the parametric tests of Lewis and Grossetti (2022, JMLR
+23(58)) for identifying the optimal number of topics of a Latent Dirichlet
+Allocation (LDA) model, together with a family of regression-style
+goodness-of-fit indices. This vignette walks through both on a real corpus,
+then closes with a simulation where the true number of topics is known.
+
+The only step run offline is the LDA fitting itself
+(`r length(meta$K_grid)` models); everything downstream — every
+`optimal_topic()` call, table, plot, and number quoted in the text — is
+computed from those fits.
+
+## Setting up: corpus, grid, models
+
+We use the U.S. Presidential Inaugural Address corpus that ships with
+**quanteda** — the same corpus as the paper's case study — with a standard
+preprocessing pipeline and a vocabulary trim. The grid spans
+K = `r min(meta$K_grid)` to `r max(meta$K_grid)` in steps of 2.
+
+```{r fitting, eval = FALSE}
+library(OpTop)
+
+ncores <- 6
+
+# Tokenize
+toks <- quanteda::data_corpus_inaugural |>
+  quanteda::tokens(remove_punct = TRUE,
+                   remove_symbols = TRUE,
+                   remove_numbers = TRUE) |>
+  quanteda::tokens_tolower() |>
+  quanteda::tokens_remove(quanteda::stopwords())
+
+# Create DFM (with raw counts as well as proportions)
+mydfm        <- quanteda::dfm(toks)
+mydfm_sub    <- quanteda::dfm_trim(mydfm, min_termfreq = 5)
+weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
+
+K_grid <- seq(2, 200, by = 2)
+
+# Estimate VEM models in parallel
+VEM_models <- parallel::mclapply(
+  K_grid,
+  function(k) {
+    message("Estimating LDA with K = ", k)
+    topicmodels::LDA(x = mydfm_sub, k = k)
+  },
+  mc.cores = ncores
+)
+```
+
+After trimming, the corpus has `r meta$ndoc` documents and
+`r meta$nfeat_trimmed` features (down from `r meta$nfeat_full`). The VEM fits
+above are unseeded, so re-running the pipeline can shift individual
+statistics slightly; the numbers quoted in this vignette come from one such
+run.
+
+`optimal_topic()` consumes **word proportions** (`weighted_dfm` above), while
+the discrepancy indices of the second part consume the raw **counts** — keep
+both objects around. With `verbose = TRUE` the function reports its setup,
+progress across the grid, the selected model with the rule that chose it, and
+the elapsed time:
+
+```{r optimal-call-seq, eval = have_models}
+# Use the sequential approach
+chi_seq <- optimal_topic(lda_models = VEM_models,
+                         weighted_dfm = weighted_dfm,
+                         selection = "sequential",
+                         q = 0.95,
+                         alpha = 0.01,
+                         do_plot = FALSE,
+                         verbose = TRUE)
+```
+
+```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_seq, sep = "\n")
+```
+
+```{r optimal-call-min, eval = have_models}
+# Use the global minimum approach
+chi_min <- optimal_topic(lda_models = VEM_models,
+                         weighted_dfm = weighted_dfm,
+                         selection = "min",
+                         q = 0.95,
+                         alpha = 0.01,
+                         do_plot = FALSE,
+                         verbose = TRUE)
+```
+
+```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_min, sep = "\n")
+```
+
+## Reading the result
+
+`optimal_topic()` returns a `data.table` with one row per model:
+
+```{r table-head}
+head(chi_seq)
+```
+
+- `OpTop` is the **standardized** Test 1 statistic (the raw chi-square of
+  Equation 8 divided by its degrees of freedom) — the quantity plotted in the
+  paper's Figure 2. Under a model that fits, it fluctuates around 1.
+- `df` is `sum_j P_j`, the total count of "relatively important" words across
+  documents.
+- `pval` is the upper-tail p-value of the raw statistic: small values mean
+  the observed discrepancy is larger than sampling noise can explain, i.e.
+  the K-topic model is rejected.
+
+The `selection` rule affects which K is *reported* as optimal (and the plot
+guides), never the table itself — the two calls above return the same data:
+
+```{r rule-independence}
+all.equal(chi_seq, chi_min)
+```
+
+### The two selection rules
+
+Both rules are one-liners on the returned table, so it is worth seeing them
+spelled out:
+
+```{r selection-rules}
+alpha <- 0.01
+
+# "sequential": the smallest K the test fails to reject
+seq_pick <- chi_seq[pval > alpha, topic][1]
+
+# "min": the K with the minimum standardized statistic
+min_pick <- chi_seq[which.min(OpTop), topic]
+
+c(sequential = seq_pick, min = min_pick)
+```
+
+**`selection = "sequential"`** implements the classical scan for model order:
+walk K upward and stop at the first model the test *fails to reject*
+(`pval > alpha`). The idea is parsimony — take the smallest K that the data
+cannot distinguish from adequate. On this corpus the sequential rule selects
+**K = `r seq_pick`**. (If every model were rejected, `optimal_topic()` falls
+back to the global minimum with a warning.)
+
+**`selection = "min"`** reproduces the published case study: take the K with
+the minimum standardized statistic. Here that is **K = `r min_pick`** —
+remarkably close to the 92 the paper reports on the untrimmed vocabulary of
+the same corpus, and (as the q-sweep below shows) insensitive to the choice
+of `q`. One practical remark: the minimum rule needs a grid that extends past
+the flattening of the curve to settle — on a grid truncated at K = 100 the
+minimum sits at the boundary, and only the full K ≤ 200 scan lets it come to
+rest. The sequential rule, by construction, stops at the first adequate K and
+does not care how far the grid extends.
+
+A look at the p-value column explains when and why the two rules diverge:
+
+```{r pval-summary}
+summary(chi_seq$pval)
+```
+
+With `df` of the order of
+`r format(round(median(chi_seq$df)), big.mark = ",")`, the chi-square
+reference distribution is extremely concentrated, so p-values saturate:
+models whose standardized statistic is materially above 1 get p-values of
+essentially 0, and models at or below 1 get p-values of essentially 1. When
+every model is rejected, the sequential rule falls back to the global minimum
+(with a warning); when several are accepted it stops at the smallest — which
+may sit well before the minimum. This is a documented calibration caveat of
+the chi-square yardstick (see `?optimal_topic`): in saturated regimes the
+*shape* of the `OpTop` curve, and its minimum, carry the information.
+
+Because the table is the return value, any plot is one `ggplot2` call away:
+
+```{r optop-curve}
+ggplot(chi_seq, aes(x = topic, y = OpTop)) +
+  geom_line(linewidth = 0.8, color = "royalblue") +
+  geom_vline(xintercept = seq_pick, linetype = 2) +
+  geom_vline(xintercept = min_pick, linetype = 3) +
+  annotate("point", x = min_pick, y = min(chi_seq$OpTop),
+           color = "red", shape = 4, size = 4) +
+  labs(x = "Topics", y = expression(OpTop[J]^{K}),
+       title = "Standardized Test 1 statistic across the grid",
+       subtitle = sprintf("sequential pick: K = %d (dashed) | global minimum: K = %d (dotted)",
+                          seq_pick, min_pick)) +
+  theme_bw()
+```
+
+## The role of `q`
+
+`q` controls the per-document envelope: sort each document's fitted word
+probabilities in decreasing order and keep the smallest head whose cumulative
+mass exceeds `q` — those are the `P_j` "relatively important" words; the rest
+are collapsed into a single bin whose mass stays strictly below `1 - q`. In
+the paper's notation `q = 1 - I^K`; its numerical setting `I^K = 0.05`
+corresponds to the default `q = 0.95`.
+
+Re-running the test across a sweep of `q` values is a direct sensitivity
+check:
+
+```{r q-sweep-run, eval = have_models}
+q_grid <- c(0.80, 0.90, 0.95, 0.99)
+
+chi_by_q <- lapply(q_grid, function(q) {
+  optimal_topic(VEM_models, weighted_dfm, q = q, alpha = alpha,
+                do_plot = FALSE)
+})
+names(chi_by_q) <- sprintf("q%.2f", q_grid)
+```
+
+```{r q-sweep-plot}
+q_curves <- rbindlist(
+  lapply(names(chi_by_q), function(nm) {
+    data.table(q = as.numeric(sub("q", "", nm)), chi_by_q[[nm]])
+  })
+)
+
+ggplot(q_curves, aes(x = topic, y = OpTop, color = factor(q))) +
+  geom_line(linewidth = 0.7) +
+  labs(x = "Topics", y = expression(OpTop[J]^{K}), color = "q",
+       title = "The envelope parameter shifts the level, not the story") +
+  theme_bw()
+```
+
+Applying the two selection rules to each element of the sweep — the same
+one-liners as before — shows how the picks react to `q`:
+
+```{r q-picks}
+picks_by_q <- data.table(
+  q = as.numeric(sub("q", "", names(chi_by_q))),
+  sequential = sapply(chi_by_q, function(tab) tab[pval > alpha, topic][1]),
+  min = sapply(chi_by_q, function(tab) tab[which.min(OpTop), topic])
+)
+
+knitr::kable(picks_by_q, caption = "Selected K by rule as q varies")
+```
+
+Larger `q` keeps more words per document, so the degrees of freedom grow and
+the envelope covers more of each document's distribution; smaller `q` makes
+the comparison coarser and cheaper. The sequential pick moves with `q` while
+the global minimum stays put. The default `q = 0.95` follows the paper.
+
+## Goodness-of-fit: the discrepancy indices
+
+The second family of tools asks a complementary question: not *which K is
+optimal* but *how much of the word-count structure a given model explains*.
+The indices compare each model against the no-topics corpus baseline on a
+**harmonized support**: a fixed, document-specific set of rare words
+(computed across the whole grid) is collapsed so that every K is evaluated on
+the same bins. They consume raw counts:
+
+```{r indices-call, eval = FALSE}
+dtm_counts <- methods::as(mydfm_sub, "CsparseMatrix")
+partition <- optop_make_partition(VEM_models, dtm_counts, c = 5)
+baseline <- optop_make_baseline(dtm_counts)
+
+idx_tab <- optop_index_table(VEM_models, dtm_counts,
+                             metrics = c("se", "chisq", "deviance"),
+                             partition = partition, baseline = baseline,
+                             macro = TRUE)
+```
+
+```{r indices-plot}
+idx <- melt(idx_tab,
+            id.vars = "K",
+            measure.vars = c("R2_SE", "R2_chisq", "R2_dev"),
+            variable.name = "metric", value.name = "R2")
+
+ggplot(idx, aes(x = K, y = R2, color = metric)) +
+  geom_line(linewidth = 0.7) +
+  labs(x = "Topics", y = expression(R^2),
+       title = "Discrepancy indices across the grid (document level, micro)") +
+  theme_bw()
+```
+
+All three indices are regression-style R-squared analogues: 0 means the model
+explains no more than the corpus-wide baseline, 1 means a perfect account of
+the (harmonized) word counts. They typically rise steeply at small K and
+flatten once additional topics stop buying explanatory power — the elbow
+region is where the Test 1 machinery above places the optimum.
+
+The indices also exist at the **word level**, which is useful diagnostics:
+which words does the selected model capture well, and which does it miss?
+For the sequential pick (K = `r word_r2$k`), the micro word-level chi-square
+index is `r round(word_r2$micro, 3)`; the tails look like this:
+
+```{r word-snapshot}
+knitr::kable(
+  data.frame(
+    `best words` = names(word_r2$best),
+    R2_best = round(unname(word_r2$best), 3),
+    `worst words` = names(word_r2$worst),
+    R2_worst = round(unname(word_r2$worst), 3),
+    check.names = FALSE
+  ),
+  caption = sprintf("Word-level chi-square R2 at K = %d: the 10 best and worst captured words",
+                    word_r2$k)
+)
+```
+
+## A simulation with known truth
+
+Real corpora never reveal their true K. To see the machinery work where the
+answer is known, we simulate one corpus from the LDA generative process
+itself: `r meta$J_sim` documents over `r meta$W_sim` words drawn from
+**`r meta$true_K` topics**, using `sim_dfm()` (a thin wrapper around
+`LDATS::sim_LDA_data()`), then re-fit a grid around the truth.
+
+```{r sim-call, eval = FALSE}
+rdirichlet <- function(n, alpha) {
+  g <- matrix(rgamma(n * length(alpha), shape = alpha, rate = 1),
+              nrow = n, byrow = TRUE)
+  g / rowSums(g)
+}
+
+set.seed(20260703)
+true_K <- 10L
+Theta_true <- rdirichlet(100L, rep(0.3, true_K))    # documents x topics
+Beta_true <- rdirichlet(true_K, rep(0.05, 1500L))   # topics x words
+doc_len <- sample(500:1500, 100L, replace = TRUE)
+
+sim_corpus <- sim_dfm(DTW = Theta_true, TWW = Beta_true,
+                      doc_length = doc_len, seed = 42)
+
+sim_models <- parallel::mclapply(
+  seq(2, 20, by = 2),
+  function(k) topicmodels::LDA(sim_corpus, k = k,
+                               control = list(seed = 2000 + k)),
+  mc.cores = ncores
+)
+
+sim_chi <- optimal_topic(sim_models,
+                         quanteda::dfm_weight(sim_corpus, scheme = "prop"),
+                         q = 0.95, alpha = alpha, verbose = TRUE)
+```
+
+```{r sim-plot}
+ggplot(sim_chi, aes(x = topic, y = OpTop)) +
+  geom_line(linewidth = 0.8, color = "royalblue") +
+  geom_vline(xintercept = meta$true_K, color = "red", linetype = 1) +
+  geom_vline(xintercept = sim_picks$sequential, linetype = 2) +
+  geom_vline(xintercept = sim_picks$min, linetype = 3) +
+  labs(x = "Topics", y = expression(OpTop[J]^{K}),
+       title = "Simulated corpus: the truth is K = 10 (solid red)",
+       subtitle = sprintf("sequential pick: K = %d (dashed) | global minimum: K = %d (dotted)",
+                          sim_picks$sequential, sim_picks$min)) +
+  theme_bw()
+```
+
+```{r sim-indices}
+sim_idx <- melt(sim_idx_tab,
+                id.vars = "K",
+                measure.vars = c("R2_SE", "R2_chisq", "R2_dev"),
+                variable.name = "metric", value.name = "R2")
+
+ggplot(sim_idx, aes(x = K, y = R2, color = metric)) +
+  geom_line(linewidth = 0.7) +
+  geom_vline(xintercept = meta$true_K, color = "red", linetype = 1) +
+  labs(x = "Topics", y = expression(R^2),
+       title = "Discrepancy indices on the simulated corpus") +
+  theme_bw()
+```
+
+The statistic bends in the neighborhood of the true K and the indices stop
+improving there — the same qualitative behavior the paper's simulation study
+reports (its Figure 7). As the paper notes, the identified optimum is not
+always exactly `K_sim` but typically adjacent to it: here the sequential rule
+stops at K = `r sim_picks$sequential` with the truth at `r meta$true_K`,
+while the global minimum drifts to the grid edge as the curve keeps creeping
+down past the bend. Treat the tools as locating the *region* of adequate K,
+with the discrepancy indices quantifying what each candidate buys you.
+
+## Notes
+
+- The legacy stability helpers (`topic_stability()`, `agg_topic_stability()`,
+  `agg_document_stability()`, `get_topic_models()`) are deprecated and will
+  be removed in a future release; the discrepancy indices shown here are
+  their replacement.
+- `selection = "legacy"` reproduces the pre-0.9.9 computation exactly for
+  back-compatibility and is also deprecated.
+- The chi-square reference for Test 1 is a yardstick, not an exact null law;
+  a calibration layer (parametric-bootstrap null) is on the roadmap — see the
+  package's `AUDIT.md` for the technical background.
+
+## References
+
+Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+topic model identification. *Journal of Machine Learning Research*, 23(58),
+1–20. <https://jmlr.org/papers/v23/19-297.html>
