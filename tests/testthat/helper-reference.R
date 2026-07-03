@@ -147,19 +147,18 @@ ref_index_word <- function(model, dtm, partition, baseline,
        K = tp$K, metric = metric)
 }
 
-# Naive reference for optimal_topic(). Mirrors the semantics of
-# src/optimal_topic_core.cpp verbatim, one explicit loop per document:
+# Naive LEGACY reference for optimal_topic(selection = "legacy"). Mirrors the
+# pre-0.9.9 semantics verbatim, one explicit loop per document:
 # X_j = gamma_j %*% exp(beta), sorted descending; the envelope is truncated at
 # the first position whose cumulative mass, rounded half-away-from-zero to 4
-# decimals (std::round), exceeds q; the truncated tail is pooled into a single
-# bin; chi_j = icut * (sum((o - e)^2 / e) + pooled term). Per model the
+# decimals (std::round), exceeds q, with the crossing word collapsed into the
+# tail; chi_j = icut * (sum((o - e)^2 / e) + pooled term). Per model the
 # statistic is sum(chi_j) / sum(icut_j) and the p-value is the LOWER tail of a
-# chi-square with 1 df (a documented oddity preserved on purpose — see
-# AUDIT.md).
+# chi-square with 1 df.
 #
 # `W_prop` is a plain dense matrix of row-wise word proportions whose rows and
 # columns are aligned with the models, exactly as the C++ core assumes.
-ref_optimal_topic <- function(models, W_prop, q = 0.80) {
+ref_optimal_topic_legacy <- function(models, W_prop, q = 0.80) {
   out <- lapply(models, function(m) {
     dtw <- m@gamma                 # J x K
     tww <- t(exp(m@beta))          # W x K
@@ -190,8 +189,60 @@ ref_optimal_topic <- function(models, W_prop, q = 0.80) {
     }
 
     stat <- sum(chi) / sum(icut)
-    c(topic = ncol(dtw), OpTop = stat,
+    c(topic = ncol(dtw), OpTop = stat, df = sum(icut),
       pval = stats::pchisq(stat, df = 1, lower.tail = TRUE))
+  })
+  as.data.frame(do.call(rbind, out))
+}
+
+# Naive reference for the calibrated Test 1 of Lewis & Grossetti (2022),
+# Eq. (8): per document, the P_j important words are the smallest
+# descending-sorted head whose cumulative mass strictly exceeds q (the
+# crossing word is KEPT, so the collapsed tail keeps mass < 1 - q, footnote
+# 5); the document contributes (P_j + 1) * Pearson over the P_j + 1 bins with
+# P_j degrees of freedom (bins - 1; if the tail is empty the min bin is
+# dropped, the multiplier is P_j and the df is P_j - 1). The corpus statistic
+# is the RAW sum over documents, chi-square with df = sum_j P_j, and the
+# p-value is the UPPER tail. The reported OpTop is the standardized statistic
+# raw / df, the quantity plotted in the paper's Figure 2.
+ref_optimal_topic <- function(models, W_prop, q = 0.95) {
+  out <- lapply(models, function(m) {
+    dtw <- m@gamma                 # J x K
+    tww <- t(exp(m@beta))          # W x K
+    J <- nrow(W_prop)
+
+    chi <- numeric(J)
+    dfs <- numeric(J)
+    for (j in seq_len(J)) {
+      X <- drop(tww %*% dtw[j, ])
+      o <- W_prop[j, ]
+
+      ord <- order(X, decreasing = TRUE)
+      X <- X[ord]
+      o <- o[ord]
+
+      cum <- cumsum(X)
+      above <- which(cum > q)
+      p_j <- if (length(above)) above[1] else length(X)
+
+      head_idx <- seq_len(p_j)
+      pearson <- sum((o[head_idx] - X[head_idx])^2 / X[head_idx])
+      n_bins <- p_j
+      if (p_j < length(X)) {
+        o_tail <- sum(o[-head_idx])
+        X_tail <- sum(X[-head_idx])
+        pearson <- pearson + (o_tail - X_tail)^2 / X_tail
+        n_bins <- p_j + 1L
+      }
+
+      chi[j] <- n_bins * pearson
+      dfs[j] <- n_bins - 1L
+    }
+
+    raw <- sum(chi)
+    df <- sum(dfs)
+    c(topic = ncol(dtw), OpTop = raw / df, df = df,
+      pval = stats::pchisq(raw, df = df, lower.tail = FALSE))
   })
   as.data.frame(do.call(rbind, out))
 }
