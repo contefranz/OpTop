@@ -77,6 +77,11 @@ str(part$rare_mask)
 }
 
 }
+\references{
+Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+topic model identification. \emph{Journal of Machine Learning Research},
+23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
+}
 \seealso{
 \code{\link{optop_make_baseline}},
 \code{\link{optop_index_se}},

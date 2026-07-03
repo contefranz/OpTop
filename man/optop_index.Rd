@@ -196,6 +196,14 @@ res_dev <- optop_index_deviance(VEM_models[[9]], mydfm, partition, baseline)
 }
 
 }
+\references{
+Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+topic model identification. \emph{Journal of Machine Learning Research},
+23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
+
+Agresti, A. (1996). \emph{An Introduction to Categorical Data Analysis}.
+Wiley, New York.
+}
 \seealso{
 \code{\link[=optop_make_partition]{optop_make_partition()}}, \code{\link[=optop_make_baseline]{optop_make_baseline()}}, \code{\link[=optop_index_table]{optop_index_table()}};
 internal helper: \code{optop_align_dtm_to_models()}.
