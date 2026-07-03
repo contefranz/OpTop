@@ -10,7 +10,8 @@
 
 ### Minor Changes
 
-* `optimal_topic()`'s plot now uses `ggplot2::theme_bw()`.
+* `optimal_topic()`'s plot now uses `ggplot2::theme_bw()` and carries a subtitle with
+  the selection method and the selected K.
 
 * Style: no spaces inside parentheses in the maintained files.
 

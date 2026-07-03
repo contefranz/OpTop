@@ -31,7 +31,8 @@ if (getRversion() >= "2.15.1") {
 #' @param selection Character; how the optimal `K` is chosen (see Details):
 #'   `"sequential"` (default), `"min"`, or `"legacy"` (deprecated).
 #' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
-#'   topics with vertical and horizontal guides at the selected optimum
+#'   topics with vertical and horizontal guides at the selected optimum and a
+#'   subtitle reporting the selection method and the selected `K`
 #'   (default `TRUE`).
 #' @param verbose Logical; if `TRUE`, report progress (a `cli` progress bar
 #'   across the model grid) and a selection summary (default `FALSE`).
@@ -217,6 +218,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
   data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval"))
 
   global_min <- Chi_K[, .SD[which.min(OpTop)]]
+  method_label <- selection
   if (selection == "sequential") {
     accepted <- Chi_K[pval > alpha][1L]
     if (all(is.na(accepted))) {
@@ -226,6 +228,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
       ))
       best_topic <- global_min
       rule <- "global minimum (sequential fallback)"
+      method_label <- "sequential (fallback: min)"
     } else {
       best_topic <- accepted
       rule <- paste0("sequential adequacy scan at alpha = ", alpha)
@@ -264,6 +267,9 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
                         color = "red", shape = 4L, size = 4L) +
       ggplot2::xlab("Topics") + ggplot2::ylab(expression(OpTop[J]^{"K"})) +
       ggplot2::ggtitle("Optimal Topic Plot") +
+      ggplot2::labs(subtitle = bquote(
+        "Method:" ~ .(method_label) ~ "|" ~ K[opt] == .(x_min)
+      )) +
       ggplot2::theme_bw()
     print(p1)
   }
