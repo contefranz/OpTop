@@ -108,6 +108,21 @@ branch, with the old pipeline frozen behind `selection = "legacy"`
   and NLPstudio's `nlp_topic_fit` (dtw → theta, tww → phi). Planned as a
   follow-up branch once the efficiency work is merged.
 
+## Vignette build design (CRAN-ready)
+
+The vignette's `optimal_topic()` calls evaluate **live** when the local model
+cache (`data-raw/VEM_models_inaugural.rds`, ~170 MB, git- and build-ignored)
+is present — the maintainer's `R CMD build` therefore ships an HTML with
+genuine console output — and fall back to **replaying the captured console
+streams** stored in the shipped 10 KB results bundle when the cache is absent
+(CI checkouts, CRAN's re-building of vignette outputs inside the pruned
+tarball). Both paths produce the same numbers because the bundle is derived
+from the same cached fits. This conditional-evaluation pattern is standard,
+CRAN-sanctioned practice for expensive vignettes; if CRAN's rebuild
+environment ever becomes a problem, the fallback plan is the rOpenSci
+"precompiled vignette" pattern (`OpTop.Rmd.orig` knitted locally into a fully
+static `OpTop.Rmd`).
+
 ## Benchmark
 
 Timings of `optimal_topic(..., do_plot = FALSE)` on an Apple Silicon Mac

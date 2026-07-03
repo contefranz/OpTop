@@ -4,8 +4,18 @@
 # re-running this script regenerates it, but note the fits are unseeded, so
 # exact numbers can shift). Only the small derived tables — plus the captured
 # console output of the optimal_topic() calls, used by the vignette as a
-# fallback when the model cache is absent (e.g. on CI) — ship with the
-# package in inst/extdata/optop-vignette-results.rds.
+# fallback when the model cache is absent — ship with the package in
+# inst/extdata/optop-vignette-results.rds.
+#
+# CRAN mechanics (deliberate design): data-raw/ is .Rbuildignore'd, so the
+# model cache never enters the tarball. The maintainer's R CMD build runs the
+# vignette LIVE against the cache and ships that HTML in inst/doc; CRAN's
+# "re-building of vignette outputs" re-knits inside the pruned tarball, where
+# have_models is FALSE, so the vignette takes the fast replay path (the
+# captured console streams stored in the bundle) and rebuilds in seconds with
+# identical numbers. Should CRAN's rebuild environment ever become a problem,
+# the fallback plan is the rOpenSci "precompiled vignette" pattern
+# (OpTop.Rmd.orig knitted locally into a fully static OpTop.Rmd).
 #
 # Run from the package root: Rscript data-raw/vignette-data.R
 
