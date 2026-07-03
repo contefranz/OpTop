@@ -81,8 +81,7 @@ seq_run <- capture_cli(
                 selection = "sequential",
                 q = 0.95,
                 alpha = alpha,
-                do_plot = FALSE,
-                verbose = TRUE)
+                do_plot = FALSE)
 )
 min_run <- capture_cli(
   optimal_topic(lda_models = VEM_models,
@@ -90,9 +89,30 @@ min_run <- capture_cli(
                 selection = "min",
                 q = 0.95,
                 alpha = alpha,
-                do_plot = FALSE,
-                verbose = TRUE)
+                do_plot = FALSE)
 )
+
+# calibrated runs: bootstrap (captured for the vignette, seeded so a live
+# vignette build reproduces it exactly) and the closed-form moment matching
+doc_lens <- quanteda::ntoken(mydfm_sub)
+boot_seed <- 20260703
+cal_time <- system.time(
+  cal_run <- capture_cli(
+    optimal_topic(lda_models = VEM_models,
+                  weighted_dfm = weighted_dfm,
+                  q = 0.95,
+                  alpha = alpha,
+                  calibrate = "bootstrap",
+                  n_boot = 200,
+                  doc_lengths = doc_lens,
+                  seed = boot_seed,
+                  do_plot = FALSE)
+  )
+)
+chi_cal_mm <- optimal_topic(VEM_models, weighted_dfm, q = 0.95,
+                            alpha = alpha, calibrate = "moment",
+                            doc_lengths = doc_lens,
+                            do_plot = FALSE, verbose = FALSE)
 
 # the returned table does not depend on the selection rule, so one call per q
 # is enough for the sweep; the picks mirror the documented rules
@@ -201,13 +221,18 @@ bundle <- list(
     true_K = true_K,
     J_sim = J_sim,
     W_sim = W_sim,
-    sim_grid = sim_grid
+    sim_grid = sim_grid,
+    boot_seed = boot_seed,
+    cal_seconds = unname(cal_time[3])
   ),
   inaugural = list(
     chi_by_q = chi_by_q,
     picks = picks,
     console_seq = seq_run$console,
     console_min = min_run$console,
+    chi_cal = cal_run$value,
+    console_cal = cal_run$console,
+    chi_cal_mm = chi_cal_mm,
     index_table = index_tab,
     word_snapshot = word_snapshot
   ),

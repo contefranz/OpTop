@@ -37,6 +37,7 @@ res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
 meta <- res$meta
 idx_tab <- res$inaugural$index_table
 word_r2 <- res$inaugural$word_snapshot
+chi_cal_mm <- res$inaugural$chi_cal_mm
 sim_chi <- res$sim$chi
 sim_picks <- res$sim$picks
 sim_idx_tab <- res$sim$index_table
@@ -63,6 +64,7 @@ if (have_models) {
   chi_seq <- res$inaugural$chi_by_q[["q0.95"]]
   chi_min <- data.table::copy(chi_seq)
   chi_by_q <- res$inaugural$chi_by_q
+  chi_cal <- res$inaugural$chi_cal
 }
 ```
 
@@ -134,8 +136,7 @@ chi_seq <- optimal_topic(lda_models = VEM_models,
                          selection = "sequential",
                          q = 0.95,
                          alpha = 0.01,
-                         do_plot = FALSE,
-                         verbose = TRUE)
+                         do_plot = FALSE)
 ```
 
 ```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
@@ -149,8 +150,7 @@ chi_min <- optimal_topic(lda_models = VEM_models,
                          selection = "min",
                          q = 0.95,
                          alpha = 0.01,
-                         do_plot = FALSE,
-                         verbose = TRUE)
+                         do_plot = FALSE)
 ```
 
 ```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
@@ -247,6 +247,76 @@ ggplot(chi_seq, aes(x = topic, y = OpTop)) +
                           seq_pick, min_pick)) +
   theme_bw()
 ```
+
+## Calibrated p-values
+
+The saturation above has a precise cause (see the *Calibration* section of
+`?optimal_topic`): the chi-square reference is a yardstick, not the exact
+null law of the statistic. `optimal_topic()` can therefore *calibrate* the
+p-values under the **fitted-model null** — "document `j` is
+`Multinomial(N_j, I_j)` with the model's own fitted probabilities" — which is
+simulated exactly and cheaply on the collapsed envelope bins. The only new
+ingredient is the vector of document lengths:
+
+```{r optimal-call-cal, eval = have_models}
+doc_lens <- quanteda::ntoken(mydfm_sub)
+
+chi_cal <- optimal_topic(lda_models = VEM_models,
+                         weighted_dfm = weighted_dfm,
+                         q = 0.95,
+                         alpha = 0.01,
+                         calibrate = "bootstrap",
+                         n_boot = 200,
+                         doc_lengths = doc_lens,
+                         seed = 20260703,
+                         do_plot = FALSE)
+```
+
+```{r optimal-call-cal-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_cal, sep = "\n")
+```
+
+The table now carries two p-value columns: `pval` (calibrated — what the
+selection rules use) and `pval_chisq` (the asymptotic value, kept for
+comparison):
+
+```{r cal-table}
+head(chi_cal)
+```
+
+```{r cal-plot}
+pv <- melt(chi_cal[, .(topic, calibrated = pval, `chi-square` = pval_chisq)],
+           id.vars = "topic", variable.name = "reference",
+           value.name = "pvalue")
+
+ggplot(pv, aes(x = topic, y = pvalue, color = reference)) +
+  geom_line(linewidth = 0.7) +
+  geom_hline(yintercept = alpha, linetype = 3) +
+  labs(x = "Topics", y = "p-value",
+       title = "Calibration replaces a saturated reference with a usable one",
+       subtitle = sprintf("dotted line: alpha = %.2f", alpha)) +
+  theme_bw()
+```
+
+```{r cal-picks}
+c(sequential_chisq = chi_seq[pval > alpha, topic][1],
+  sequential_calibrated = chi_cal[pval > alpha, topic][1])
+```
+
+Where the asymptotic p-values jump between 0 and 1, the calibrated series
+moves through the interior, and `alpha` becomes a real Type-I error rate with
+respect to the fitted-model null (at bootstrap resolution
+`1 / (n_boot + 1)`). Note how much earlier the calibrated scan stops: once
+the reference distribution has the right scale, the residual discrepancy at
+small K is already within what sampling noise produces under the fitted
+model, so the sequential rule reads "adequate" much sooner — while the
+global-minimum rule and the discrepancy indices below remain the tools for
+asking how much *more* fit additional topics buy. Two practical notes:
+`calibrate = "moment"` gives a closed-form approximation of the same null
+(no simulation — on this grid its sequential pick is
+K = `r chi_cal_mm[pval > alpha, topic][1]`, agreeing with the bootstrap),
+and both calibrations hold the estimated `theta` and `phi` fixed, so they do
+not account for estimation noise in the LDA parameters themselves.
 
 ## The role of `q`
 
