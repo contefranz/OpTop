@@ -178,7 +178,7 @@ the elapsed time:
 
 ```{r optimal-call-seq, eval = have_models}
 # Use the sequential approach
-chi_seq <- optimal_topic(lda_models = VEM_models,
+chi_seq <- optimal_topic(topic_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "sequential",
                          q = 0.95,
@@ -192,7 +192,7 @@ cat(res$inaugural$console_seq, sep = "\n")
 
 ```{r optimal-call-min, eval = have_models}
 # Use the global minimum approach
-chi_min <- optimal_topic(lda_models = VEM_models,
+chi_min <- optimal_topic(topic_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "min",
                          q = 0.95,
@@ -333,7 +333,7 @@ vector of document lengths $N_j$:
 ```{r optimal-call-cal, eval = have_models}
 doc_lens <- quanteda::ntoken(mydfm_sub)
 
-chi_cal <- optimal_topic(lda_models = VEM_models,
+chi_cal <- optimal_topic(topic_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          q = 0.95,
                          alpha = 0.01,
@@ -393,7 +393,7 @@ No simulation, no seed — a fast approximation that corrects the location and
 scale of the reference but not its higher moments:
 
 ```{r optimal-call-mm, eval = have_models}
-chi_cal_mm <- optimal_topic(lda_models = VEM_models,
+chi_cal_mm <- optimal_topic(topic_models = VEM_models,
                             weighted_dfm = weighted_dfm,
                             q = 0.95,
                             alpha = 0.01,

@@ -5,8 +5,10 @@
 
 optop_envelope <- function(model, wdfm, q = 0.95) {
   doc_map <- seq_len(quanteda::ndoc(wdfm)) - 1L
-  out <- optimal_topic_core(list(model), wdfm, q, doc_map,
-                            legacy = FALSE, return_envelope = TRUE)
+  tp <- optop_as_theta_phi(model)
+  dfm_t <- Matrix::t(methods::as(wdfm, "dgCMatrix"))
+  out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map,
+                            return_envelope = TRUE)
   list(stat = out$stat,
        probs = .optop_split_envelope(out$bin_probs, out$bin_counts))
 }

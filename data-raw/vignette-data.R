@@ -76,7 +76,7 @@ capture_cli <- function(expr) {
 }
 
 seq_run <- capture_cli(
-  optimal_topic(lda_models = VEM_models,
+  optimal_topic(topic_models = VEM_models,
                 weighted_dfm = weighted_dfm,
                 selection = "sequential",
                 q = 0.95,
@@ -84,7 +84,7 @@ seq_run <- capture_cli(
                 do_plot = FALSE)
 )
 min_run <- capture_cli(
-  optimal_topic(lda_models = VEM_models,
+  optimal_topic(topic_models = VEM_models,
                 weighted_dfm = weighted_dfm,
                 selection = "min",
                 q = 0.95,
@@ -98,7 +98,7 @@ doc_lens <- quanteda::ntoken(mydfm_sub)
 boot_seed <- 20260703
 cal_time <- system.time(
   cal_run <- capture_cli(
-    optimal_topic(lda_models = VEM_models,
+    optimal_topic(topic_models = VEM_models,
                   weighted_dfm = weighted_dfm,
                   q = 0.95,
                   alpha = alpha,
@@ -110,7 +110,7 @@ cal_time <- system.time(
   )
 )
 mm_run <- capture_cli(
-  optimal_topic(lda_models = VEM_models,
+  optimal_topic(topic_models = VEM_models,
                 weighted_dfm = weighted_dfm,
                 q = 0.95,
                 alpha = alpha,

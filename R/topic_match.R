@@ -13,9 +13,12 @@ if ( getRversion() >= "2.15.1" ) {
 #' For above-optimal topics, detect and extract informative and uninformative
 #' components in terms of cosine similarities with the optimal topic model.
 #' 
-#' @inheritParams optimal_topic
+#' @param lda_models A list of `topicmodels::LDA` objects (VEM), ordered by
+#'   increasing number of topics. The grid should span the candidate values
+#'   of \eqn{K}. (This deprecated function predates the engine
+#'   generalization of `optimal_topic()` and keeps its original argument.)
 #' @inheritParams topic_stability
-#' @param var_correction Use the unbiased estimator of the co-variance for 
+#' @param var_correction Use the unbiased estimator of the co-variance for
 #' i.i.d. observations by applying n - 1 in the denominator. Default is \code{TRUE}.
 #' 
 #' @return A named list with the informative and uninformative components given

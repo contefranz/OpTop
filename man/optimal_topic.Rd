@@ -2,10 +2,10 @@
 % Please edit documentation in R/optimal_topic.R
 \name{optimal_topic}
 \alias{optimal_topic}
-\title{Find the optimal number of topics from a pool of LDA models}
+\title{Find the optimal number of topics from a pool of topic models}
 \usage{
 optimal_topic(
-  lda_models,
+  topic_models,
   weighted_dfm,
   q = 0.95,
   alpha = 0.05,
@@ -15,16 +15,24 @@ optimal_topic(
   doc_lengths = NULL,
   seed = NULL,
   do_plot = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  lda_models = lifecycle::deprecated()
 )
 }
 \arguments{
-\item{lda_models}{A list of \code{topicmodels::LDA} objects (VEM), ordered by
-increasing number of topics. The grid should span the candidate values
-of \eqn{K}.}
+\item{topic_models}{A list of fitted topic models spanning the candidate
+values of \eqn{K}, one model per \eqn{K} (an unordered grid is sorted by
+increasing \eqn{K}). Supported classes: \code{topicmodels::LDA()} fits (VEM
+or Gibbs), \code{topicmodels::CTM()} fits, the seededlda models
+(\code{seededlda::textmodel_lda()}, \code{seededlda::textmodel_seededlda()},
+\code{seededlda::textmodel_seqlda()}) and NLPstudio fits (\code{nlp_topic_fit}).
+Classes can be mixed within a grid as long as every model was fitted on
+the same corpus and vocabulary; the test consumes the models only
+through their fitted word probabilities (see Details).}
 
 \item{weighted_dfm}{A weighted \code{quanteda::dfm} containing word proportions
-for each document; it is recommended that document ids are available via
+for each document, built from the same counts dfm the models were
+fitted on; it is recommended that document ids are available via
 \code{quanteda::docid()}.}
 
 \item{q}{Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
@@ -65,8 +73,13 @@ calibration if any (default \code{TRUE}).}
 
 \item{verbose}{Logical; if \code{TRUE} (default), report progress (a \code{cli}
 progress bar across the model grid) and a selection summary. Regardless
-of \code{verbose}, dropping documents that the models never saw and the
-sequential rule's fallback are always signalled.}
+of \code{verbose}, corrective actions (dropping documents the models never
+saw, reordering models or features, the sequential rule's fallback) are
+always signalled.}
+
+\item{lda_models}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to
+\code{topic_models}, which accepts more than \code{topicmodels::LDA()} fits; the
+old name still works but warns, and will be removed before v1.0.0.}
 }
 \value{
 A \code{data.table} with columns:
@@ -104,6 +117,14 @@ degrees of freedom, the version plotted in the paper's Figure 2), while
 raw statistic on its full degrees of freedom by default, or the calibrated
 value when \code{calibrate != "none"}.
 
+The statistic touches each model only through its fitted word
+probabilities \eqn{I_j = \theta_j^\top \Phi}{I_j = theta_j' Phi}, where
+\eqn{\theta_j}{theta_j} is the document's topic distribution and
+\eqn{\Phi}{Phi} the topic-word matrix. Any implementation that provides
+those two (row-stochastic) matrices is therefore admissible, whatever its
+estimation method — which is what the supported classes listed under
+\code{topic_models} have in common.
+
 \strong{Selection rules.}
 \itemize{
 \item \code{"sequential"} (default): scan \eqn{K} upward and select the smallest
@@ -115,7 +136,7 @@ the rule used in the published case study.
 \item \code{"legacy"}: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
 with the crossing word collapsed, \eqn{P_j} scaling, lower-tail p-value
 with 1 degree of freedom, "first \code{pval <= alpha}" rule). Deprecated; it
-will be removed before v1.0.0.
+only accepts \code{LDA_VEM} fits and will be removed before v1.0.0.
 }
 
 \strong{Calibration.}
@@ -125,11 +146,11 @@ for the \emph{count} statistic, whose scale factor is the document length
 \eqn{N_j}; Equation 8 works on proportions scaled by the bin count
 \eqn{P_j + 1} instead, so the statistic's null magnitude is off by roughly
 \eqn{N_j / (P_j + 1)} per document. Second, the expected probabilities are
-estimated (by VEM) from the same data they are tested against. The
-practical consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of
-freedom in the thousands the chi-square quantiles are razor-thin and
-upper-tail p-values saturate at 0 or 1 unless the fit is genuinely
-borderline — \code{alpha} is not a true Type-I error rate.
+estimated from the same data they are tested against. The practical
+consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
+the thousands the chi-square quantiles are razor-thin and upper-tail
+p-values saturate at 0 or 1 unless the fit is genuinely borderline —
+\code{alpha} is not a true Type-I error rate.
 
 Calibration replaces the chi-square reference with the distribution of the
 statistic under the \strong{conditional fitted-model null}: document \eqn{j} is
@@ -173,18 +194,22 @@ the reference but not its higher moments.
 
 One caveat applies to both: the null holds the estimated
 \eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
-of the LDA — the "double bootstrap" would be exact but computationally
+of the model — the "double bootstrap" would be exact but computationally
 prohibitive). Calibrated p-values are therefore conditional on the fitted
 parameters and do not account for estimation noise in \eqn{\theta}{theta}
 and \eqn{\phi}{phi}.
 
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
-proportions (row-wise). Document identifiers are taken from
-\code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
-present in the first model’s \verb{@documents} slot are dropped (with a warning)
-to ensure alignment. The remaining documents are paired with the rows of
-\verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
-follow the order in which the models saw the documents.
+proportions (row-wise), built from the same counts dfm the models were
+fitted on. Its features must match the models' common vocabulary: when
+they are the same set in a different order the columns are reordered
+automatically (signalled), any other mismatch is an error. Document
+identifiers are taken from \code{quanteda::docid(weighted_dfm)} and matched
+against each model's own document identifiers: documents not present in
+\emph{every} model are dropped (with a warning), and each retained dfm row is
+paired with the corresponding row of \eqn{\theta}{theta} \emph{per model}.
+Neither the row order of \code{weighted_dfm} nor the order in which each model
+saw the documents matters — alignment is always by identifier.
 
 \strong{Performance note.} The core computation is delegated to C++ compiled
 code; the bootstrap operates on the collapsed bins through vectorized
@@ -194,14 +219,14 @@ calls (\code{rmultinom}, \code{colSums}), costing about \eqn{B \times
 \examples{
 \dontrun{
 # Asymptotic p-values (Equation 8)
-test1 <- optimal_topic(lda_models = lda_list,
+test1 <- optimal_topic(topic_models = lda_list,
                        weighted_dfm = weighted_dfm,
                        q = 0.95,
                        alpha = 0.05,
                        selection = "sequential")
 
 # Bootstrap-calibrated p-values: document lengths come from the counts dfm
-test1_cal <- optimal_topic(lda_models = lda_list,
+test1_cal <- optimal_topic(topic_models = lda_list,
                            weighted_dfm = weighted_dfm,
                            calibrate = "bootstrap",
                            n_boot = 200,
@@ -225,5 +250,6 @@ Davison, A. C. and Hinkley, D. V. (1997). \emph{Bootstrap Methods and their
 Application}. Cambridge University Press, Cambridge.
 }
 \seealso{
-\code{\link[topicmodels:LDA]{topicmodels::LDA()}}
+\code{\link[topicmodels:LDA]{topicmodels::LDA()}}, \code{\link[topicmodels:CTM]{topicmodels::CTM()}},
+\code{\link[seededlda:textmodel_lda]{seededlda::textmodel_lda()}}
 }

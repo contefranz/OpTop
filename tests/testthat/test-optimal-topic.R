@@ -149,9 +149,9 @@ test_that("optimal_topic() validates its inputs", {
   expect_error(optimal_topic("not a list", wp$wdfm),
                "must be a list")
   expect_error(optimal_topic(fx$models[1L], wp$wdfm),
-               "multiple LDA models")
+               "multiple topic models")
   expect_error(optimal_topic(list(1, 2), wp$wdfm),
-               "LDA_VEM")
+               "unsupported topic model class")
   expect_error(optimal_topic(fx$models, fx$counts),
                "must be a dfm")
   expect_error(optimal_topic(fx$models, wp$wdfm, q = "a"),
