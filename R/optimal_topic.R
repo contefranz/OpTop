@@ -5,15 +5,16 @@ if (getRversion() >= "2.15.1") {
                            ".", "chisquare", "chisquare_mod",
                            "row_cut", "chi_sum", "word_prop_hat",
                            "word_prop_hat_cum", "pval", "docid",
-                           "OpTop", "raw", "df"))
+                           "OpTop", "raw", "df", "pval_chisq"))
 }
 #' Find the optimal number of topics from a pool of LDA models
 #'
 #' Identify the number of topics that best describes the corpus with the
 #' Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
 #' goodness-of-fit test on each document's word distribution. The routine
-#' evaluates each model of the grid and selects the optimal topic count with
-#' one of three rules; see Details.
+#' evaluates each model of the grid, optionally calibrates the p-values under
+#' the fitted-model null, and selects the optimal topic count with one of
+#' three rules; see Details.
 #'
 #' @param lda_models A list of `topicmodels::LDA` objects (VEM), ordered by
 #'   increasing number of topics. The grid should span the candidate values of `K`.
@@ -30,14 +31,28 @@ if (getRversion() >= "2.15.1") {
 #'   by `"min"`.
 #' @param selection Character; how the optimal `K` is chosen (see Details):
 #'   `"sequential"` (default), `"min"`, or `"legacy"` (deprecated).
+#' @param calibrate Character; how the p-values are computed (see the
+#'   Calibration section): `"none"` (default, the asymptotic chi-square of
+#'   Equation 8), `"bootstrap"` (parametric bootstrap under the fitted-model
+#'   null), or `"moment"` (exact multinomial moments matched to a scaled
+#'   chi-square). Not available with `selection = "legacy"`.
+#' @param n_boot Integer; number of bootstrap replicates per model when
+#'   `calibrate = "bootstrap"` (default `200L`, minimum `20`).
+#' @param doc_lengths Numeric vector with the length (total token count) of
+#'   each document; required when `calibrate != "none"`, typically
+#'   `rowSums()` of the counts dfm the models were fitted on. If named, names
+#'   are matched to the document ids of `weighted_dfm`; if unnamed, the
+#'   vector must follow the row order of `weighted_dfm`.
+#' @param seed Optional integer passed to [set.seed()] before the bootstrap,
+#'   for reproducible calibrated p-values (default `NULL`).
 #' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
 #'   topics with vertical and horizontal guides at the selected optimum and a
-#'   subtitle reporting the selection method and the selected `K`
-#'   (default `TRUE`).
-#' @param verbose Logical; if `TRUE`, report progress (a `cli` progress bar
-#'   across the model grid) and a selection summary (default `FALSE`).
-#'   Regardless of `verbose`, dropping documents that the models never saw
-#'   and the sequential rule's fallback are always signalled.
+#'   subtitle reporting the selection method, the selected `K`, and the
+#'   calibration if any (default `TRUE`).
+#' @param verbose Logical; if `TRUE` (default), report progress (a `cli`
+#'   progress bar across the model grid) and a selection summary. Regardless
+#'   of `verbose`, dropping documents that the models never saw and the
+#'   sequential rule's fallback are always signalled.
 #'
 #' @details
 #' For each document, the fitted word probabilities are sorted in decreasing
@@ -48,8 +63,10 @@ if (getRversion() >= "2.15.1") {
 #' (Equation 8 of the paper), asymptotically chi-square with
 #' `df = sum_j P_j` degrees of freedom. The returned `OpTop` column reports
 #' the *standardized* statistic (raw statistic divided by `df`, the version
-#' plotted in the paper's Figure 2), while `pval` is the upper-tail p-value
-#' of the raw statistic on its full degrees of freedom.
+#' plotted in the paper's Figure 2), while `pval` is the p-value the
+#' selection rules consume — the upper tail of the raw statistic on its full
+#' degrees of freedom by default, or the calibrated value when
+#' `calibrate != "none"`.
 #'
 #' **Selection rules.**
 #' - `"sequential"` (default): scan `K` upward and select the smallest `K`
@@ -63,13 +80,56 @@ if (getRversion() >= "2.15.1") {
 #'   1 degree of freedom, "first `pval <= alpha`" rule). Deprecated; it will
 #'   be removed before v1.0.0.
 #'
-#' **A calibration caveat.** With `df = sum_j P_j` in the thousands, the
-#' chi-square reference distribution is extremely concentrated, so upper-tail
-#' p-values tend to saturate at 0 or 1 unless the fit is genuinely borderline.
-#' When the sequential rule degenerates (all 0 or all 1), the shape of the
-#' standardized statistic — and its minimum — carries the information, which
-#' is why the paper's case study uses the `"min"` rule.
+#' @section Calibration:
+#' The chi-square reference of Equation 8 is a yardstick rather than an exact
+#' null law, for two reasons. First, the classical Pearson asymptotics hold
+#' for the *count* statistic, whose scale factor is the document length
+#' `N_j`; Equation 8 works on proportions scaled by the bin count `P_j + 1`
+#' instead, so the statistic's null magnitude is off by roughly
+#' `N_j / (P_j + 1)` per document. Second, the expected probabilities are
+#' estimated (by VEM) from the same data they are tested against. The
+#' practical consequence is that with `df = sum_j P_j` in the thousands the
+#' chi-square quantiles are razor-thin and upper-tail p-values saturate at 0
+#' or 1 unless the fit is genuinely borderline — `alpha` is not a true
+#' Type-I error rate.
 #'
+#' Calibration replaces the chi-square reference with the distribution of the
+#' statistic under the **conditional fitted-model null**: "document `j` is
+#' `Multinomial(N_j, I_j)`", where `I_j` are the `K`-model's fitted word
+#' probabilities and `N_j` the observed document lengths (hence
+#' `doc_lengths`). Two properties make this exact and fast:
+#' - the per-document envelope (sorted fitted probabilities, cutoff at `q`,
+#'   collapsed min bin) depends only on the model, never on the data, and the
+#'   statistic touches the data only through sums over those fixed bins;
+#' - a multinomial collapsed over bins is multinomial on the collapsed
+#'   probabilities, so the null can be simulated *directly on the*
+#'   `P_j + 1` *bins* — exactly equivalent to simulating whole documents over
+#'   the vocabulary, at a tiny fraction of the cost.
+#'
+#' `calibrate = "bootstrap"` draws `n_boot` null replicates of the statistic
+#' this way and reports the empirical upper-tail p-value with the standard
+#' finite-sample correction, `(1 + #\{T* >= T\}) / (n_boot + 1)`. This is the
+#' reference method: `alpha` becomes a genuine Type-I error rate with respect
+#' to the conditional null, at bootstrap resolution `1 / (n_boot + 1)`.
+#'
+#' `calibrate = "moment"` uses the exact multinomial moments of the
+#' per-document Pearson term (Haldane, 1937): over `k` bins with
+#' probabilities `p_b` and length `n`, the count statistic has
+#' `E = k - 1` and `Var = 2(k - 1) + (sum_b 1/p_b - k^2 - 2k + 2) / n`;
+#' scaling by the statistic's `k / n` factor and summing over independent
+#' documents gives the null mean and variance of the corpus statistic, which
+#' are matched to a scaled chi-square `a * chisq(nu)` (Satterthwaite:
+#' `a = sigma^2 / (2 mu)`, `nu = 2 mu^2 / sigma^2`). Closed form, no
+#' simulation — a fast approximation that corrects the location and scale of
+#' the reference but not its higher moments.
+#'
+#' One caveat applies to both: the null holds the estimated `theta` and `phi`
+#' fixed (no per-replicate re-fitting of the LDA — the "double bootstrap"
+#' would be exact but computationally prohibitive). Calibrated p-values are
+#' therefore conditional on the fitted parameters and do not account for
+#' estimation noise in `theta` and `phi`.
+#'
+#' @details
 #' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
 #' proportions (row-wise). Document identifiers are taken from
 #' `quanteda::docid(weighted_dfm)` and matched to the LDA fits; documents not
@@ -78,31 +138,46 @@ if (getRversion() >= "2.15.1") {
 #' `@gamma` by identifier, so the row order of `weighted_dfm` does not need to
 #' follow the order in which the models saw the documents.
 #'
-#' **Performance note.** The core computation is delegated to C++ compiled code
-#' to handle high-dimensional vocabularies efficiently.
+#' **Performance note.** The core computation is delegated to C++ compiled
+#' code; the bootstrap operates on the collapsed bins through vectorized
+#' calls (`rmultinom`, `colSums`), costing about `n_boot * df` floating-point
+#' operations per model.
 #'
 #' @return A `data.table` with columns:
 #' - `topic`: integer number of topics (`K`).
 #' - `OpTop`: standardized Test 1 statistic (raw statistic / `df`).
 #' - `df`: degrees of freedom `sum_j P_j` of the raw statistic.
-#' - `pval`: p-value associated with the raw statistic (upper tail for
-#'   `"sequential"`/`"min"`; the legacy lower-tail value for `"legacy"`).
+#' - `pval`: the p-value the selection rules use — asymptotic upper tail for
+#'   `calibrate = "none"`, calibrated otherwise (legacy: the deprecated
+#'   lower-tail value).
+#' - `pval_chisq`: only when `calibrate != "none"` — the uncalibrated
+#'   asymptotic chi-square p-value, for comparison.
 #'
 #' @examples
 #' \dontrun{
-#' # Compute word proportions from a corpus objects
+#' # Asymptotic p-values (Equation 8)
 #' test1 <- optimal_topic(lda_models = lda_list,
 #'                        weighted_dfm = weighted_dfm,
 #'                        q = 0.95,
 #'                        alpha = 0.05,
-#'                        selection = "sequential",
-#'                        verbose = TRUE)
+#'                        selection = "sequential")
+#'
+#' # Bootstrap-calibrated p-values: document lengths come from the counts dfm
+#' test1_cal <- optimal_topic(lda_models = lda_list,
+#'                            weighted_dfm = weighted_dfm,
+#'                            calibrate = "bootstrap",
+#'                            n_boot = 200,
+#'                            doc_lengths = rowSums(counts_dfm),
+#'                            seed = 42)
 #' }
 #'
 #' @references
 #' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 #' topic model identification. *Journal of Machine Learning Research*,
 #' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
+#'
+#' Haldane, J. B. S. (1937). The exact value of the moments of the
+#' distribution of chi-square. *Biometrika*, 29, 133--143.
 #'
 #' @seealso [topicmodels::LDA()]
 #'
@@ -111,7 +186,9 @@ if (getRversion() >= "2.15.1") {
 
 optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
                           selection = c("sequential", "min", "legacy"),
-                          do_plot = TRUE, verbose = FALSE) {
+                          calibrate = c("none", "bootstrap", "moment"),
+                          n_boot = 200L, doc_lengths = NULL, seed = NULL,
+                          do_plot = TRUE, verbose = TRUE) {
 
   if (!is.list(lda_models)) {
     stop("lda_models must be a list")
@@ -135,11 +212,15 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     stop("alpha must be a numeric")
   }
   selection <- match.arg(selection)
+  calibrate <- match.arg(calibrate)
   if (!is.logical(verbose)) {
     stop("verbose must be either TRUE or FALSE")
   }
 
   if (selection == "legacy") {
+    if (calibrate != "none") {
+      stop('calibration is not available with selection = "legacy"')
+    }
     lifecycle::deprecate_warn(
       when = "0.9.9",
       what = I('optimal_topic(selection = "legacy")'),
@@ -149,11 +230,33 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     )
   }
 
+  calibrating <- calibrate != "none"
+  if (calibrating) {
+    if (is.null(doc_lengths)) {
+      stop(paste("calibrate != \"none\" needs doc_lengths: the total token",
+                 "count of each document, typically rowSums() of the counts",
+                 "dfm the models were fitted on"))
+    }
+    if (!is.numeric(doc_lengths) || any(!is.finite(doc_lengths)) ||
+        any(doc_lengths <= 0)) {
+      stop("doc_lengths must be a numeric vector of positive document lengths")
+    }
+    if (!is.numeric(n_boot) || length(n_boot) != 1L || n_boot < 20) {
+      stop("n_boot must be a single number >= 20")
+    }
+    n_boot <- as.integer(n_boot)
+  }
+
   tic <- proc.time()
   if (verbose) {
     cli::cli_h2("Optimal topic selection")
   }
   docs <- as.character(quanteda::docid(weighted_dfm))
+  if (calibrating && is.null(names(doc_lengths)) &&
+      length(doc_lengths) != length(docs)) {
+    stop(paste("unnamed doc_lengths must have one entry per document of",
+               "weighted_dfm, in the same row order"))
+  }
 
   # drop documents the models never saw; all models are assumed to share the
   # document set of the first one (a document the LDA drops is dropped for
@@ -167,8 +270,17 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
       )
       weighted_dfm <- weighted_dfm[-id_toremove, ]
       docs <- docs[-id_toremove]
+      if (calibrating && is.null(names(doc_lengths))) {
+        doc_lengths <- doc_lengths[-id_toremove]
+      }
     } else {
       stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
+    }
+  }
+  if (calibrating && !is.null(names(doc_lengths))) {
+    doc_lengths <- doc_lengths[docs]
+    if (anyNA(doc_lengths)) {
+      stop("doc_lengths is missing entries for some documents of weighted_dfm")
     }
   }
 
@@ -183,15 +295,43 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
       "{quanteda::nfeat(weighted_dfm)} features (q = {q}, alpha = {alpha},",
       "selection = {selection})"
     ))
+    if (calibrate == "bootstrap") {
+      seed_note <- if (is.null(seed)) "" else paste0(", seed = ", seed)
+      cli::cli_alert_info(paste0(
+        "Calibrating p-values by parametric bootstrap (B = {n_boot}",
+        seed_note, ") under the fitted-model null"
+      ))
+    } else if (calibrate == "moment") {
+      cli::cli_alert_info(paste(
+        "Calibrating p-values by moment matching (Satterthwaite scaled",
+        "chi-square) under the fitted-model null"
+      ))
+    }
     cli::cli_progress_bar("Processing LDA grid", total = n_models)
+  }
+  if (calibrating && !is.null(seed)) {
+    set.seed(seed)
   }
 
   legacy <- selection == "legacy"
   Chi_K_rows <- vector("list", n_models)
+  pval_cal <- rep(NA_real_, n_models)
   for (i_mod in seq_len(n_models)) {
-    Chi_K_rows[[i_mod]] <- optimal_topic_core(lda_models[i_mod],
-                                              weighted_dfm, q, doc_map,
-                                              legacy)
+    core_out <- optimal_topic_core(lda_models[i_mod], weighted_dfm, q,
+                                   doc_map, legacy, calibrating)
+    Chi_K_rows[[i_mod]] <- core_out$stat
+    if (calibrating) {
+      probs <- .optop_split_envelope(core_out$bin_probs, core_out$bin_counts)
+      T_obs <- core_out$stat[1L, 2L]
+      if (calibrate == "bootstrap") {
+        T_null <- .optop_boot_null(probs, doc_lengths, n_boot)
+        pval_cal[i_mod] <- (1 + sum(T_null >= T_obs)) / (n_boot + 1)
+      } else {
+        mm <- .optop_moment_null(probs, doc_lengths)
+        pval_cal[i_mod] <- stats::pchisq(T_obs / mm$a, df = mm$nu,
+                                         lower.tail = FALSE)
+      }
+    }
     if (verbose) {
       cli::cli_progress_update(
         status = paste0("k = ", lda_models[[i_mod]]@k)
@@ -215,7 +355,21 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     Chi_K[, pval := stats::pchisq(raw, df = df, lower.tail = FALSE)]
   }
   Chi_K[, raw := NULL]
-  data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval"))
+  if (calibrating) {
+    # the selection rules read pval: the calibrated value takes its place and
+    # the asymptotic one stays alongside for comparison
+    Chi_K[, pval_chisq := pval]
+    Chi_K[, pval := pval_cal]
+    data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval",
+                                     "pval_chisq"))
+  } else {
+    data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval"))
+  }
+
+  cal_suffix <- switch(calibrate,
+                       none = "",
+                       bootstrap = ", bootstrap-calibrated",
+                       moment = ", moment-calibrated")
 
   global_min <- Chi_K[, .SD[which.min(OpTop)]]
   method_label <- selection
@@ -251,13 +405,24 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
   }
   if (verbose) {
     cli::cli_alert_success(
-      "Optimal model has {best_topic$topic} topics (selected by {rule})"
+      "Optimal model has {best_topic$topic} topics (selected by {rule}{cal_suffix})"
     )
   }
 
   if (do_plot) {
     x_min <- best_topic$topic
     y_min <- best_topic$OpTop
+    subtitle_expr <- if (calibrating) {
+      cal_label <- if (calibrate == "bootstrap") {
+        paste0("bootstrap (B = ", n_boot, ")")
+      } else {
+        "moment"
+      }
+      bquote("Method:" ~ .(method_label) ~ "|" ~ K[opt] == .(x_min) ~ "|" ~
+               "calibrated:" ~ .(cal_label))
+    } else {
+      bquote("Method:" ~ .(method_label) ~ "|" ~ K[opt] == .(x_min))
+    }
     p1 <- ggplot2::ggplot(Chi_K) +
       ggplot2::geom_line(ggplot2::aes(x = topic, y = OpTop),
                          linewidth = 0.8, color = "royalblue") +
@@ -267,9 +432,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
                         color = "red", shape = 4L, size = 4L) +
       ggplot2::xlab("Topics") + ggplot2::ylab(expression(OpTop[J]^{"K"})) +
       ggplot2::ggtitle("Optimal Topic Plot") +
-      ggplot2::labs(subtitle = bquote(
-        "Method:" ~ .(method_label) ~ "|" ~ K[opt] == .(x_min)
-      )) +
+      ggplot2::labs(subtitle = subtitle_expr) +
       ggplot2::theme_bw()
     print(p1)
   }

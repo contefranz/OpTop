@@ -12,8 +12,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // optimal_topic_core
-arma::mat optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const arma::uvec& doc_map, bool legacy);
-RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP legacySEXP) {
+Rcpp::List optimal_topic_core(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const arma::uvec& doc_map, bool legacy, bool return_envelope);
+RcppExport SEXP _OpTop_optimal_topic_core(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP legacySEXP, SEXP return_envelopeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -22,7 +22,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
     Rcpp::traits::input_parameter< bool >::type legacy(legacySEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(lda_models, weighted_dfm, q, doc_map, legacy));
+    Rcpp::traits::input_parameter< bool >::type return_envelope(return_envelopeSEXP);
+    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(lda_models, weighted_dfm, q, doc_map, legacy, return_envelope));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -53,7 +54,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 5},
+    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 6},
     {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
     {NULL, NULL, 0}

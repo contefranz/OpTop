@@ -10,8 +10,12 @@ optimal_topic(
   q = 0.95,
   alpha = 0.05,
   selection = c("sequential", "min", "legacy"),
+  calibrate = c("none", "bootstrap", "moment"),
+  n_boot = 200L,
+  doc_lengths = NULL,
+  seed = NULL,
   do_plot = TRUE,
-  verbose = FALSE
+  verbose = TRUE
 )
 }
 \arguments{
@@ -35,15 +39,33 @@ by \code{"min"}.}
 \item{selection}{Character; how the optimal \code{K} is chosen (see Details):
 \code{"sequential"} (default), \code{"min"}, or \code{"legacy"} (deprecated).}
 
+\item{calibrate}{Character; how the p-values are computed (see the
+Calibration section): \code{"none"} (default, the asymptotic chi-square of
+Equation 8), \code{"bootstrap"} (parametric bootstrap under the fitted-model
+null), or \code{"moment"} (exact multinomial moments matched to a scaled
+chi-square). Not available with \code{selection = "legacy"}.}
+
+\item{n_boot}{Integer; number of bootstrap replicates per model when
+\code{calibrate = "bootstrap"} (default \code{200L}, minimum \code{20}).}
+
+\item{doc_lengths}{Numeric vector with the length (total token count) of
+each document; required when \code{calibrate != "none"}, typically
+\code{rowSums()} of the counts dfm the models were fitted on. If named, names
+are matched to the document ids of \code{weighted_dfm}; if unnamed, the
+vector must follow the row order of \code{weighted_dfm}.}
+
+\item{seed}{Optional integer passed to \code{\link[=set.seed]{set.seed()}} before the bootstrap,
+for reproducible calibrated p-values (default \code{NULL}).}
+
 \item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
 topics with vertical and horizontal guides at the selected optimum and a
-subtitle reporting the selection method and the selected \code{K}
-(default \code{TRUE}).}
+subtitle reporting the selection method, the selected \code{K}, and the
+calibration if any (default \code{TRUE}).}
 
-\item{verbose}{Logical; if \code{TRUE}, report progress (a \code{cli} progress bar
-across the model grid) and a selection summary (default \code{FALSE}).
-Regardless of \code{verbose}, dropping documents that the models never saw
-and the sequential rule's fallback are always signalled.}
+\item{verbose}{Logical; if \code{TRUE} (default), report progress (a \code{cli}
+progress bar across the model grid) and a selection summary. Regardless
+of \code{verbose}, dropping documents that the models never saw and the
+sequential rule's fallback are always signalled.}
 }
 \value{
 A \code{data.table} with columns:
@@ -51,16 +73,20 @@ A \code{data.table} with columns:
 \item \code{topic}: integer number of topics (\code{K}).
 \item \code{OpTop}: standardized Test 1 statistic (raw statistic / \code{df}).
 \item \code{df}: degrees of freedom \verb{sum_j P_j} of the raw statistic.
-\item \code{pval}: p-value associated with the raw statistic (upper tail for
-\code{"sequential"}/\code{"min"}; the legacy lower-tail value for \code{"legacy"}).
+\item \code{pval}: the p-value the selection rules use — asymptotic upper tail for
+\code{calibrate = "none"}, calibrated otherwise (legacy: the deprecated
+lower-tail value).
+\item \code{pval_chisq}: only when \code{calibrate != "none"} — the uncalibrated
+asymptotic chi-square p-value, for comparison.
 }
 }
 \description{
 Identify the number of topics that best describes the corpus with the
 Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
 goodness-of-fit test on each document's word distribution. The routine
-evaluates each model of the grid and selects the optimal topic count with
-one of three rules; see Details.
+evaluates each model of the grid, optionally calibrates the p-values under
+the fitted-model null, and selects the optimal topic count with one of
+three rules; see Details.
 }
 \details{
 For each document, the fitted word probabilities are sorted in decreasing
@@ -71,8 +97,10 @@ The document contributes \code{(P_j + 1)} times its Pearson term over the
 (Equation 8 of the paper), asymptotically chi-square with
 \verb{df = sum_j P_j} degrees of freedom. The returned \code{OpTop} column reports
 the \emph{standardized} statistic (raw statistic divided by \code{df}, the version
-plotted in the paper's Figure 2), while \code{pval} is the upper-tail p-value
-of the raw statistic on its full degrees of freedom.
+plotted in the paper's Figure 2), while \code{pval} is the p-value the
+selection rules consume — the upper tail of the raw statistic on its full
+degrees of freedom by default, or the calibrated value when
+\code{calibrate != "none"}.
 
 \strong{Selection rules.}
 \itemize{
@@ -88,13 +116,6 @@ with the crossing word collapsed, \code{P_j} scaling, lower-tail p-value with
 be removed before v1.0.0.
 }
 
-\strong{A calibration caveat.} With \verb{df = sum_j P_j} in the thousands, the
-chi-square reference distribution is extremely concentrated, so upper-tail
-p-values tend to saturate at 0 or 1 unless the fit is genuinely borderline.
-When the sequential rule degenerates (all 0 or all 1), the shape of the
-standardized statistic — and its minimum — carries the information, which
-is why the paper's case study uses the \code{"min"} rule.
-
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
 proportions (row-wise). Document identifiers are taken from
 \code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
@@ -103,18 +124,80 @@ to ensure alignment. The remaining documents are paired with the rows of
 \verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
 follow the order in which the models saw the documents.
 
-\strong{Performance note.} The core computation is delegated to C++ compiled code
-to handle high-dimensional vocabularies efficiently.
+\strong{Performance note.} The core computation is delegated to C++ compiled
+code; the bootstrap operates on the collapsed bins through vectorized
+calls (\code{rmultinom}, \code{colSums}), costing about \code{n_boot * df} floating-point
+operations per model.
 }
+\section{Calibration}{
+
+The chi-square reference of Equation 8 is a yardstick rather than an exact
+null law, for two reasons. First, the classical Pearson asymptotics hold
+for the \emph{count} statistic, whose scale factor is the document length
+\code{N_j}; Equation 8 works on proportions scaled by the bin count \code{P_j + 1}
+instead, so the statistic's null magnitude is off by roughly
+\code{N_j / (P_j + 1)} per document. Second, the expected probabilities are
+estimated (by VEM) from the same data they are tested against. The
+practical consequence is that with \verb{df = sum_j P_j} in the thousands the
+chi-square quantiles are razor-thin and upper-tail p-values saturate at 0
+or 1 unless the fit is genuinely borderline — \code{alpha} is not a true
+Type-I error rate.
+
+Calibration replaces the chi-square reference with the distribution of the
+statistic under the \strong{conditional fitted-model null}: "document \code{j} is
+\code{Multinomial(N_j, I_j)}", where \code{I_j} are the \code{K}-model's fitted word
+probabilities and \code{N_j} the observed document lengths (hence
+\code{doc_lengths}). Two properties make this exact and fast:
+\itemize{
+\item the per-document envelope (sorted fitted probabilities, cutoff at \code{q},
+collapsed min bin) depends only on the model, never on the data, and the
+statistic touches the data only through sums over those fixed bins;
+\item a multinomial collapsed over bins is multinomial on the collapsed
+probabilities, so the null can be simulated \emph{directly on the}
+\code{P_j + 1} \emph{bins} — exactly equivalent to simulating whole documents over
+the vocabulary, at a tiny fraction of the cost.
+}
+
+\code{calibrate = "bootstrap"} draws \code{n_boot} null replicates of the statistic
+this way and reports the empirical upper-tail p-value with the standard
+finite-sample correction, \verb{(1 + #\\\{T* >= T\\\}) / (n_boot + 1)}. This is the
+reference method: \code{alpha} becomes a genuine Type-I error rate with respect
+to the conditional null, at bootstrap resolution \code{1 / (n_boot + 1)}.
+
+\code{calibrate = "moment"} uses the exact multinomial moments of the
+per-document Pearson term (Haldane, 1937): over \code{k} bins with
+probabilities \code{p_b} and length \code{n}, the count statistic has
+\code{E = k - 1} and \verb{Var = 2(k - 1) + (sum_b 1/p_b - k^2 - 2k + 2) / n};
+scaling by the statistic's \code{k / n} factor and summing over independent
+documents gives the null mean and variance of the corpus statistic, which
+are matched to a scaled chi-square \code{a * chisq(nu)} (Satterthwaite:
+\verb{a = sigma^2 / (2 mu)}, \verb{nu = 2 mu^2 / sigma^2}). Closed form, no
+simulation — a fast approximation that corrects the location and scale of
+the reference but not its higher moments.
+
+One caveat applies to both: the null holds the estimated \code{theta} and \code{phi}
+fixed (no per-replicate re-fitting of the LDA — the "double bootstrap"
+would be exact but computationally prohibitive). Calibrated p-values are
+therefore conditional on the fitted parameters and do not account for
+estimation noise in \code{theta} and \code{phi}.
+}
+
 \examples{
 \dontrun{
-# Compute word proportions from a corpus objects
+# Asymptotic p-values (Equation 8)
 test1 <- optimal_topic(lda_models = lda_list,
                        weighted_dfm = weighted_dfm,
                        q = 0.95,
                        alpha = 0.05,
-                       selection = "sequential",
-                       verbose = TRUE)
+                       selection = "sequential")
+
+# Bootstrap-calibrated p-values: document lengths come from the counts dfm
+test1_cal <- optimal_topic(lda_models = lda_list,
+                           weighted_dfm = weighted_dfm,
+                           calibrate = "bootstrap",
+                           n_boot = 200,
+                           doc_lengths = rowSums(counts_dfm),
+                           seed = 42)
 }
 
 }
@@ -122,6 +205,9 @@ test1 <- optimal_topic(lda_models = lda_list,
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
+
+Haldane, J. B. S. (1937). The exact value of the moments of the
+distribution of chi-square. \emph{Biometrika}, 29, 133--143.
 }
 \seealso{
 \code{\link[topicmodels:LDA]{topicmodels::LDA()}}

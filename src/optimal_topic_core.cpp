@@ -3,14 +3,22 @@
 
 //' @keywords internal
 // [[Rcpp::export]]
-arma::mat optimal_topic_core(const Rcpp::List& lda_models,
-                             const arma::sp_mat& weighted_dfm,
-                             double q,
-                             const arma::uvec& doc_map,
-                             bool legacy)
+Rcpp::List optimal_topic_core(const Rcpp::List& lda_models,
+                              const arma::sp_mat& weighted_dfm,
+                              double q,
+                              const arma::uvec& doc_map,
+                              bool legacy,
+                              bool return_envelope)
 {
     const arma::uword n_models = lda_models.size();
     const arma::uword n_docs = weighted_dfm.n_rows;
+
+    if (return_envelope && legacy) {
+        Rcpp::stop("the envelope export is not available for the legacy pipeline");
+    }
+    if (return_envelope && n_models != 1) {
+        Rcpp::stop("the envelope export works on a single model at a time");
+    }
 
     // documents are processed in fixed-size blocks: one BLAS product per
     // (model, block) replaces the former dense W x K temporary per document,
@@ -28,6 +36,17 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
     // and p-values are computed by the R caller, where the tail convention is
     // visible and testable
     arma::mat Chi_K(n_models, 3);
+
+    // per-document envelope, exported for the calibration layer: the bin
+    // structure (kept-word probabilities plus the collapsed min-bin mass)
+    // depends only on the model, so the null distribution of the statistic
+    // can be simulated or moment-matched from these bins alone
+    std::vector<double> bin_probs;
+    std::vector<int> bin_counts;
+    if (return_envelope) {
+        bin_probs.reserve(n_docs * 128);
+        bin_counts.reserve(n_docs);
+    }
 
     const arma::uword max_gamma_row = doc_map.max();
 
@@ -110,8 +129,9 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
                     double pearson = arma::sum(head_diff % head_diff / X.head(p_j));
 
                     std::size_t n_bins = p_j;
+                    double tail_X = 0.0;
                     if (n_tail > 0) {
-                        const double tail_X = arma::sum(X.tail(n_tail));
+                        tail_X = arma::sum(X.tail(n_tail));
                         const double tail_diff = arma::sum(weighted_dfm_j_doc.tail(n_tail)) - tail_X;
                         pearson += tail_diff * tail_diff / tail_X;
                         n_bins += 1;
@@ -119,6 +139,16 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
 
                     sum_chi += double(n_bins) * pearson;
                     sum_df += double(n_bins - 1);
+
+                    if (return_envelope) {
+                        for (std::size_t p = 0; p < p_j; ++p) {
+                            bin_probs.push_back(X(p));
+                        }
+                        if (n_tail > 0) {
+                            bin_probs.push_back(tail_X);
+                        }
+                        bin_counts.push_back(int(n_bins));
+                    }
                 }
             }
         }
@@ -130,5 +160,12 @@ arma::mat optimal_topic_core(const Rcpp::List& lda_models,
         });
     }
 
-    return Chi_K;
+    if (return_envelope) {
+        return Rcpp::List::create(
+            Rcpp::Named("stat") = Chi_K,
+            Rcpp::Named("bin_probs") = Rcpp::NumericVector(bin_probs.begin(), bin_probs.end()),
+            Rcpp::Named("bin_counts") = Rcpp::IntegerVector(bin_counts.begin(), bin_counts.end())
+        );
+    }
+    return Rcpp::List::create(Rcpp::Named("stat") = Chi_K);
 }
