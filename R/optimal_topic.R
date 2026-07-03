@@ -32,10 +32,10 @@ if (getRversion() >= "2.15.1") {
 #' @param selection Character; how the optimal `K` is chosen (see Details):
 #'   `"sequential"` (default), `"min"`, or `"legacy"` (deprecated).
 #' @param calibrate Character; how the p-values are computed (see the
-#'   Calibration section): `"none"` (default, the asymptotic chi-square of
-#'   Equation 8), `"bootstrap"` (parametric bootstrap under the fitted-model
-#'   null), or `"moment"` (exact multinomial moments matched to a scaled
-#'   chi-square). Not available with `selection = "legacy"`.
+#'   Calibration part of Details): `"none"` (default, the asymptotic
+#'   chi-square of Equation 8), `"bootstrap"` (parametric bootstrap under the
+#'   fitted-model null), or `"moment"` (exact multinomial moments matched to
+#'   a scaled chi-square). Not available with `selection = "legacy"`.
 #' @param n_boot Integer; number of bootstrap replicates per model when
 #'   `calibrate = "bootstrap"` (default `200L`, minimum `20`).
 #' @param doc_lengths Numeric vector with the length (total token count) of
@@ -80,7 +80,7 @@ if (getRversion() >= "2.15.1") {
 #'   1 degree of freedom, "first `pval <= alpha`" rule). Deprecated; it will
 #'   be removed before v1.0.0.
 #'
-#' @section Calibration:
+#' **Calibration.**
 #' The chi-square reference of Equation 8 is a yardstick rather than an exact
 #' null law, for two reasons. First, the classical Pearson asymptotics hold
 #' for the *count* statistic, whose scale factor is the document length
@@ -129,7 +129,6 @@ if (getRversion() >= "2.15.1") {
 #' therefore conditional on the fitted parameters and do not account for
 #' estimation noise in `theta` and `phi`.
 #'
-#' @details
 #' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
 #' proportions (row-wise). Document identifiers are taken from
 #' `quanteda::docid(weighted_dfm)` and matched to the LDA fits; documents not

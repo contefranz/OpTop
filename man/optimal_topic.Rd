@@ -40,10 +40,10 @@ by \code{"min"}.}
 \code{"sequential"} (default), \code{"min"}, or \code{"legacy"} (deprecated).}
 
 \item{calibrate}{Character; how the p-values are computed (see the
-Calibration section): \code{"none"} (default, the asymptotic chi-square of
-Equation 8), \code{"bootstrap"} (parametric bootstrap under the fitted-model
-null), or \code{"moment"} (exact multinomial moments matched to a scaled
-chi-square). Not available with \code{selection = "legacy"}.}
+Calibration part of Details): \code{"none"} (default, the asymptotic
+chi-square of Equation 8), \code{"bootstrap"} (parametric bootstrap under the
+fitted-model null), or \code{"moment"} (exact multinomial moments matched to
+a scaled chi-square). Not available with \code{selection = "legacy"}.}
 
 \item{n_boot}{Integer; number of bootstrap replicates per model when
 \code{calibrate = "bootstrap"} (default \code{200L}, minimum \code{20}).}
@@ -116,21 +116,7 @@ with the crossing word collapsed, \code{P_j} scaling, lower-tail p-value with
 be removed before v1.0.0.
 }
 
-\strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
-proportions (row-wise). Document identifiers are taken from
-\code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
-present in the first model’s \verb{@documents} slot are dropped (with a warning)
-to ensure alignment. The remaining documents are paired with the rows of
-\verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
-follow the order in which the models saw the documents.
-
-\strong{Performance note.} The core computation is delegated to C++ compiled
-code; the bootstrap operates on the collapsed bins through vectorized
-calls (\code{rmultinom}, \code{colSums}), costing about \code{n_boot * df} floating-point
-operations per model.
-}
-\section{Calibration}{
-
+\strong{Calibration.}
 The chi-square reference of Equation 8 is a yardstick rather than an exact
 null law, for two reasons. First, the classical Pearson asymptotics hold
 for the \emph{count} statistic, whose scale factor is the document length
@@ -180,8 +166,20 @@ fixed (no per-replicate re-fitting of the LDA — the "double bootstrap"
 would be exact but computationally prohibitive). Calibrated p-values are
 therefore conditional on the fitted parameters and do not account for
 estimation noise in \code{theta} and \code{phi}.
-}
 
+\strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
+proportions (row-wise). Document identifiers are taken from
+\code{quanteda::docid(weighted_dfm)} and matched to the LDA fits; documents not
+present in the first model’s \verb{@documents} slot are dropped (with a warning)
+to ensure alignment. The remaining documents are paired with the rows of
+\verb{@gamma} by identifier, so the row order of \code{weighted_dfm} does not need to
+follow the order in which the models saw the documents.
+
+\strong{Performance note.} The core computation is delegated to C++ compiled
+code; the bootstrap operates on the collapsed bins through vectorized
+calls (\code{rmultinom}, \code{colSums}), costing about \code{n_boot * df} floating-point
+operations per model.
+}
 \examples{
 \dontrun{
 # Asymptotic p-values (Equation 8)
