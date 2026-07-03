@@ -29,6 +29,23 @@ inaug <- res$inaugural
 sim <- res$sim
 picks <- inaug$picks
 tab95 <- inaug$chi_by_q[["q0.95"]]
+
+# The fitted grid (~170 MB) lives outside the shipped package in data-raw/.
+# When it is available (the maintainer's machine), the optimal_topic() calls
+# below run live; otherwise their captured console output is replayed.
+models_path <- file.path("..", "data-raw", "VEM_models_inaugural.rds")
+have_models <- file.exists(models_path)
+if (have_models) {
+  VEM_models <- readRDS(models_path)
+  toks <- quanteda::data_corpus_inaugural |>
+    quanteda::tokens(remove_punct = TRUE,
+                     remove_symbols = TRUE,
+                     remove_numbers = TRUE) |>
+    quanteda::tokens_tolower() |>
+    quanteda::tokens_remove(quanteda::stopwords())
+  mydfm_sub <- quanteda::dfm_trim(quanteda::dfm(toks), min_termfreq = 5)
+  weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
+}
 ```
 
 OpTop implements the parametric tests of Lewis and Grossetti (2022, JMLR
@@ -52,59 +69,73 @@ K = `r min(meta$K_grid)` to `r max(meta$K_grid)` in steps of 2.
 
 ```{r fitting, eval = FALSE}
 library(OpTop)
-library(quanteda)
-library(topicmodels)
 
 ncores <- 6
 
 # Tokenize
-toks <- data_corpus_inaugural |>
-  tokens(remove_punct = TRUE,
-         remove_symbols = TRUE,
-         remove_numbers = TRUE) |>
-  tokens_tolower() |>
-  tokens_remove(stopwords())
+toks <- quanteda::data_corpus_inaugural |>
+  quanteda::tokens(remove_punct = TRUE,
+                   remove_symbols = TRUE,
+                   remove_numbers = TRUE) |>
+  quanteda::tokens_tolower() |>
+  quanteda::tokens_remove(quanteda::stopwords())
 
-# Create the DFM of raw counts and trim rare terms
-mydfm <- dfm(toks)
-mydfm_sub <- dfm_trim(mydfm, min_termfreq = 5)
+# Create DFM (raw counts - DO NOT weight, OpTop expects counts not proportions)
+mydfm        <- quanteda::dfm(toks)
+mydfm_sub    <- quanteda::dfm_trim(mydfm, min_termfreq = 5)
+weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
 
-K_grid <- seq(2, 100, by = 2)
+K_grid <- seq(2, 200, by = 2)
 
-# Estimate the VEM models in parallel (seeded for reproducibility)
+# Estimate VEM models
 VEM_models <- parallel::mclapply(
   K_grid,
   function(k) {
     message("Estimating LDA with K = ", k)
-    topicmodels::LDA(x = mydfm_sub, k = k, control = list(seed = 1000 + k))
+    topicmodels::LDA(x = mydfm_sub, k = k)
   },
   mc.cores = ncores
 )
 ```
 
 After trimming, the corpus has `r meta$ndoc` documents and
-`r meta$nfeat_trimmed` features (down from `r meta$nfeat_full`).
+`r meta$nfeat_trimmed` features (down from `r meta$nfeat_full`). The VEM fits
+above are unseeded, so re-running the pipeline can shift individual
+statistics slightly; the numbers quoted in this vignette come from one such
+run.
 
-`optimal_topic()` consumes **word proportions**, so the counts are weighted
-before the call. The discrepancy indices of the second part consume the raw
-**counts** instead — keep both objects around.
+`optimal_topic()` consumes **word proportions** (`weighted_dfm` above), while
+the discrepancy indices of the second part consume the raw **counts** — keep
+both objects around. With `verbose = TRUE` the function reports its setup,
+progress across the grid, the selected model with the rule that chose it, and
+the elapsed time:
 
-```{r optimal-call, eval = FALSE}
-weighted_dfm <- dfm_weight(mydfm_sub, scheme = "prop")
-
+```{r optimal-call-seq, eval = have_models}
 chi_seq <- optimal_topic(lda_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "sequential",
                          q = 0.95,
-                         alpha = 0.05,
+                         alpha = 0.01,
+                         do_plot = FALSE,
                          verbose = TRUE)
+```
 
+```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
+cat(inaug$console_seq, sep = "\n")
+```
+
+```{r optimal-call-min, eval = have_models}
 chi_min <- optimal_topic(lda_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "min",
                          q = 0.95,
-                         alpha = 0.05,
+                         alpha = 0.01,
+                         do_plot = FALSE,
                          verbose = TRUE)
+```
+
+```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
+cat(inaug$console_min, sep = "\n")
 ```
 
 ## Reading the result
@@ -156,13 +187,14 @@ cannot distinguish from adequate. On this corpus the sequential rule selects
 **K = `r seq_pick`**.
 
 **`selection = "min"`** reproduces the published case study: take the K with
-the minimum standardized statistic. Here that is **K = `r min_pick`** — the
-edge of our grid. That is informative in itself: the standardized curve keeps
-creeping down as topics are added, so the minimum rule needs a grid that
-extends past the flattening to settle (the paper's case study ran K up to 200
-on the untrimmed vocabulary and located the minimum at 92). The sequential
-rule, by construction, stops at the first adequate K and is insensitive to
-how far the grid extends.
+the minimum standardized statistic. Here that is **K = `r min_pick`** —
+remarkably close to the 92 the paper reports on the untrimmed vocabulary of
+the same corpus, and (as the q-sweep below shows) insensitive to the choice
+of `q`. One practical remark: the minimum rule needs a grid that extends past
+the flattening of the curve to settle — on a grid truncated at K = 100 the
+minimum sits at the boundary, and only the full K ≤ 200 scan lets it come to
+rest. The sequential rule, by construction, stops at the first adequate K and
+does not care how far the grid extends.
 
 A look at the p-value column explains when and why the two rules diverge:
 
