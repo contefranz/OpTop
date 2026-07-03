@@ -217,6 +217,12 @@ topic model identification. \emph{Journal of Machine Learning Research},
 
 Haldane, J. B. S. (1937). The exact value of the moments of the
 distribution of chi-square. \emph{Biometrika}, 29, 133--143.
+
+Satterthwaite, F. E. (1946). An approximate distribution of estimates of
+variance components. \emph{Biometrics Bulletin}, 2(6), 110--114.
+
+Davison, A. C. and Hinkley, D. V. (1997). \emph{Bootstrap Methods and their
+Application}. Cambridge University Press, Cambridge.
 }
 \seealso{
 \code{\link[topicmodels:LDA]{topicmodels::LDA()}}

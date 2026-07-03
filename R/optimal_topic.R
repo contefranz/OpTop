@@ -1,11 +1,9 @@
 if (getRversion() >= "2.15.1") {
-  utils::globalVariables(c("id_word", "id_doc", "weighted_dfm",
-                           "word_prop", "document",
-                           "word_sum", "check", "topics",
-                           ".", "chisquare", "chisquare_mod",
-                           "row_cut", "chi_sum", "word_prop_hat",
-                           "word_prop_hat_cum", "pval", "docid",
-                           "OpTop", "raw", "df", "pval_chisq"))
+  # docid stays declared: agg_document_stability() (deprecated, untouched)
+  # calls it unqualified without importing it from quanteda
+  utils::globalVariables(c("id_doc", "document", "check", "topics", ".",
+                           "pval", "OpTop", "raw", "df", "pval_chisq",
+                           "docid"))
 }
 #' Find the optimal number of topics from a pool of LDA models
 #'
@@ -188,6 +186,12 @@ if (getRversion() >= "2.15.1") {
 #'
 #' Haldane, J. B. S. (1937). The exact value of the moments of the
 #' distribution of chi-square. *Biometrika*, 29, 133--143.
+#'
+#' Satterthwaite, F. E. (1946). An approximate distribution of estimates of
+#' variance components. *Biometrics Bulletin*, 2(6), 110--114.
+#'
+#' Davison, A. C. and Hinkley, D. V. (1997). *Bootstrap Methods and their
+#' Application*. Cambridge University Press, Cambridge.
 #'
 #' @seealso [topicmodels::LDA()]
 #'

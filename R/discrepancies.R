@@ -123,6 +123,14 @@
 #' [`optop_make_partition()`], [`optop_make_baseline()`], [`optop_index_table()`];
 #' internal helper: `optop_align_dtm_to_models()`.
 #'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+#' topic model identification. *Journal of Machine Learning Research*,
+#' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
+#'
+#' Agresti, A. (1996). *An Introduction to Categorical Data Analysis*.
+#' Wiley, New York.
+#'
 #' @name optop_index
 #' @aliases optop_index_se optop_index_chisq optop_index_deviance
 NULL
@@ -145,12 +153,23 @@ optop_index_se <- function(model, dtm, partition, baseline,
                        add_baseline_topic, level, block_size, ztest)
 }
 
-# Worker for optop_index_se(). `null_disc` optionally carries the
-# model-independent baseline discrepancy (per-document D_null when
-# level = "document", per-word SST when level = "word"), as computed by
-# .optop_index_null(), so that grid evaluations across K reuse it instead of
-# recomputing it for every model. It is ignored when reopt != "none" because
-# the SE re-optimization needs the full baseline counts per document.
+#' Worker behind optop_index_se()
+#'
+#' Carries the actual squared-error computation; the exported wrapper only
+#' validates and forwards. Shares the signature of [optop_index_se()] plus
+#' `null_disc`.
+#'
+#' @param null_disc Optional model-independent baseline discrepancy
+#'   (per-document \eqn{D_{null}}{D_null} when `level = "document"`, per-word
+#'   SST when `level = "word"`), as computed by `.optop_index_null()`, so
+#'   that grid evaluations across \eqn{K} reuse it instead of recomputing it
+#'   for every model. Ignored when `reopt != "none"` because the SE
+#'   re-optimization needs the full baseline counts per document.
+#' @inheritParams optop_index_se
+#'
+#' @return The same list the exported wrapper documents.
+#'
+#' @keywords internal
 .optop_index_se_impl <- function(model, dtm, partition, baseline, macro, reopt,
                                  add_baseline_topic, level, block_size, ztest,
                                  null_disc = NULL) {
@@ -357,8 +376,16 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                           add_baseline_topic, level, block_size, ztest)
 }
 
-# Worker for optop_index_chisq(). See .optop_index_se_impl() for the meaning
-# of `null_disc`.
+#' Worker behind optop_index_chisq()
+#'
+#' See `.optop_index_se_impl()` for the role of these workers and the
+#' meaning of `null_disc`.
+#'
+#' @inheritParams .optop_index_se_impl
+#'
+#' @return The same list the exported wrapper documents.
+#'
+#' @keywords internal
 .optop_index_chisq_impl <- function(model, dtm, partition, baseline, macro,
                                     reopt, add_baseline_topic, level,
                                     block_size, ztest, null_disc = NULL) {
@@ -523,8 +550,16 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
                              level, block_size, ztest)
 }
 
-# Worker for optop_index_deviance(). See .optop_index_se_impl() for the
-# meaning of `null_disc`.
+#' Worker behind optop_index_deviance()
+#'
+#' See `.optop_index_se_impl()` for the role of these workers and the
+#' meaning of `null_disc`.
+#'
+#' @inheritParams .optop_index_se_impl
+#'
+#' @return The same list the exported wrapper documents.
+#'
+#' @keywords internal
 .optop_index_deviance_impl <- function(model, dtm, partition, baseline, macro,
                                        reopt, level, block_size, ztest,
                                        null_disc = NULL) {
@@ -798,6 +833,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @seealso
 #' [`optop_index()`], [`optop_make_partition()`], [`optop_make_baseline()`]
 #'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+#' topic model identification. *Journal of Machine Learning Research*,
+#' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
+#'
 #' @export
 optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                               c = 5, macro = FALSE, reopt = "none",
@@ -915,9 +955,22 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 }
 
 
-# Shared alignment validation for the index functions: the dtm, baseline and
-# partition must all match the model vocabulary (same features, same order).
-# Returns the baseline probabilities ordered as `vocab_model`.
+#' Validate the alignment of dtm, partition and baseline with a model
+#'
+#' Shared gate of the index functions: the dtm, the baseline and the
+#' harmonized partition must all match the model vocabulary (same features,
+#' same order); mismatches stop with a pointer to
+#' `optop_align_dtm_to_models()`.
+#'
+#' @param vocab_model Character vector; the model's vocabulary in model
+#'   order.
+#' @param dtm The counts document-term matrix under validation.
+#' @param partition A partition from [optop_make_partition()].
+#' @param baseline A baseline from [optop_make_baseline()].
+#'
+#' @return The baseline probabilities ordered as `vocab_model`.
+#'
+#' @keywords internal
 .optop_validate_alignment <- function(vocab_model, dtm, partition, baseline) {
   if (!identical(colnames(dtm), vocab_model))
     stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
@@ -940,13 +993,28 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   pi_row
 }
 
-# Baseline (no-topics) discrepancy for one metric. This quantity does not
-# depend on the fitted model, only on the observed counts, the harmonized
-# partition and the global baseline, so grid evaluations across K can compute
-# it once and pass it to the index workers via their `null_disc` argument.
-# Returns the per-document D_null vector when level = "document" and the
-# per-word null discrepancy vector when level = "word". Formulas, eps floors
-# and blocking mirror the corresponding index workers exactly.
+#' Baseline (no-topics) discrepancy for one metric
+#'
+#' This quantity does not depend on the fitted model, only on the observed
+#' counts, the harmonized partition and the global baseline, so grid
+#' evaluations across \eqn{K} can compute it once and pass it to the index
+#' workers via their `null_disc` argument. Formulas, eps floors and blocking
+#' mirror the corresponding index workers exactly.
+#'
+#' @param dtm The counts document-term matrix.
+#' @param partition A partition from [optop_make_partition()].
+#' @param pi_row Baseline probabilities aligned to the dtm vocabulary, as
+#'   returned by `.optop_validate_alignment()`.
+#' @param metric The discrepancy metric.
+#' @param level Aggregation level, `"document"` or `"word"`.
+#' @param block_size Number of vocabulary columns per processing block.
+#' @param eps Numerical floor for expected counts.
+#'
+#' @return The per-document \eqn{D_{null}}{D_null} vector when
+#'   `level = "document"` and the per-word null discrepancy vector when
+#'   `level = "word"`.
+#'
+#' @keywords internal
 .optop_index_null <- function(dtm, partition, pi_row,
                               metric = c("se", "chisq", "deviance"),
                               level = c("document", "word"),
@@ -1023,27 +1091,33 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   D_null
 }
 
-#' Z-test for cross-document inference on Macro R² index
+#' Z-test for cross-document inference on the Macro R-squared index
 #'
-#' Tests whether the K-topic model provides statistically significant
+#' Tests whether the \eqn{K}-topic model provides statistically significant
 #' improvement over the no-topics baseline.
 #'
-#' @param r2_doc Numeric vector of document-level R² values (length J).
-#' @param r2_macro Scalar macro index (mean of r2_doc over valid documents).
+#' @param r2_doc Numeric vector of document-level \eqn{R^2}{R^2} values
+#'   (length \eqn{J}).
+#' @param r2_macro Scalar macro index (mean of `r2_doc` over valid
+#'   documents).
 #'
 #' @return A list with:
 #' \itemize{
 #'   \item \code{z}: Z-statistic.
-#'   \item \code{pval}: One-sided p-value for H1: μ_R² > 0.
-#'   \item \code{se}: Standard error σ̂_R.
-#'   \item \code{ci}: 95\% confidence interval for the true mean R².
+#'   \item \code{pval}: One-sided p-value for
+#'     \eqn{H_1: \mu_{R^2} > 0}{H1: mu_R2 > 0}.
+#'   \item \code{se}: Standard error \eqn{\hat\sigma_R}{sigma_R hat}.
+#'   \item \code{ci}: 95\% confidence interval for the true mean
+#'     \eqn{R^2}{R^2}.
 #'   \item \code{J}: Number of valid documents used.
 #' }
 #'
 #' @details
-#' The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
-#' the global distribution on average). Under regularity conditions, the
-#' test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
+#' The null hypothesis is \eqn{H_0: \mu_{R^2} \le 0}{H0: mu_R2 <= 0} (the
+#' topic model is no better than the global distribution on average). Under
+#' regularity conditions, the test statistic
+#' \eqn{Z = \sqrt{J}\,\bar{R}^2_{Macro} / \hat\sigma_R}{Z = sqrt(J) * R2_Macro / sigma_R hat}
+#' is asymptotically \eqn{N(0, 1)}.
 #'
 #' @keywords internal
 .optop_ztest <- function(r2_doc, r2_macro) {

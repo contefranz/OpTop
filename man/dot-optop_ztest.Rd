@@ -2,32 +2,38 @@
 % Please edit documentation in R/discrepancies.R
 \name{.optop_ztest}
 \alias{.optop_ztest}
-\title{Z-test for cross-document inference on Macro R² index}
+\title{Z-test for cross-document inference on the Macro R-squared index}
 \usage{
 .optop_ztest(r2_doc, r2_macro)
 }
 \arguments{
-\item{r2_doc}{Numeric vector of document-level R² values (length J).}
+\item{r2_doc}{Numeric vector of document-level \eqn{R^2}{R^2} values
+(length \eqn{J}).}
 
-\item{r2_macro}{Scalar macro index (mean of r2_doc over valid documents).}
+\item{r2_macro}{Scalar macro index (mean of \code{r2_doc} over valid
+documents).}
 }
 \value{
 A list with:
 \itemize{
 \item \code{z}: Z-statistic.
-\item \code{pval}: One-sided p-value for H1: μ_R² > 0.
-\item \code{se}: Standard error σ̂_R.
-\item \code{ci}: 95\\% confidence interval for the true mean R².
+\item \code{pval}: One-sided p-value for
+\eqn{H_1: \mu_{R^2} > 0}{H1: mu_R2 > 0}.
+\item \code{se}: Standard error \eqn{\hat\sigma_R}{sigma_R hat}.
+\item \code{ci}: 95\\% confidence interval for the true mean
+\eqn{R^2}{R^2}.
 \item \code{J}: Number of valid documents used.
 }
 }
 \description{
-Tests whether the K-topic model provides statistically significant
+Tests whether the \eqn{K}-topic model provides statistically significant
 improvement over the no-topics baseline.
 }
 \details{
-The null hypothesis is H0: μ_R² ≤ 0 (the topic model is no better than
-the global distribution on average). Under regularity conditions, the
-test statistic Z = √J · R̄²_Macro / σ̂_R is asymptotically N(0,1).
+The null hypothesis is \eqn{H_0: \mu_{R^2} \le 0}{H0: mu_R2 <= 0} (the
+topic model is no better than the global distribution on average). Under
+regularity conditions, the test statistic
+\eqn{Z = \sqrt{J}\,\bar{R}^2_{Macro} / \hat\sigma_R}{Z = sqrt(J) * R2_Macro / sigma_R hat}
+is asymptotically \eqn{N(0, 1)}.
 }
 \keyword{internal}

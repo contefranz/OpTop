@@ -1,3 +1,25 @@
+# OpTop 0.10.1
+
+### Minor Changes
+
+* **Internal helpers fully documented**: the calibration engine, the index workers, the
+  alignment validators and the `optop_as_theta_phi()` adapter family now carry proper
+  roxygen documentation with `@keywords internal` (browsable via `?OpTop:::name`),
+  including the calibration mathematics typeset with `\eqn{}`.
+
+* Remaining documentation mathematics (the cross-document Z-test) moved from unicode
+  prose to `\eqn{}`; references extended — Satterthwaite (1946) and Davison & Hinkley
+  (1997) join `?optimal_topic`, and the index/partition pages now cite Lewis & Grossetti
+  (2022) and Agresti (1996).
+
+* Dead code removed: ten stale `utils::globalVariables()` declarations referenced by
+  no live or deprecated code, plus a dangling roxygen fragment in `R/utils.R`.
+
+* **Package overview rewritten**: `?OpTop-package` now presents the current toolkit
+  (Test 1 with its selection rules and calibration, the discrepancy indices, the
+  harmonized partition) and cites Lewis and Grossetti (2022) — the previous page still
+  referenced a 2019 preprint and predated the index family.
+
 # OpTop 0.10.0
 
 ### New Features — calibrated p-values for Test 1
