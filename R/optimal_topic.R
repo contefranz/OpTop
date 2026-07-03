@@ -5,41 +5,69 @@ if ( getRversion() >= "2.15.1" ) {
                              ".", "chisquare", "chisquare_mod",
                              "row_cut", "chi_sum", "word_prop_hat",
                              "word_prop_hat_cum", "pval", "docid",
-                             "OpTop") )
+                             "OpTop", "raw", "df") )
 }
 #' Find the optimal number of topics from a pool of LDA models
 #'
-#' Identify the number of topics that best describes the corpus by applying a
-#' fast chi-square–style test across a grid of `topicmodels::LDA` fits. The
-#' routine evaluates each model and selects the optimal topic count using a
-#' significance rule controlled by `alpha`, with a fallback to the global
-#' minimum of the statistic.
+#' Identify the number of topics that best describes the corpus with the
+#' Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
+#' goodness-of-fit test on each document's word distribution. The routine
+#' evaluates each model of the grid and selects the optimal topic count with
+#' one of three rules; see Details.
 #'
 #' @param lda_models A list of `topicmodels::LDA` objects (VEM), ordered by
 #'   increasing number of topics. The grid should span the candidate values of `K`.
 #' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
 #'   for each document; it is recommended that document ids are available via
 #'   `quanteda::docid()`.
-#' @param q Numeric in `(0, 1]`. Cumulative mass used to define the truncated
-#'   envelope (default `0.80`).
-#' @param alpha Numeric in `[0, 1]`. Significance level for the selection rule
-#'   (default `0.05`). See Details.
-#' @param do_plot Logical; if `TRUE`, plot the statistic versus topics with
-#'   vertical and horizontal guides at the selected optimum (default `TRUE`).
+#' @param q Numeric in `(0, 1]`. Cumulative probability mass retained as
+#'   "relatively important" words; the remaining words are collapsed into a
+#'   single bin whose mass stays strictly below `1 - q`. Equals `1 - I^K` in
+#'   the paper's notation; the default `0.95` matches the paper's numerical
+#'   setting `I^K = 0.05`.
+#' @param alpha Numeric in `[0, 1]`. Significance level used by the
+#'   `"sequential"` and `"legacy"` selection rules (default `0.05`); ignored
+#'   by `"min"`.
+#' @param selection Character; how the optimal `K` is chosen (see Details):
+#'   `"sequential"` (default), `"min"`, or `"legacy"` (deprecated).
+#' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
+#'   topics with vertical and horizontal guides at the selected optimum
+#'   (default `TRUE`).
 #' @param verbose Logical; if `TRUE`, report progress (a `cli` progress bar
 #'   across the model grid) and a selection summary (default `FALSE`).
-#'   Regardless of `verbose`, dropping documents that the models never saw is
-#'   always signalled with a warning.
+#'   Regardless of `verbose`, dropping documents that the models never saw
+#'   and the sequential rule's fallback are always signalled.
 #'
 #' @details
-#' The method builds a Pearson-type statistic under a multinomial view of word
-#' counts and evaluates stability for each candidate `K`. The envelope used in
-#' the comparison is truncated at cumulative mass `q` (e.g., `q = 0.80` keeps
-#' the top 80% of mass).
+#' For each document, the fitted word probabilities are sorted in decreasing
+#' order and the smallest head whose cumulative mass exceeds `q` is kept
+#' (`P_j` words); the remaining words are collapsed into a single "min" bin.
+#' The document contributes `(P_j + 1)` times its Pearson term over the
+#' `P_j + 1` bins, and the corpus statistic is the sum over documents
+#' (Equation 8 of the paper), asymptotically chi-square with
+#' `df = sum_j P_j` degrees of freedom. The returned `OpTop` column reports
+#' the *standardized* statistic (raw statistic divided by `df`, the version
+#' plotted in the paper's Figure 2), while `pval` is the upper-tail p-value
+#' of the raw statistic on its full degrees of freedom.
 #'
-#' **Selection rule.** The optimal `K` is the first model whose p-value is at
-#' most `alpha`. If no model reaches `alpha`, the model with the minimum
-#' statistic is selected. Setting `alpha = 0` forces the global-minimum rule.
+#' **Selection rules.**
+#' - `"sequential"` (default): scan `K` upward and select the smallest `K`
+#'   the test fails to reject (`pval > alpha`) — the classical sequential
+#'   scheme for model order. If every model is rejected, the rule falls back
+#'   to the global minimum with a warning.
+#' - `"min"`: select the `K` with the minimum standardized statistic — the
+#'   rule used in the published case study.
+#' - `"legacy"`: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
+#'   with the crossing word collapsed, `P_j` scaling, lower-tail p-value with
+#'   1 degree of freedom, "first `pval <= alpha`" rule). Deprecated; it will
+#'   be removed before v1.0.0.
+#'
+#' **A calibration caveat.** With `df = sum_j P_j` in the thousands, the
+#' chi-square reference distribution is extremely concentrated, so upper-tail
+#' p-values tend to saturate at 0 or 1 unless the fit is genuinely borderline.
+#' When the sequential rule degenerates (all 0 or all 1), the shape of the
+#' standardized statistic — and its minimum — carries the information, which
+#' is why the paper's case study uses the `"min"` rule.
 #'
 #' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
 #' proportions (row-wise). Document identifiers are taken from
@@ -54,25 +82,34 @@ if ( getRversion() >= "2.15.1" ) {
 #'
 #' @return A `data.table` with columns:
 #' - `topic`: integer number of topics (`K`).
-#' - `OpTop`: standardized chi-square–style statistic for each `K`.
-#' - `pval`: p-value associated with `OpTop`.
+#' - `OpTop`: standardized Test 1 statistic (raw statistic / `df`).
+#' - `df`: degrees of freedom `sum_j P_j` of the raw statistic.
+#' - `pval`: p-value associated with the raw statistic (upper tail for
+#'   `"sequential"`/`"min"`; the legacy lower-tail value for `"legacy"`).
 #'
 #' @examples
 #' \dontrun{
 #' # Compute word proportions from a corpus objects
 #' test1 <- optimal_topic( lda_models = lda_list,
 #'                         weighted_dfm = weighted_dfm,
-#'                         q = 0.80,
+#'                         q = 0.95,
 #'                         alpha = 0.05,
+#'                         selection = "sequential",
 #'                         verbose = TRUE )
 #' }
+#'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+#' topic model identification. *Journal of Machine Learning Research*,
+#' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
 #'
 #' @seealso [topicmodels::LDA()]
 #'
 #' @import data.table
 #' @export
 
-optimal_topic <- function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05,
+optimal_topic <- function( lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
+                           selection = c( "sequential", "min", "legacy" ),
                            do_plot = TRUE, verbose = FALSE ) {
 
   if ( !is.list( lda_models ) ) {
@@ -96,8 +133,19 @@ optimal_topic <- function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05,
   if ( !is.numeric( alpha ) ) {
     stop( "alpha must be a numeric" )
   }
+  selection <- match.arg( selection )
   if ( !is.logical( verbose ) ) {
     stop( "verbose must be either TRUE or FALSE" )
+  }
+
+  if ( selection == "legacy" ) {
+    lifecycle::deprecate_warn(
+      when = "0.9.9",
+      what = I( 'optimal_topic(selection = "legacy")' ),
+      details = paste( "The legacy rule (lower-tail p-value with 1 degree of",
+                       "freedom) predates the calibration to the published",
+                       "test and will be removed before v1.0.0." )
+    )
   }
 
   tic <- proc.time()
@@ -131,15 +179,18 @@ optimal_topic <- function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05,
   if ( verbose ) {
     cli::cli_alert_info( paste(
       "Evaluating {n_models} models on {length(docs)} document{?s} and",
-      "{quanteda::nfeat(weighted_dfm)} features (q = {q}, alpha = {alpha})"
+      "{quanteda::nfeat(weighted_dfm)} features (q = {q}, alpha = {alpha},",
+      "selection = {selection})"
     ) )
     cli::cli_progress_bar( "Processing LDA grid", total = n_models )
   }
 
+  legacy <- selection == "legacy"
   Chi_K_rows <- vector( "list", n_models )
   for ( i_mod in seq_len( n_models ) ) {
     Chi_K_rows[[ i_mod ]] <- optimal_topic_core( lda_models[ i_mod ],
-                                                 weighted_dfm, q, doc_map )
+                                                 weighted_dfm, q, doc_map,
+                                                 legacy )
     if ( verbose ) {
       cli::cli_progress_update(
         status = paste0( "k = ", lda_models[[ i_mod ]]@k )
@@ -151,19 +202,49 @@ optimal_topic <- function( lda_models, weighted_dfm, q = 0.80, alpha = 0.05,
   }
 
   Chi_K <- data.table::as.data.table( do.call( rbind, Chi_K_rows ) )
-  data.table::setnames( Chi_K, old = names( Chi_K ), c( "topic", "OpTop", "pval" ) )
+  data.table::setnames( Chi_K, old = names( Chi_K ), c( "topic", "raw", "df" ) )
+  Chi_K[ , OpTop := raw / df ]
+  if ( legacy ) {
+    # pre-0.9.9 convention: lower tail of the standardized statistic on 1 df
+    Chi_K[ , pval := stats::pchisq( OpTop, df = 1L, lower.tail = TRUE ) ]
+  } else {
+    # Eq. (8): the raw statistic is chi-square with df = sum_j P_j under
+    # adequacy, and misspecification only inflates it, so the p-value is the
+    # upper tail
+    Chi_K[ , pval := stats::pchisq( raw, df = df, lower.tail = FALSE ) ]
+  }
+  Chi_K[ , raw := NULL ]
+  data.table::setcolorder( Chi_K, c( "topic", "OpTop", "df", "pval" ) )
 
   global_min <- Chi_K[ , .SD[ which.min( OpTop ) ] ]
-  alpha_min <- Chi_K[ pval <= alpha ][ 1L ]
-  if ( alpha == 0 || all( is.na( alpha_min ) ) ) {
+  if ( selection == "sequential" ) {
+    accepted <- Chi_K[ pval > alpha ][ 1L ]
+    if ( all( is.na( accepted ) ) ) {
+      cli::cli_alert_warning( paste(
+        "No model passes the adequacy test at alpha = {alpha};",
+        "falling back to the global minimum"
+      ) )
+      best_topic <- global_min
+      rule <- "global minimum (sequential fallback)"
+    } else {
+      best_topic <- accepted
+      rule <- paste0( "sequential adequacy scan at alpha = ", alpha )
+    }
+  } else if ( selection == "min" ) {
     best_topic <- global_min
     rule <- "global minimum"
-  } else if ( global_min$topic > alpha_min$topic ) {
-    best_topic <- alpha_min
-    rule <- paste0( "significance level of ", alpha )
   } else {
-    best_topic <- global_min
-    rule <- "global minimum"
+    alpha_min <- Chi_K[ pval <= alpha ][ 1L ]
+    if ( alpha == 0 || all( is.na( alpha_min ) ) ) {
+      best_topic <- global_min
+      rule <- "global minimum (legacy)"
+    } else if ( global_min$topic > alpha_min$topic ) {
+      best_topic <- alpha_min
+      rule <- paste0( "legacy significance level of ", alpha )
+    } else {
+      best_topic <- global_min
+      rule <- "global minimum (legacy)"
+    }
   }
   if ( verbose ) {
     cli::cli_alert_success(

@@ -7,8 +7,9 @@
 optimal_topic(
   lda_models,
   weighted_dfm,
-  q = 0.8,
+  q = 0.95,
   alpha = 0.05,
+  selection = c("sequential", "min", "legacy"),
   do_plot = TRUE,
   verbose = FALSE
 )
@@ -21,44 +22,77 @@ increasing number of topics. The grid should span the candidate values of \code{
 for each document; it is recommended that document ids are available via
 \code{quanteda::docid()}.}
 
-\item{q}{Numeric in \verb{(0, 1]}. Cumulative mass used to define the truncated
-envelope (default \code{0.80}).}
+\item{q}{Numeric in \verb{(0, 1]}. Cumulative probability mass retained as
+"relatively important" words; the remaining words are collapsed into a
+single bin whose mass stays strictly below \code{1 - q}. Equals \code{1 - I^K} in
+the paper's notation; the default \code{0.95} matches the paper's numerical
+setting \code{I^K = 0.05}.}
 
-\item{alpha}{Numeric in \verb{[0, 1]}. Significance level for the selection rule
-(default \code{0.05}). See Details.}
+\item{alpha}{Numeric in \verb{[0, 1]}. Significance level used by the
+\code{"sequential"} and \code{"legacy"} selection rules (default \code{0.05}); ignored
+by \code{"min"}.}
 
-\item{do_plot}{Logical; if \code{TRUE}, plot the statistic versus topics with
-vertical and horizontal guides at the selected optimum (default \code{TRUE}).}
+\item{selection}{Character; how the optimal \code{K} is chosen (see Details):
+\code{"sequential"} (default), \code{"min"}, or \code{"legacy"} (deprecated).}
+
+\item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
+topics with vertical and horizontal guides at the selected optimum
+(default \code{TRUE}).}
 
 \item{verbose}{Logical; if \code{TRUE}, report progress (a \code{cli} progress bar
 across the model grid) and a selection summary (default \code{FALSE}).
-Regardless of \code{verbose}, dropping documents that the models never saw is
-always signalled with a warning.}
+Regardless of \code{verbose}, dropping documents that the models never saw
+and the sequential rule's fallback are always signalled.}
 }
 \value{
 A \code{data.table} with columns:
 \itemize{
 \item \code{topic}: integer number of topics (\code{K}).
-\item \code{OpTop}: standardized chi-square–style statistic for each \code{K}.
-\item \code{pval}: p-value associated with \code{OpTop}.
+\item \code{OpTop}: standardized Test 1 statistic (raw statistic / \code{df}).
+\item \code{df}: degrees of freedom \verb{sum_j P_j} of the raw statistic.
+\item \code{pval}: p-value associated with the raw statistic (upper tail for
+\code{"sequential"}/\code{"min"}; the legacy lower-tail value for \code{"legacy"}).
 }
 }
 \description{
-Identify the number of topics that best describes the corpus by applying a
-fast chi-square–style test across a grid of \code{topicmodels::LDA} fits. The
-routine evaluates each model and selects the optimal topic count using a
-significance rule controlled by \code{alpha}, with a fallback to the global
-minimum of the statistic.
+Identify the number of topics that best describes the corpus with the
+Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
+goodness-of-fit test on each document's word distribution. The routine
+evaluates each model of the grid and selects the optimal topic count with
+one of three rules; see Details.
 }
 \details{
-The method builds a Pearson-type statistic under a multinomial view of word
-counts and evaluates stability for each candidate \code{K}. The envelope used in
-the comparison is truncated at cumulative mass \code{q} (e.g., \code{q = 0.80} keeps
-the top 80\% of mass).
+For each document, the fitted word probabilities are sorted in decreasing
+order and the smallest head whose cumulative mass exceeds \code{q} is kept
+(\code{P_j} words); the remaining words are collapsed into a single "min" bin.
+The document contributes \code{(P_j + 1)} times its Pearson term over the
+\code{P_j + 1} bins, and the corpus statistic is the sum over documents
+(Equation 8 of the paper), asymptotically chi-square with
+\verb{df = sum_j P_j} degrees of freedom. The returned \code{OpTop} column reports
+the \emph{standardized} statistic (raw statistic divided by \code{df}, the version
+plotted in the paper's Figure 2), while \code{pval} is the upper-tail p-value
+of the raw statistic on its full degrees of freedom.
 
-\strong{Selection rule.} The optimal \code{K} is the first model whose p-value is at
-most \code{alpha}. If no model reaches \code{alpha}, the model with the minimum
-statistic is selected. Setting \code{alpha = 0} forces the global-minimum rule.
+\strong{Selection rules.}
+\itemize{
+\item \code{"sequential"} (default): scan \code{K} upward and select the smallest \code{K}
+the test fails to reject (\code{pval > alpha}) — the classical sequential
+scheme for model order. If every model is rejected, the rule falls back
+to the global minimum with a warning.
+\item \code{"min"}: select the \code{K} with the minimum standardized statistic — the
+rule used in the published case study.
+\item \code{"legacy"}: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
+with the crossing word collapsed, \code{P_j} scaling, lower-tail p-value with
+1 degree of freedom, "first \code{pval <= alpha}" rule). Deprecated; it will
+be removed before v1.0.0.
+}
+
+\strong{A calibration caveat.} With \verb{df = sum_j P_j} in the thousands, the
+chi-square reference distribution is extremely concentrated, so upper-tail
+p-values tend to saturate at 0 or 1 unless the fit is genuinely borderline.
+When the sequential rule degenerates (all 0 or all 1), the shape of the
+standardized statistic — and its minimum — carries the information, which
+is why the paper's case study uses the \code{"min"} rule.
 
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
 proportions (row-wise). Document identifiers are taken from
@@ -76,11 +110,17 @@ to handle high-dimensional vocabularies efficiently.
 # Compute word proportions from a corpus objects
 test1 <- optimal_topic( lda_models = lda_list,
                         weighted_dfm = weighted_dfm,
-                        q = 0.80,
+                        q = 0.95,
                         alpha = 0.05,
+                        selection = "sequential",
                         verbose = TRUE )
 }
 
+}
+\references{
+Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+topic model identification. \emph{Journal of Machine Learning Research},
+23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
 }
 \seealso{
 \code{\link[topicmodels:LDA]{topicmodels::LDA()}}
