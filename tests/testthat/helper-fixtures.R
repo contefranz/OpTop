@@ -8,6 +8,14 @@
 
 .optop_test_cache <- new.env(parent = emptyenv())
 
+# Row-wise word proportions as a weighted quanteda dfm and as the plain dense
+# matrix the reference implementations consume.
+optop_wprop_fixture <- function(fx) {
+  wdfm <- quanteda::dfm_weight(quanteda::as.dfm(fx$counts), scheme = "prop")
+  W_prop <- sweep(fx$counts, 1, rowSums(fx$counts), "/")
+  list(wdfm = wdfm, W_prop = W_prop)
+}
+
 optop_test_fixture <- function() {
   if (!is.null(.optop_test_cache$fixture)) {
     return(.optop_test_cache$fixture)

@@ -247,6 +247,26 @@ ref_optimal_topic <- function(models, W_prop, q = 0.95) {
   as.data.frame(do.call(rbind, out))
 }
 
+# Naive reference for the per-document envelope exported by the C++ core:
+# the bin probabilities (kept-word fitted probabilities plus the collapsed
+# min-bin mass) that the calibration layer consumes. Mirrors the Eq. (8)
+# cutoff of ref_optimal_topic().
+ref_envelope <- function(model, q = 0.95) {
+  dtw <- model@gamma
+  tww <- t(exp(model@beta))
+  lapply(seq_len(nrow(dtw)), function(j) {
+    X <- sort(drop(tww %*% dtw[j, ]), decreasing = TRUE)
+    cum <- cumsum(X)
+    above <- which(cum > q)
+    p_j <- if (length(above)) above[1] else length(X)
+    if (p_j < length(X)) {
+      c(X[seq_len(p_j)], sum(X[-seq_len(p_j)]))
+    } else {
+      X
+    }
+  })
+}
+
 # Reference for the cross-document Z-test.
 ref_ztest <- function(r2_doc_valid) {
   J <- length(r2_doc_valid)
