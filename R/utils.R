@@ -1,7 +1,7 @@
 # topicmodels adapters ----
 
 # handy function to check LDA_VEM class
-is.LDA_VEM <- function( x ) {
+is.LDA_VEM <- function(x) {
   "LDA_VEM" %in% class(x)
 }
 #' @keywords internal
@@ -68,11 +68,11 @@ optop_align_dtm_to_models <- function(dtm, models) {
 # this declare my personal ggplot theme
 font_size <- 10
 theme_OpTop <- ggplot2::theme(
-  title = ggplot2::element_text( face = "bold", size = 8 ),
-  axis.title.x = ggplot2::element_text( face = "bold", size = font_size ),
-  axis.title.y = ggplot2::element_text( face = "bold", size = font_size ),
-  axis.text.x = ggplot2::element_text( size = font_size ),
-  axis.text.y = ggplot2::element_text( size = font_size ),
-  legend.text = ggplot2::element_text( size = 8 ),
+  title = ggplot2::element_text(face = "bold", size = 8),
+  axis.title.x = ggplot2::element_text(face = "bold", size = font_size),
+  axis.title.y = ggplot2::element_text(face = "bold", size = font_size),
+  axis.text.x = ggplot2::element_text(size = font_size),
+  axis.text.y = ggplot2::element_text(size = font_size),
+  legend.text = ggplot2::element_text(size = 8),
   legend.position = "bottom"
 )

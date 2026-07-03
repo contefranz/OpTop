@@ -108,12 +108,12 @@ to handle high-dimensional vocabularies efficiently.
 \examples{
 \dontrun{
 # Compute word proportions from a corpus objects
-test1 <- optimal_topic( lda_models = lda_list,
-                        weighted_dfm = weighted_dfm,
-                        q = 0.95,
-                        alpha = 0.05,
-                        selection = "sequential",
-                        verbose = TRUE )
+test1 <- optimal_topic(lda_models = lda_list,
+                       weighted_dfm = weighted_dfm,
+                       q = 0.95,
+                       alpha = 0.05,
+                       selection = "sequential",
+                       verbose = TRUE)
 }
 
 }
