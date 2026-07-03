@@ -38,7 +38,7 @@ different topic counts directly comparable.
   
 ### Authors
 
-- [Francesco Grossetti](https://accounting.unibocconi.eu/people/francesco-grossetti) 
+- [Francesco Grossetti](https://contefranz.github.io/) 
 
   _Assistant Professor of Accounting Analytics and Data Science_  
   Department of Accounting | Bocconi University  
