@@ -264,7 +264,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
                         color = "red", shape = 4L, size = 4L) +
       ggplot2::xlab("Topics") + ggplot2::ylab(expression(OpTop[J]^{"K"})) +
       ggplot2::ggtitle("Optimal Topic Plot") +
-      theme_OpTop
+      ggplot2::theme_bw()
     print(p1)
   }
 
