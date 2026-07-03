@@ -69,6 +69,11 @@
 #' str(part$rare_mask)
 #' }
 #'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+#' topic model identification. *Journal of Machine Learning Research*,
+#' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
+#'
 #' @export
 optop_make_partition <- function(models, dtm, c = 5, block = 5000) {
   stopifnot(length(models) >= 1)
