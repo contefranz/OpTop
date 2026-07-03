@@ -61,9 +61,11 @@ test_that("self-generated data: asymptotic p-values saturate, calibrated ones ar
   row_gen <- got[got$topic == gen@k]
   # the chi-square yardstick is far off scale even under the true model
   expect_true(row_gen$pval_chisq > 0.999 || row_gen$pval_chisq < 0.001)
-  # the calibrated p-value lands in the interior
-  expect_gt(row_gen$pval, 0.01)
-  expect_lt(row_gen$pval, 0.99)
+  # the calibrated p-value lands in the interior; the bounds are deliberately
+  # loose because the fixture fits (and hence the null draw) vary slightly
+  # across platforms and BLAS builds
+  expect_gt(row_gen$pval, 0.001)
+  expect_lt(row_gen$pval, 0.999)
 })
 
 test_that("bootstrap calibration is reproducible under a seed", {

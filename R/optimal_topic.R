@@ -244,8 +244,8 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
   if (calibrating) {
     if (is.null(doc_lengths)) {
       stop(paste("calibrate != \"none\" needs doc_lengths: the total token",
-                 "count of each document, typically rowSums() of the counts",
-                 "dfm the models were fitted on"))
+                 "count of each document, typically quanteda::ntoken() of",
+                 "the counts dfm the models were fitted on"))
     }
     if (!is.numeric(doc_lengths) || any(!is.finite(doc_lengths)) ||
         any(doc_lengths <= 0)) {
