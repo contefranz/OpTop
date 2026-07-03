@@ -1,3 +1,35 @@
+# OpTop 0.9.9
+
+### Major Changes — `optimal_topic()` calibrated to the published test
+
+**This release changes numerical results.** The implementation is now faithful to
+Test 1 (Equation 8) of Lewis and Grossetti (2022):
+
+* **Statistic**: each document's Pearson term is scaled by `P_j + 1` (the number of bins,
+  previously `P_j`), and the corpus statistic is chi-square with `df = sum_j P_j`. The
+  returned `OpTop` column reports the standardized statistic (raw / `df`, the scale of the
+  paper's Figure 2) and the table gains a `df` column.
+
+* **P-values**: upper tail of the raw statistic on its full degrees of freedom
+  (previously: lower tail of the standardized statistic on 1 df, which asked "is the fit
+  suspiciously perfect?" rather than "does the model fit?").
+
+* **Selection rules**: new `selection` argument — `"sequential"` (default; smallest `K` the
+  test fails to reject at `alpha`, with a warned fallback to the global minimum),
+  `"min"` (the global minimum of the standardized statistic — the rule used in the paper's
+  case study), and `"legacy"` (the frozen pre-0.9.9 pipeline, bit-identical to v0.9.8).
+  `"legacy"` is deprecated at birth and will be removed before v1.0.0.
+
+* **Cutoff**: the "relatively important" words are now the smallest sorted head whose
+  cumulative mass strictly exceeds `q`, keeping the crossing word, so the collapsed tail
+  stays strictly below `1 - q` (the paper's footnote 5); the 4-decimal rounding hack is
+  gone. The default `q` moves from `0.80` to `0.95`, matching the paper's numerical
+  setting `I^K = 0.05`.
+
+* Documentation now includes an honest calibration caveat: with `df = sum_j P_j` in the
+  thousands the chi-square p-values saturate near 0/1 unless the fit is borderline, in
+  which case the shape and minimum of the standardized curve carry the information.
+
 # OpTop 0.9.8
 
 ### Major Changes

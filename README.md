@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.9.8-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.9.8)
+[![release](https://img.shields.io/badge/release-v0.9.9-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.9.9)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -95,11 +95,13 @@ VEM_models <- lapply(
   }
 ) 
 
-# 3) Choose the optimal K (verbose = TRUE reports progress and the selection)
+# 3) Choose the optimal K (selection: "sequential" adequacy scan by default,
+#    "min" for the paper's global-minimum rule; verbose = TRUE reports progress)
 res_opt   <- optimal_topic(lda_models = VEM_models, 
                            weighted_dfm = weighted_dfm,
-                           q = 0.80, 
+                           q = 0.95, 
                            alpha = 0.05, 
+                           selection = "sequential",
                            do_plot = TRUE,
                            verbose = TRUE)
 

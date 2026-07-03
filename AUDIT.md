@@ -36,18 +36,37 @@ the `optimal-topic-core` branch, and what is deliberately deferred.
   identifier (a `doc_map` index vector passed to the C++ core), and the core
   stops if the mapping points past the rows of `@gamma`.
 
-### Confirmed, deliberately unchanged (methodological — author's call)
+### Resolved in 0.9.9 — calibrated to the published test (Test 1, Eq. 8)
 
-- **`pchisq(stat, df = 1, lower.tail = TRUE)`.** A goodness-of-fit p-value is
-  conventionally the upper tail. With the lower tail, a *small* statistic
-  yields a *small* p-value, which interacts with the `alpha` selection rule
-  ("first model with p-value ≤ alpha"). This is tied to the paper's selection
-  procedure and is left exactly as is; the test suite encodes the current
-  behavior.
-- **`round(val * 1e4) / 1e4 > q` cumulative-mass cutoff.** Rounding to 4
-  decimals before comparing with `q` makes the truncation index unstable near
-  ties (documents whose cumulative mass sits within 5e-5 of `q` can flip).
-  Kept verbatim to preserve numerical output.
+Reading the JMLR paper (Lewis & Grossetti 2022, 23(58)) settled both flags and
+uncovered three more deviations; all five are fixed on the `test-calibration`
+branch, with the old pipeline frozen behind `selection = "legacy"`
+(deprecated, bit-identical to v0.9.8, removal before v1.0.0):
+
+- **Tail and df.** The paper claims `OpTop ~ χ²` with `df = Σ_j P_j` and
+  frames adequacy as "unable to reject" — an upper-tail test on the *raw*
+  statistic. The code used the lower tail with `df = 1` on the *standardized*
+  statistic. Now: `pchisq(raw, df = Σ P_j, lower.tail = FALSE)`; the reported
+  `OpTop` column stays standardized (`raw / df`, the paper's Figure 2 scale).
+- **Selection.** The paper selects the global minimum of the standardized
+  statistic and never uses p-values for selection; the old "first
+  `pval ≤ alpha`" lower-tail rule was an implementation-era invention. Now:
+  `selection = c("sequential", "min", "legacy")` — the default sequential
+  adequacy scan (smallest K with `pval > alpha`, global-minimum fallback),
+  the paper's `"min"`, and the frozen legacy rule.
+- **Per-document scaling.** Eq. (8) scales each document's Pearson term by
+  `(P_j + 1)` (the number of bins); the code used `P_j`.
+- **Cutoff.** Footnote 5 collapses the least-probable words with total mass
+  strictly below `I^K = 0.05`; the code rounded the cumulative mass to 4
+  decimals, put the crossing word in the tail (collapsed mass *exceeding*
+  `1 − q`), and defaulted to `q = 0.80`. Now: exact comparison, crossing word
+  kept, default `q = 0.95 = 1 − I^K`.
+- **Calibration caveat (documented, not "fixed").** With `df = Σ P_j` in the
+  thousands, χ² p-values saturate near 0/1 unless the fit is genuinely
+  borderline; when the sequential rule degenerates, the minimum of the
+  standardized curve carries the information — which is why the paper's case
+  study uses the min rule. Establishing a sharper null law (asymptotics or
+  simulation calibration) remains future methodological work for the paper.
 
 ## Deferred
 
