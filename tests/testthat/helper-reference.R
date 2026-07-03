@@ -206,9 +206,17 @@ ref_optimal_topic_legacy <- function(models, W_prop, q = 0.80) {
 # p-value is the UPPER tail. The reported OpTop is the standardized statistic
 # raw / df, the quantity plotted in the paper's Figure 2.
 ref_optimal_topic <- function(models, W_prop, q = 0.95) {
-  out <- lapply(models, function(m) {
-    dtw <- m@gamma                 # J x K
-    tww <- t(exp(m@beta))          # W x K
+  tps <- lapply(models, function(m) list(theta = m@gamma, phi = exp(m@beta)))
+  ref_optimal_topic_tp(tps, W_prop, q = q)
+}
+
+# Same Eq. (8) reference on plain (theta, phi) pairs, for engines that do not
+# store gamma/beta S4 slots (seededlda fits, NLPstudio-style wrappers). Rows
+# of theta are assumed aligned with the rows of W_prop.
+ref_optimal_topic_tp <- function(tps, W_prop, q = 0.95) {
+  out <- lapply(tps, function(tp) {
+    dtw <- tp$theta                # J x K
+    tww <- t(tp$phi)               # W x K
     J <- nrow(W_prop)
 
     chi <- numeric(J)
