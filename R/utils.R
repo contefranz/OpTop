@@ -1,8 +1,9 @@
-# topicmodels adapters ----
+# model adapters ----
 
 #' Check for a topicmodels VEM fit
 #'
-#' Input gate used by the exported functions: `TRUE` when `x` is an
+#' Input gate used by the deprecated functions and by
+#' `optimal_topic(selection = "legacy")`: `TRUE` when `x` is an
 #' `LDA_VEM` object as returned by `topicmodels::LDA(method = "VEM")`.
 #'
 #' @param x Any object.
@@ -16,50 +17,117 @@ is.LDA_VEM <- function(x) {
 
 #' Extract document-topic and topic-word weights from a fitted model
 #'
-#' Adapter generic behind the discrepancy indices: every supported topic
-#' model class is reduced to the common contract
-#' `list(theta, phi, K)`, with \eqn{\theta}{theta} the
+#' Adapter generic behind [optimal_topic()] and the discrepancy indices:
+#' every supported topic-model class is reduced to the common contract
+#' `list(theta, phi, K, docs, terms)`, with \eqn{\theta}{theta} the
 #' \eqn{J \times K}{J x K} document-topic matrix (rows summing to 1),
 #' \eqn{\phi}{phi} the \eqn{K \times W}{K x W} topic-word matrix (rows
-#' summing to 1), and \eqn{K} the number of topics. Adding support for a new
-#' topic-model implementation means adding a method for its class.
+#' summing to 1), \eqn{K} the number of topics, `docs` the \eqn{J} document
+#' identifiers matching the rows of \eqn{\theta}{theta}, and `terms` the
+#' \eqn{W} vocabulary entries matching the columns of \eqn{\phi}{phi}.
+#' Document identifiers are mandatory: alignment to the data is always by
+#' identifier, never positional. Adding support for a new topic-model
+#' implementation means adding a method for its class; the contract is
+#' enforced by `.optop_validate_theta_phi()`.
 #'
 #' @param model A fitted topic model.
 #'
-#' @return A list with elements `theta`, `phi` and `K` as described above.
+#' @return A list with elements `theta`, `phi`, `K`, `docs` and `terms` as
+#'   described above.
 #'
 #' @keywords internal
 optop_as_theta_phi <- function(model) UseMethod("optop_as_theta_phi")
 
-#' @describeIn optop_as_theta_phi `topicmodels::LDA` fits: theta and phi
-#'   come from `topicmodels::posterior()`.
-#' @keywords internal
-#' @exportS3Method optop_as_theta_phi LDA
-optop_as_theta_phi.LDA <- function(model) {
-  p <- topicmodels::posterior(model)
-  list(theta = p$topics,  # J x K
-       phi   = p$terms,   # K x W
-       K     = ncol(p$topics))
-}
-
-#' @describeIn optop_as_theta_phi VEM fits delegate to the `LDA` method.
-#' @keywords internal
-#' @exportS3Method optop_as_theta_phi LDA_VEM
-optop_as_theta_phi.LDA_VEM <- function(model) optop_as_theta_phi.LDA(model)
-
-#' @describeIn optop_as_theta_phi Gibbs fits delegate to the `LDA` method.
-#' @keywords internal
-#' @exportS3Method optop_as_theta_phi LDA_Gibbs
-optop_as_theta_phi.LDA_Gibbs <- function(model) optop_as_theta_phi.LDA(model)
-
-#' @describeIn optop_as_theta_phi Defensive fallback for other `topicmodels`
-#'   classes: LDA subclasses are accepted, everything else fails with an
-#'   informative error.
+#' @describeIn optop_as_theta_phi Workhorse for all `topicmodels` fits (LDA
+#'   and CTM alike): theta and phi come from `topicmodels::posterior()`,
+#'   identifiers from the `documents` and `terms` slots.
 #' @keywords internal
 #' @exportS3Method optop_as_theta_phi TopicModel
 optop_as_theta_phi.TopicModel <- function(model) {
-  if (inherits(model, "LDA")) return(optop_as_theta_phi.LDA(model))
-  stop("Unsupported 'topicmodels' class: ", paste(class(model), collapse = "/"))
+  p <- topicmodels::posterior(model)
+  list(theta = p$topics,  # J x K
+       phi   = p$terms,   # K x W
+       K     = ncol(p$topics),
+       docs  = as.character(model@documents),
+       terms = as.character(model@terms))
+}
+
+#' @describeIn optop_as_theta_phi `topicmodels::LDA` fits delegate to the
+#'   `TopicModel` method.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi LDA
+optop_as_theta_phi.LDA <- function(model) optop_as_theta_phi.TopicModel(model)
+
+#' @describeIn optop_as_theta_phi VEM fits delegate to the `TopicModel`
+#'   method.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi LDA_VEM
+optop_as_theta_phi.LDA_VEM <- function(model) optop_as_theta_phi.TopicModel(model)
+
+#' @describeIn optop_as_theta_phi Gibbs fits delegate to the `TopicModel`
+#'   method.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi LDA_Gibbs
+optop_as_theta_phi.LDA_Gibbs <- function(model) optop_as_theta_phi.TopicModel(model)
+
+#' @describeIn optop_as_theta_phi `topicmodels::CTM` fits delegate to the
+#'   `TopicModel` method.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi CTM
+optop_as_theta_phi.CTM <- function(model) optop_as_theta_phi.TopicModel(model)
+
+#' @describeIn optop_as_theta_phi CTM VEM fits delegate to the `TopicModel`
+#'   method.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi CTM_VEM
+optop_as_theta_phi.CTM_VEM <- function(model) optop_as_theta_phi.TopicModel(model)
+
+#' @describeIn optop_as_theta_phi seededlda fits: one method covers
+#'   `seededlda::textmodel_lda()`, `seededlda::textmodel_seededlda()` and
+#'   `seededlda::textmodel_seqlda()`, since all three constructors return
+#'   objects of class `textmodel_lda` exposing `theta` and `phi`.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi textmodel_lda
+optop_as_theta_phi.textmodel_lda <- function(model) {
+  list(theta = model$theta,
+       phi   = model$phi,
+       K     = ncol(model$theta),
+       docs  = rownames(model$theta),
+       terms = colnames(model$phi))
+}
+
+#' @describeIn optop_as_theta_phi NLPstudio fits: theta and phi come from the
+#'   stored `dtw` (document-topic) and `tww` (topic-word) weight matrices,
+#'   identifiers from `doc_ids` and `vocab`. When the weights are not stored,
+#'   the adapter recurses into the raw `model_object` if present.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi nlp_topic_fit
+optop_as_theta_phi.nlp_topic_fit <- function(model) {
+  theta <- model$dtw
+  phi <- model$tww
+  if (is.null(theta) || is.null(phi)) {
+    if (!is.null(model$model_object)) {
+      return(optop_as_theta_phi(model$model_object))
+    }
+    stop(paste("this nlp_topic_fit stores neither its dtw/tww weight",
+               "matrices nor the raw model_object, so theta and phi cannot",
+               "be recovered"))
+  }
+  theta <- as.matrix(theta)
+  phi <- as.matrix(phi)
+  docs <- model$doc_ids
+  if (is.null(docs)) {
+    docs <- rownames(theta)
+  }
+  terms <- model$vocab
+  if (is.null(terms)) {
+    terms <- colnames(phi)
+  }
+  list(theta = theta,
+       phi   = phi,
+       K     = ncol(theta),
+       docs  = as.character(docs),
+       terms = as.character(terms))
 }
 
 #' @describeIn optop_as_theta_phi Placeholder for `text2vec` (WarpLDA)
@@ -70,6 +138,88 @@ optop_as_theta_phi.TopicModel <- function(model) {
 optop_as_theta_phi.LDA_t2v <- function(model) {
   # TODO: map model$doc_topic_distr -> theta; model$topic_word_distribution -> phi (rows sum to 1)
   stop("text2vec adapter not implemented yet.")
+}
+
+#' @describeIn optop_as_theta_phi Unsupported classes fail with the list of
+#'   supported engines.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi default
+optop_as_theta_phi.default <- function(model) {
+  stop(paste0("unsupported topic model class <",
+              paste(class(model), collapse = "/"),
+              ">. Supported: topicmodels (LDA VEM/Gibbs, CTM), seededlda ",
+              "(textmodel_lda/textmodel_seededlda/textmodel_seqlda) and ",
+              "NLPstudio (nlp_topic_fit)."))
+}
+
+#' Validate an adapter result
+#'
+#' Contract enforcement behind [optimal_topic()]: checks that an
+#' `optop_as_theta_phi()` result is a coherent
+#' `list(theta, phi, K, docs, terms)` before any statistic is computed, so a
+#' broken or partial adapter fails with a clear message instead of
+#' propagating misaligned numbers. Document identifiers and terms are
+#' mandatory and must be unique, and both weight matrices must have rows
+#' summing to 1.
+#'
+#' @param tp A list as returned by `optop_as_theta_phi()`.
+#' @param model_class Character; the class vector of the adapted model, used
+#'   in the error messages.
+#'
+#' @return Invisibly `TRUE`; called for its side effect of stopping on a
+#'   contract violation.
+#'
+#' @keywords internal
+.optop_validate_theta_phi <- function(tp, model_class) {
+  lbl <- paste(model_class, collapse = "/")
+  theta <- tp$theta
+  phi <- tp$phi
+  if (!is.matrix(theta) || !is.numeric(theta) ||
+      !is.matrix(phi) || !is.numeric(phi)) {
+    stop("adapter for class <", lbl,
+         "> must return numeric matrices theta and phi")
+  }
+  if (ncol(theta) != nrow(phi)) {
+    stop("adapter for class <", lbl,
+         ">: ncol(theta) and nrow(phi) disagree on the number of topics")
+  }
+  if (length(tp$K) != 1L || !is.finite(tp$K) ||
+      as.integer(tp$K) != ncol(theta)) {
+    stop("adapter for class <", lbl,
+         ">: K does not match the dimensions of theta and phi")
+  }
+  docs <- tp$docs
+  if (is.null(docs) || length(docs) != nrow(theta) || anyNA(docs)) {
+    stop("adapter for class <", lbl, "> must expose one document identifier",
+         " per row of theta; positional alignment is never assumed")
+  }
+  if (anyDuplicated(docs)) {
+    stop("model of class <", lbl, "> has duplicated document identifiers;",
+         " alignment would be ambiguous")
+  }
+  terms <- tp$terms
+  if (is.null(terms) || length(terms) != ncol(phi) || anyNA(terms)) {
+    stop("adapter for class <", lbl,
+         "> must expose one term per column of phi")
+  }
+  if (anyDuplicated(terms)) {
+    stop("model of class <", lbl, "> has duplicated terms; feature",
+         " alignment would be ambiguous")
+  }
+  if (any(!is.finite(theta)) || any(!is.finite(phi)) ||
+      any(theta < 0) || any(phi < 0)) {
+    stop("model of class <", lbl,
+         "> has non-finite or negative fitted probabilities")
+  }
+  if (any(abs(rowSums(theta) - 1) > 1e-6)) {
+    stop("model of class <", lbl, ">: the rows of theta do not sum to 1",
+         " (document-topic weights must be proportions)")
+  }
+  if (any(abs(rowSums(phi) - 1) > 1e-6)) {
+    stop("model of class <", lbl, ">: the rows of phi do not sum to 1",
+         " (topic-word weights must be proportions)")
+  }
+  invisible(TRUE)
 }
 
 #' Align a document-term matrix to a grid of fitted models
@@ -91,8 +241,8 @@ optop_as_theta_phi.LDA_t2v <- function(model) {
 #' @keywords internal
 optop_align_dtm_to_models <- function(dtm, models) {
   # collect model vocabularies
-  vocabs <- lapply(models, function(m) colnames(topicmodels::posterior(m)$terms))
-  vocab  <- Reduce(intersect, vocabs)
+  vocabs <- lapply(models, function(m) optop_as_theta_phi(m)$terms)
+  vocab <- Reduce(intersect, vocabs)
   if (length(vocab) == 0L) stop("Empty vocabulary intersection across models.")
 
   # subset & reorder dtm to model vocab order

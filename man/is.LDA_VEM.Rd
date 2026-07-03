@@ -13,7 +13,8 @@ is.LDA_VEM(x)
 A logical scalar.
 }
 \description{
-Input gate used by the exported functions: \code{TRUE} when \code{x} is an
+Input gate used by the deprecated functions and by
+\code{optimal_topic(selection = "legacy")}: \code{TRUE} when \code{x} is an
 \code{LDA_VEM} object as returned by \code{topicmodels::LDA(method = "VEM")}.
 }
 \keyword{internal}

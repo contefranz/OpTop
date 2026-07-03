@@ -2,14 +2,21 @@
 % Please edit documentation in R/utils.R
 \name{optop_as_theta_phi}
 \alias{optop_as_theta_phi}
+\alias{optop_as_theta_phi.TopicModel}
 \alias{optop_as_theta_phi.LDA}
 \alias{optop_as_theta_phi.LDA_VEM}
 \alias{optop_as_theta_phi.LDA_Gibbs}
-\alias{optop_as_theta_phi.TopicModel}
+\alias{optop_as_theta_phi.CTM}
+\alias{optop_as_theta_phi.CTM_VEM}
+\alias{optop_as_theta_phi.textmodel_lda}
+\alias{optop_as_theta_phi.nlp_topic_fit}
 \alias{optop_as_theta_phi.LDA_t2v}
+\alias{optop_as_theta_phi.default}
 \title{Extract document-topic and topic-word weights from a fitted model}
 \usage{
 optop_as_theta_phi(model)
+
+\method{optop_as_theta_phi}{TopicModel}(model)
 
 \method{optop_as_theta_phi}{LDA}(model)
 
@@ -17,41 +24,76 @@ optop_as_theta_phi(model)
 
 \method{optop_as_theta_phi}{LDA_Gibbs}(model)
 
-\method{optop_as_theta_phi}{TopicModel}(model)
+\method{optop_as_theta_phi}{CTM}(model)
+
+\method{optop_as_theta_phi}{CTM_VEM}(model)
+
+\method{optop_as_theta_phi}{textmodel_lda}(model)
+
+\method{optop_as_theta_phi}{nlp_topic_fit}(model)
 
 \method{optop_as_theta_phi}{LDA_t2v}(model)
+
+\method{optop_as_theta_phi}{default}(model)
 }
 \arguments{
 \item{model}{A fitted topic model.}
 }
 \value{
-A list with elements \code{theta}, \code{phi} and \code{K} as described above.
+A list with elements \code{theta}, \code{phi}, \code{K}, \code{docs} and \code{terms} as
+described above.
 }
 \description{
-Adapter generic behind the discrepancy indices: every supported topic
-model class is reduced to the common contract
-\code{list(theta, phi, K)}, with \eqn{\theta}{theta} the
+Adapter generic behind \code{\link[=optimal_topic]{optimal_topic()}} and the discrepancy indices:
+every supported topic-model class is reduced to the common contract
+\code{list(theta, phi, K, docs, terms)}, with \eqn{\theta}{theta} the
 \eqn{J \times K}{J x K} document-topic matrix (rows summing to 1),
 \eqn{\phi}{phi} the \eqn{K \times W}{K x W} topic-word matrix (rows
-summing to 1), and \eqn{K} the number of topics. Adding support for a new
-topic-model implementation means adding a method for its class.
+summing to 1), \eqn{K} the number of topics, \code{docs} the \eqn{J} document
+identifiers matching the rows of \eqn{\theta}{theta}, and \code{terms} the
+\eqn{W} vocabulary entries matching the columns of \eqn{\phi}{phi}.
+Document identifiers are mandatory: alignment to the data is always by
+identifier, never positional. Adding support for a new topic-model
+implementation means adding a method for its class; the contract is
+enforced by \code{.optop_validate_theta_phi()}.
 }
 \section{Methods (by class)}{
 \itemize{
-\item \code{optop_as_theta_phi(LDA)}: \code{topicmodels::LDA} fits: theta and phi
-come from \code{topicmodels::posterior()}.
+\item \code{optop_as_theta_phi(TopicModel)}: Workhorse for all \code{topicmodels} fits (LDA
+and CTM alike): theta and phi come from \code{topicmodels::posterior()},
+identifiers from the \code{documents} and \code{terms} slots.
 
-\item \code{optop_as_theta_phi(LDA_VEM)}: VEM fits delegate to the \code{LDA} method.
+\item \code{optop_as_theta_phi(LDA)}: \code{topicmodels::LDA} fits delegate to the
+\code{TopicModel} method.
 
-\item \code{optop_as_theta_phi(LDA_Gibbs)}: Gibbs fits delegate to the \code{LDA} method.
+\item \code{optop_as_theta_phi(LDA_VEM)}: VEM fits delegate to the \code{TopicModel}
+method.
 
-\item \code{optop_as_theta_phi(TopicModel)}: Defensive fallback for other \code{topicmodels}
-classes: LDA subclasses are accepted, everything else fails with an
-informative error.
+\item \code{optop_as_theta_phi(LDA_Gibbs)}: Gibbs fits delegate to the \code{TopicModel}
+method.
+
+\item \code{optop_as_theta_phi(CTM)}: \code{topicmodels::CTM} fits delegate to the
+\code{TopicModel} method.
+
+\item \code{optop_as_theta_phi(CTM_VEM)}: CTM VEM fits delegate to the \code{TopicModel}
+method.
+
+\item \code{optop_as_theta_phi(textmodel_lda)}: seededlda fits: one method covers
+\code{seededlda::textmodel_lda()}, \code{seededlda::textmodel_seededlda()} and
+\code{seededlda::textmodel_seqlda()}, since all three constructors return
+objects of class \code{textmodel_lda} exposing \code{theta} and \code{phi}.
+
+\item \code{optop_as_theta_phi(nlp_topic_fit)}: NLPstudio fits: theta and phi come from the
+stored \code{dtw} (document-topic) and \code{tww} (topic-word) weight matrices,
+identifiers from \code{doc_ids} and \code{vocab}. When the weights are not stored,
+the adapter recurses into the raw \code{model_object} if present.
 
 \item \code{optop_as_theta_phi(LDA_t2v)}: Placeholder for \code{text2vec} (WarpLDA)
 support, registered so the method dispatches and fails informatively
 until the adapter is implemented.
+
+\item \code{optop_as_theta_phi(default)}: Unsupported classes fail with the list of
+supported engines.
 
 }}
 \keyword{internal}
