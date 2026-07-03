@@ -20,19 +20,20 @@ optimal_topic(
 }
 \arguments{
 \item{lda_models}{A list of \code{topicmodels::LDA} objects (VEM), ordered by
-increasing number of topics. The grid should span the candidate values of \code{K}.}
+increasing number of topics. The grid should span the candidate values
+of \eqn{K}.}
 
 \item{weighted_dfm}{A weighted \code{quanteda::dfm} containing word proportions
 for each document; it is recommended that document ids are available via
 \code{quanteda::docid()}.}
 
-\item{q}{Numeric in \verb{(0, 1]}. Cumulative probability mass retained as
+\item{q}{Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 "relatively important" words; the remaining words are collapsed into a
-single bin whose mass stays strictly below \code{1 - q}. Equals \code{1 - I^K} in
-the paper's notation; the default \code{0.95} matches the paper's numerical
-setting \code{I^K = 0.05}.}
+single bin whose mass stays strictly below \eqn{1 - q}. Equals
+\eqn{1 - I^K} in the paper's notation; the default \code{0.95} matches the
+paper's numerical setting \eqn{I^K = 0.05}.}
 
-\item{alpha}{Numeric in \verb{[0, 1]}. Significance level used by the
+\item{alpha}{Numeric in \eqn{[0, 1]}. Significance level used by the
 \code{"sequential"} and \code{"legacy"} selection rules (default \code{0.05}); ignored
 by \code{"min"}.}
 
@@ -59,7 +60,7 @@ for reproducible calibrated p-values (default \code{NULL}).}
 
 \item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
 topics with vertical and horizontal guides at the selected optimum and a
-subtitle reporting the selection method, the selected \code{K}, and the
+subtitle reporting the selection method, the selected \eqn{K}, and the
 calibration if any (default \code{TRUE}).}
 
 \item{verbose}{Logical; if \code{TRUE} (default), report progress (a \code{cli}
@@ -70,9 +71,10 @@ sequential rule's fallback are always signalled.}
 \value{
 A \code{data.table} with columns:
 \itemize{
-\item \code{topic}: integer number of topics (\code{K}).
-\item \code{OpTop}: standardized Test 1 statistic (raw statistic / \code{df}).
-\item \code{df}: degrees of freedom \verb{sum_j P_j} of the raw statistic.
+\item \code{topic}: integer number of topics (\eqn{K}).
+\item \code{OpTop}: standardized Test 1 statistic (raw statistic divided by \code{df}).
+\item \code{df}: degrees of freedom \eqn{\sum_j P_j}{sum_j P_j} of the raw
+statistic.
 \item \code{pval}: the p-value the selection rules use — asymptotic upper tail for
 \code{calibrate = "none"}, calibrated otherwise (legacy: the deprecated
 lower-tail value).
@@ -89,83 +91,92 @@ the fitted-model null, and selects the optimal topic count with one of
 three rules; see Details.
 }
 \details{
-For each document, the fitted word probabilities are sorted in decreasing
-order and the smallest head whose cumulative mass exceeds \code{q} is kept
-(\code{P_j} words); the remaining words are collapsed into a single "min" bin.
-The document contributes \code{(P_j + 1)} times its Pearson term over the
-\code{P_j + 1} bins, and the corpus statistic is the sum over documents
-(Equation 8 of the paper), asymptotically chi-square with
-\verb{df = sum_j P_j} degrees of freedom. The returned \code{OpTop} column reports
-the \emph{standardized} statistic (raw statistic divided by \code{df}, the version
-plotted in the paper's Figure 2), while \code{pval} is the p-value the
-selection rules consume — the upper tail of the raw statistic on its full
-degrees of freedom by default, or the calibrated value when
-\code{calibrate != "none"}.
+For each document \eqn{j}, the fitted word probabilities are sorted in
+decreasing order and the smallest head whose cumulative mass exceeds
+\eqn{q} is kept (\eqn{P_j} words); the remaining words are collapsed into
+a single "min" bin. The document contributes \eqn{P_j + 1} times its
+Pearson term over the \eqn{P_j + 1} bins, and the corpus statistic is the
+sum over documents (Equation 8 of the paper), asymptotically chi-square
+with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom. The returned \code{OpTop}
+column reports the \emph{standardized} statistic (raw statistic divided by its
+degrees of freedom, the version plotted in the paper's Figure 2), while
+\code{pval} is the p-value the selection rules consume — the upper tail of the
+raw statistic on its full degrees of freedom by default, or the calibrated
+value when \code{calibrate != "none"}.
 
 \strong{Selection rules.}
 \itemize{
-\item \code{"sequential"} (default): scan \code{K} upward and select the smallest \code{K}
-the test fails to reject (\code{pval > alpha}) — the classical sequential
-scheme for model order. If every model is rejected, the rule falls back
-to the global minimum with a warning.
-\item \code{"min"}: select the \code{K} with the minimum standardized statistic — the
-rule used in the published case study.
+\item \code{"sequential"} (default): scan \eqn{K} upward and select the smallest
+\eqn{K} the test fails to reject (\code{pval > alpha}) — the classical
+sequential scheme for model order. If every model is rejected, the rule
+falls back to the global minimum with a warning.
+\item \code{"min"}: select the \eqn{K} with the minimum standardized statistic —
+the rule used in the published case study.
 \item \code{"legacy"}: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
-with the crossing word collapsed, \code{P_j} scaling, lower-tail p-value with
-1 degree of freedom, "first \code{pval <= alpha}" rule). Deprecated; it will
-be removed before v1.0.0.
+with the crossing word collapsed, \eqn{P_j} scaling, lower-tail p-value
+with 1 degree of freedom, "first \code{pval <= alpha}" rule). Deprecated; it
+will be removed before v1.0.0.
 }
 
 \strong{Calibration.}
 The chi-square reference of Equation 8 is a yardstick rather than an exact
 null law, for two reasons. First, the classical Pearson asymptotics hold
 for the \emph{count} statistic, whose scale factor is the document length
-\code{N_j}; Equation 8 works on proportions scaled by the bin count \code{P_j + 1}
-instead, so the statistic's null magnitude is off by roughly
-\code{N_j / (P_j + 1)} per document. Second, the expected probabilities are
+\eqn{N_j}; Equation 8 works on proportions scaled by the bin count
+\eqn{P_j + 1} instead, so the statistic's null magnitude is off by roughly
+\eqn{N_j / (P_j + 1)} per document. Second, the expected probabilities are
 estimated (by VEM) from the same data they are tested against. The
-practical consequence is that with \verb{df = sum_j P_j} in the thousands the
-chi-square quantiles are razor-thin and upper-tail p-values saturate at 0
-or 1 unless the fit is genuinely borderline — \code{alpha} is not a true
-Type-I error rate.
+practical consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of
+freedom in the thousands the chi-square quantiles are razor-thin and
+upper-tail p-values saturate at 0 or 1 unless the fit is genuinely
+borderline — \code{alpha} is not a true Type-I error rate.
 
 Calibration replaces the chi-square reference with the distribution of the
-statistic under the \strong{conditional fitted-model null}: "document \code{j} is
-\code{Multinomial(N_j, I_j)}", where \code{I_j} are the \code{K}-model's fitted word
-probabilities and \code{N_j} the observed document lengths (hence
-\code{doc_lengths}). Two properties make this exact and fast:
+statistic under the \strong{conditional fitted-model null}: document \eqn{j} is
+\eqn{\mathrm{Multinomial}(N_j, I_j)}{Multinomial(N_j, I_j)}, where
+\eqn{I_j} are the \eqn{K}-model's fitted word probabilities and \eqn{N_j}
+the observed document lengths (hence \code{doc_lengths}). Two properties make
+this exact and fast:
 \itemize{
-\item the per-document envelope (sorted fitted probabilities, cutoff at \code{q},
-collapsed min bin) depends only on the model, never on the data, and the
-statistic touches the data only through sums over those fixed bins;
+\item the per-document envelope (sorted fitted probabilities, cutoff at
+\eqn{q}, collapsed min bin) depends only on the model, never on the
+data, and the statistic touches the data only through sums over those
+fixed bins;
 \item a multinomial collapsed over bins is multinomial on the collapsed
 probabilities, so the null can be simulated \emph{directly on the}
-\code{P_j + 1} \emph{bins} — exactly equivalent to simulating whole documents over
-the vocabulary, at a tiny fraction of the cost.
+\eqn{P_j + 1} \emph{bins} — exactly equivalent to simulating whole documents
+over the vocabulary, at a tiny fraction of the cost.
 }
 
-\code{calibrate = "bootstrap"} draws \code{n_boot} null replicates of the statistic
-this way and reports the empirical upper-tail p-value with the standard
-finite-sample correction, \verb{(1 + #\\\{T* >= T\\\}) / (n_boot + 1)}. This is the
-reference method: \code{alpha} becomes a genuine Type-I error rate with respect
-to the conditional null, at bootstrap resolution \code{1 / (n_boot + 1)}.
+\code{calibrate = "bootstrap"} draws \eqn{B} = \code{n_boot} null replicates
+\eqn{T^\ast}{T*} of the statistic \eqn{T} this way and reports the
+empirical upper-tail p-value with the standard finite-sample correction,
+\eqn{(1 + \#\{T^\ast \ge T\}) / (B + 1)}{(1 + #{T* >= T}) / (B + 1)}.
+This is the reference method: \code{alpha} becomes a genuine Type-I error rate
+with respect to the conditional null, at bootstrap resolution
+\eqn{1 / (B + 1)}.
 
 \code{calibrate = "moment"} uses the exact multinomial moments of the
-per-document Pearson term (Haldane, 1937): over \code{k} bins with
-probabilities \code{p_b} and length \code{n}, the count statistic has
-\code{E = k - 1} and \verb{Var = 2(k - 1) + (sum_b 1/p_b - k^2 - 2k + 2) / n};
-scaling by the statistic's \code{k / n} factor and summing over independent
-documents gives the null mean and variance of the corpus statistic, which
-are matched to a scaled chi-square \code{a * chisq(nu)} (Satterthwaite:
-\verb{a = sigma^2 / (2 mu)}, \verb{nu = 2 mu^2 / sigma^2}). Closed form, no
+per-document Pearson term (Haldane, 1937): over \eqn{k} bins with
+probabilities \eqn{p_b} and length \eqn{n}, the count statistic
+\eqn{X^2} has
+\eqn{E[X^2] = k - 1}{E[X^2] = k - 1} and
+\eqn{\mathrm{Var}[X^2] = 2(k - 1) + (\sum_b 1/p_b - k^2 - 2k + 2)/n}{Var[X^2] = 2(k - 1) + (sum_b 1/p_b - k^2 - 2k + 2)/n};
+scaling by the statistic's \eqn{k/n} factor and summing over independent
+documents gives the null mean \eqn{\mu}{mu} and variance
+\eqn{\sigma^2}{sigma^2} of the corpus statistic, which are matched to a
+scaled chi-square \eqn{a\,\chi^2_\nu}{a * chisq(nu)} (Satterthwaite:
+\eqn{a = \sigma^2 / (2\mu)}{a = sigma^2 / (2 mu)},
+\eqn{\nu = 2\mu^2 / \sigma^2}{nu = 2 mu^2 / sigma^2}). Closed form, no
 simulation — a fast approximation that corrects the location and scale of
 the reference but not its higher moments.
 
-One caveat applies to both: the null holds the estimated \code{theta} and \code{phi}
-fixed (no per-replicate re-fitting of the LDA — the "double bootstrap"
-would be exact but computationally prohibitive). Calibrated p-values are
-therefore conditional on the fitted parameters and do not account for
-estimation noise in \code{theta} and \code{phi}.
+One caveat applies to both: the null holds the estimated
+\eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
+of the LDA — the "double bootstrap" would be exact but computationally
+prohibitive). Calibrated p-values are therefore conditional on the fitted
+parameters and do not account for estimation noise in \eqn{\theta}{theta}
+and \eqn{\phi}{phi}.
 
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
 proportions (row-wise). Document identifiers are taken from
@@ -177,8 +188,8 @@ follow the order in which the models saw the documents.
 
 \strong{Performance note.} The core computation is delegated to C++ compiled
 code; the bootstrap operates on the collapsed bins through vectorized
-calls (\code{rmultinom}, \code{colSums}), costing about \code{n_boot * df} floating-point
-operations per model.
+calls (\code{rmultinom}, \code{colSums}), costing about \eqn{B \times
+\mathrm{df}}{B x df} floating-point operations per model.
 }
 \examples{
 \dontrun{
