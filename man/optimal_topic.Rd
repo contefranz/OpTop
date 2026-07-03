@@ -50,9 +50,9 @@ chi-square). Not available with \code{selection = "legacy"}.}
 
 \item{doc_lengths}{Numeric vector with the length (total token count) of
 each document; required when \code{calibrate != "none"}, typically
-\code{rowSums()} of the counts dfm the models were fitted on. If named, names
-are matched to the document ids of \code{weighted_dfm}; if unnamed, the
-vector must follow the row order of \code{weighted_dfm}.}
+\code{quanteda::ntoken()} of the counts dfm the models were fitted on. If
+named, names are matched to the document ids of \code{weighted_dfm}; if
+unnamed, the vector must follow the row order of \code{weighted_dfm}.}
 
 \item{seed}{Optional integer passed to \code{\link[=set.seed]{set.seed()}} before the bootstrap,
 for reproducible calibrated p-values (default \code{NULL}).}
@@ -196,7 +196,7 @@ test1_cal <- optimal_topic(lda_models = lda_list,
                            weighted_dfm = weighted_dfm,
                            calibrate = "bootstrap",
                            n_boot = 200,
-                           doc_lengths = rowSums(counts_dfm),
+                           doc_lengths = quanteda::ntoken(counts_dfm),
                            seed = 42)
 }
 

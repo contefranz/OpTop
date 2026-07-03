@@ -40,9 +40,9 @@ if (getRversion() >= "2.15.1") {
 #'   `calibrate = "bootstrap"` (default `200L`, minimum `20`).
 #' @param doc_lengths Numeric vector with the length (total token count) of
 #'   each document; required when `calibrate != "none"`, typically
-#'   `rowSums()` of the counts dfm the models were fitted on. If named, names
-#'   are matched to the document ids of `weighted_dfm`; if unnamed, the
-#'   vector must follow the row order of `weighted_dfm`.
+#'   `quanteda::ntoken()` of the counts dfm the models were fitted on. If
+#'   named, names are matched to the document ids of `weighted_dfm`; if
+#'   unnamed, the vector must follow the row order of `weighted_dfm`.
 #' @param seed Optional integer passed to [set.seed()] before the bootstrap,
 #'   for reproducible calibrated p-values (default `NULL`).
 #' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
@@ -167,7 +167,7 @@ if (getRversion() >= "2.15.1") {
 #'                            weighted_dfm = weighted_dfm,
 #'                            calibrate = "bootstrap",
 #'                            n_boot = 200,
-#'                            doc_lengths = rowSums(counts_dfm),
+#'                            doc_lengths = quanteda::ntoken(counts_dfm),
 #'                            seed = 42)
 #' }
 #'
