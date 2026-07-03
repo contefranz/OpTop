@@ -1,11 +1,12 @@
 ---
-title: "Optimal topic selection and goodness-of-fit with OpTop"
+title: "Selecting K with OpTop"
+subtitle: "Parametric tests and discrepancy indices for LDA models"
 author: "Francesco Grossetti"
 output:
   rmarkdown::html_vignette:
     toc: true
 vignette: >
-  %\VignetteIndexEntry{Optimal topic selection and goodness-of-fit with OpTop}
+  %\VignetteIndexEntry{Selecting K with OpTop}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -90,14 +91,14 @@ toks <- quanteda::data_corpus_inaugural |>
   quanteda::tokens_tolower() |>
   quanteda::tokens_remove(quanteda::stopwords())
 
-# Create DFM (raw counts - DO NOT weight, OpTop expects counts not proportions)
+# Create DFM (with raw counts as well as proportions)
 mydfm        <- quanteda::dfm(toks)
 mydfm_sub    <- quanteda::dfm_trim(mydfm, min_termfreq = 5)
 weighted_dfm <- quanteda::dfm_weight(mydfm_sub, scheme = "prop")
 
 K_grid <- seq(2, 200, by = 2)
 
-# Estimate VEM models
+# Estimate VEM models in parallel
 VEM_models <- parallel::mclapply(
   K_grid,
   function(k) {
@@ -121,6 +122,7 @@ progress across the grid, the selected model with the rule that chose it, and
 the elapsed time:
 
 ```{r optimal-call-seq, eval = have_models}
+# Use the sequential approach
 chi_seq <- optimal_topic(lda_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "sequential",
@@ -135,6 +137,7 @@ cat(res$inaugural$console_seq, sep = "\n")
 ```
 
 ```{r optimal-call-min, eval = have_models}
+# Use the global minimum approach
 chi_min <- optimal_topic(lda_models = VEM_models,
                          weighted_dfm = weighted_dfm,
                          selection = "min",
