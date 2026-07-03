@@ -8,8 +8,9 @@
 #' \eqn{\tau_j = c / L_j} with \eqn{L_j} the document length.
 #'
 #' @param models A list of fitted topic models spanning a grid of \eqn{K}.
-#'   Currently supports \code{topicmodels::LDA} objects (VEM or Gibbs).
-#'   Additional adapters may be added in future versions.
+#'   Supports every class handled by the internal adapters:
+#'   \code{topicmodels::LDA} (VEM or Gibbs) and \code{topicmodels::CTM}
+#'   fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.
 #' @param dtm A document–term matrix of **counts** with rows = documents and
 #'   columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.
 #' @param c Positive scalar controlling the per-document threshold

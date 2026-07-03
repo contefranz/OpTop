@@ -7,3 +7,6 @@
 ^AUDIT\.md$
 ^codecov\.yml$
 ^data-raw$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

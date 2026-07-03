@@ -13,9 +13,14 @@ regression-style goodness-of-fit indices. Both build on the multinomial
 structure that LDA itself assumes, so model choice and model assessment
 rest on statistical tests rather than heuristics such as perplexity.
 
-The package operates on
-\strong{\href{https://cran.r-project.org/package=topicmodels}{topicmodels}} fits
-within the \strong{\href{https://quanteda.io/}{quanteda}} ecosystem, returns
+The package operates within the \strong{\href{https://quanteda.io/}{quanteda}}
+ecosystem on fits from
+\strong{\href{https://cran.r-project.org/package=topicmodels}{topicmodels}} (LDA
+with VEM or Gibbs, and CTM),
+\strong{\href{https://cran.r-project.org/package=seededlda}{seededlda}} (all three
+constructors) and \strong{NLPstudio} (\code{nlp_topic_fit}), reduced to a common
+\eqn{\theta}{theta}/\eqn{\phi}{phi} contract by an internal adapter
+family. It returns
 \strong{\href{https://rdatatable.gitlab.io/data.table/}{data.table}} objects
 throughout, and delegates its hot loops to compiled C++ so that large
 vocabularies and long model grids remain tractable.
@@ -24,7 +29,7 @@ vocabularies and long model grids remain tractable.
 The toolkit is organized around three questions:
 \itemize{
 \item \strong{Which K is optimal?}
-\code{\link[=optimal_topic]{optimal_topic()}} evaluates a grid of fitted LDA models with the Test 1
+\code{\link[=optimal_topic]{optimal_topic()}} evaluates a grid of fitted topic models with the Test 1
 chi-square statistic of the paper (Equation 8) and selects the optimal
 topic count with one of three rules: the sequential adequacy scan
 (default), the global minimum of the standardized statistic (the rule of

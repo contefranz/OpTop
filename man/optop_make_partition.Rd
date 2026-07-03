@@ -8,8 +8,9 @@ optop_make_partition(models, dtm, c = 5, block = 5000)
 }
 \arguments{
 \item{models}{A list of fitted topic models spanning a grid of \eqn{K}.
-Currently supports \code{topicmodels::LDA} objects (VEM or Gibbs).
-Additional adapters may be added in future versions.}
+Supports every class handled by the internal adapters:
+\code{topicmodels::LDA} (VEM or Gibbs) and \code{topicmodels::CTM}
+fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.}
 
 \item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
 columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.}

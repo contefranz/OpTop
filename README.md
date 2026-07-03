@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.10.1-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.10.1)
+[![release](https://img.shields.io/badge/release-v0.11.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.11.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -30,11 +30,13 @@ different topic counts directly comparable.
   documents with the fitted models by identifier, so the dfm row order no longer matters.
 
 - **Current support and extensions**  
-  `optimal_topic()` currently requires **VEM** fits from the package **topicmodels** 
-  (class `LDA_VEM`). The discrepancy indices accept both **VEM and Gibbs** fits via 
-  internal adapters (`optop_as_theta_phi()`). Adapters for further implementations — 
-  topicmodels' `CTM`, **seededlda**, **NLPstudio**, and *WarpLDA* from **text2vec** — 
-  are planned.
+  As of v0.11.0, `optimal_topic()` and the discrepancy indices accept — through the 
+  internal adapter family (`optop_as_theta_phi()`) — **topicmodels** fits (LDA with 
+  VEM or Gibbs, and `CTM`), all three **seededlda** models (`textmodel_lda()`, 
+  `textmodel_seededlda()`, `textmodel_seqlda()`), and **NLPstudio** fits 
+  (`nlp_topic_fit`). Engines can be mixed within one grid fitted on the same corpus: 
+  documents and features are aligned by identifier, per model. An adapter for 
+  *WarpLDA* from **text2vec** is planned.
   
 ### Authors
 

@@ -96,6 +96,38 @@ bootstrap remains out of scope). The per-document bootstrap loop lives in R
 on C-level primitives; it is the designated C++/OpenMP port if corpora with
 J ≫ 10⁴ ever make it the bottleneck.
 
+## Generalization to arbitrary engines (implemented in 0.11.0)
+
+The 0.10.x core hard-coded `@gamma`/`@beta` S4 access and `optimal_topic()`
+gated inputs with `is.LDA_VEM()` (rejecting even `LDA_Gibbs`). Resolved on
+the `generalize-core` branch:
+
+- **The C++ core takes plain matrices.** `optimal_topic_core(theta, phi,
+  dfm_t, q, doc_map, return_envelope)` — no S4 slot access, no `exp()`, and
+  the weighted dfm is transposed once in R for the whole grid instead of once
+  per call. Adding a model class never touches C++ again: it is one R
+  adapter method. As a by-product the hot path contains no R API calls,
+  which is the thread-safety precondition for the OpenMP work below.
+- **Adapter contract extended** to `list(theta, phi, K, docs, terms)` with a
+  validator (`.optop_validate_theta_phi()`): simplex rows, unique mandatory
+  document identifiers and terms, consistent dimensions. Methods:
+  `TopicModel` (one workhorse covering topicmodels LDA VEM/Gibbs *and* CTM —
+  `posterior()` is defined on the parent class and returns `exp(@beta)`
+  verbatim), `textmodel_lda` (covers all three seededlda constructors, which
+  share the class), `nlp_topic_fit` (NLPstudio: `dtw`/`tww`/`doc_ids`/`vocab`,
+  with recursion into `model_object` when the weights are not stored), plus
+  the informative `default` and the `LDA_t2v` stub.
+- **Alignment hardened.** Two latent defects fixed: vocabulary alignment was
+  never validated (a feature-permuted dfm was silently mis-scored — now
+  reordered when it is the same set, error otherwise), and `doc_map` was
+  built against model 1 and reused for the grid (now per model, with the
+  document set intersected across all models). Alignment is identifier-based
+  everywhere; positional alignment is never assumed.
+- **Legacy frozen.** The pre-0.9.9 arithmetic lives verbatim in
+  `src/optimal_topic_core_legacy.cpp`, used only by `selection = "legacy"`
+  (still VEM-only), so bit-compatibility holds by construction; the file
+  dies with the rule before v1.0.0.
+
 ## Deferred
 
 - **Count-based statistic option**: the orthodox Pearson on counts
@@ -103,18 +135,20 @@ J ≫ 10⁴ ever make it the bottleneck.
   a different statistic than the published Eq. (8), so an alternative
   alongside it, not a replacement.
 
-- **OpenMP over the document loop.** Correct parallelization axis, but only
-  worth adding after the `gemm` rewrite is benchmarked: it requires a
-  `src/Makevars` with `$(SHLIB_OPENMP_CXXFLAGS)` and keeping
-  `Rcpp::checkUserInterrupt()` out of the parallel region. See the benchmark
-  section — revisit only if the per-document sort/cumsum still dominates.
-- **Generalizability.** The core hard-codes `@gamma` / `@beta` S4 access and
-  `optimal_topic()` gates inputs with `is.LDA_VEM()` (which even rejects
-  `LDA_Gibbs`). The right abstraction already exists in `R/utils.R`
-  (`optop_as_theta_phi()`): extract theta/phi in R and pass plain matrices to
-  C++, with new adapter methods for `CTM_VEM`, seededlda's `textmodel_lda`,
-  and NLPstudio's `nlp_topic_fit` (dtw → theta, tww → phi). Planned as a
-  follow-up branch once the efficiency work is merged.
+- **OpenMP over the document loop.** Correct parallelization axis, and the
+  0.11.0 matrix core removed the blocker: the per-document loop is now pure
+  Armadillo with no R API inside (`Rcpp::checkUserInterrupt()` sits at the
+  block level and would move out of the parallel region). Still deliberately
+  deferred to a later release: it needs a `src/Makevars` with
+  `$(SHLIB_OPENMP_CXXFLAGS)`, a decision on the thread-count API, and a
+  fresh benchmark of the matrix core to justify it — see the benchmark
+  section. Note the platform caveat: CRAN's macOS binaries (and Apple clang
+  toolchains generally) build without OpenMP, so the speedup would accrue to
+  Linux/Windows users.
+
+- **text2vec (WarpLDA) adapter**: the `LDA_t2v` stub still fails
+  informatively; mapping `doc_topic_distr`/`topic_word_distribution` to the
+  contract needs a verified normalization convention.
 
 ## Vignette build design (CRAN-ready)
 
@@ -133,6 +167,8 @@ static `OpTop.Rmd`).
 
 ## Benchmark
 
+### 0.9.7 blocked-gemm rewrite (historical)
+
 Timings of `optimal_topic(..., do_plot = FALSE)` on an Apple Silicon Mac
 (R 4.6.1, Apple clang 21, `-O2`, reference BLAS), median of 3 runs, before
 (commit `d44317f`, pre-rewrite) vs after the blocked-gemm rewrite. Outputs
@@ -143,19 +179,37 @@ agree to ~1e-14 in both settings.
 | J = 1000, W = 4000 (VEM fits) | K ∈ {3, 5, 8, 12} | 1.41 s | 0.98 s | 1.4× |
 | J = 2000, W = 8000 (synthetic weights) | K ∈ {5, 10, 20, 40, 80} | 6.43 s | 3.83 s | 1.7× |
 
-**Where the time goes now.** The full grid's `gamma %*% exp(beta)` products
-account for only ~0.14 s of the 3.83 s in the large setting: after the
-rewrite, the per-document *sorting* machinery (`sort_index` over W elements,
-J × n_models times) dominates the runtime, not the algebra. Consequences:
+At 0.9.7 the full grid's `gamma %*% exp(beta)` products accounted for only
+~0.14 s of the 3.83 s in the large setting: after the rewrite, the
+per-document *sorting* machinery (`sort_index` over W elements,
+J × n_models times) dominated the runtime, not the algebra.
 
-- The headline gain of the rewrite is asymptotic in K (the removed temporary
-  was W × K per document) and in sparsity handling; at small K the sort was
-  already the bottleneck.
-- **OpenMP over the document loop is now the highest-leverage follow-up**:
-  documents are independent and the per-model reductions are two scalars, so
-  the sort-dominated loop should scale near-linearly with cores.
-- A further algorithmic option: the chi-square statistic only needs the
-  *set* of top-`icut` words (sums are order-independent), so a
-  partial-sort/selection scheme could replace the full descending sort —
-  but the `round(cum * 1e4)` cutoff must be reproduced exactly, so this
-  needs care.
+### 0.11.0 matrix core
+
+Same settings re-run against the model-agnostic core (Apple Silicon Mac,
+R 4.6.1, Apple clang 21, `-O2`, OpenBLAS; fresh synthetic corpora — the
+0.9.7 harness was not preserved, so timings are indicative across audits,
+exact within this one):
+
+| Corpus | Models | Full pipeline | Bare core loop | gemm share |
+|---|---|---|---|---|
+| J = 1000, W = 4000 (VEM fits) | K ∈ {3, 5, 8, 12} | 0.83 s | — | — |
+| J = 2000, W = 8000 (synthetic weights) | K ∈ {5, 10, 20, 40, 80} | 5.06 s | 5.11 s | 0.26 s |
+
+Findings:
+
+- **The generalization layer is free.** The full `optimal_topic()` pipeline
+  (adapter pre-pass, contract validation, per-model document maps, feature
+  checks) times the same as a bare loop over `optimal_topic_core()` calls on
+  pre-adapted matrices — the R plumbing is not measurable next to the core.
+- **The sort still dominates (~95%).** The gemm is ~5% of the large-setting
+  runtime; the per-document `sort_index`/`cumsum` machinery is where the
+  time goes, unchanged from the 0.9.7 profile. **OpenMP over the document
+  loop therefore remains the highest-leverage follow-up**, and the matrix
+  core has removed its thread-safety blocker (no R API in the hot path).
+- A further algorithmic option: the Eq. (8) statistic only needs the *set*
+  of top-`P_j` words (sums are order-independent), so a
+  partial-sort/selection scheme could replace the full descending sort;
+  with the legacy pipeline frozen in its own translation unit, the modern
+  core no longer needs to reproduce the `round(cum * 1e4)` cutoff, which
+  makes this cleaner than it was at 0.9.7.
