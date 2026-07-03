@@ -37,7 +37,6 @@ res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
 meta <- res$meta
 idx_tab <- res$inaugural$index_table
 word_r2 <- res$inaugural$word_snapshot
-chi_cal_mm <- res$inaugural$chi_cal_mm
 sim_chi <- res$sim$chi
 sim_picks <- res$sim$picks
 sim_idx_tab <- res$sim$index_table
@@ -65,6 +64,7 @@ if (have_models) {
   chi_min <- data.table::copy(chi_seq)
   chi_by_q <- res$inaugural$chi_by_q
   chi_cal <- res$inaugural$chi_cal
+  chi_cal_mm <- res$inaugural$chi_cal_mm
 }
 ```
 
@@ -284,10 +284,35 @@ comparison):
 head(chi_cal)
 ```
 
+The bootstrap is the reference method; `calibrate = "moment"` targets the
+same fitted-model null with a closed-form approximation (exact multinomial
+moments matched to a scaled chi-square) — no simulation, instant, no seed
+needed:
+
+```{r optimal-call-mm, eval = have_models}
+chi_cal_mm <- optimal_topic(lda_models = VEM_models,
+                            weighted_dfm = weighted_dfm,
+                            q = 0.95,
+                            alpha = 0.01,
+                            calibrate = "moment",
+                            doc_lengths = doc_lens,
+                            do_plot = FALSE)
+```
+
+```{r optimal-call-mm-replay, eval = !have_models, echo = FALSE}
+cat(res$inaugural$console_cal_mm, sep = "\n")
+```
+
+The three references side by side make the point visually:
+
 ```{r cal-plot}
-pv <- melt(chi_cal[, .(topic, calibrated = pval, `chi-square` = pval_chisq)],
-           id.vars = "topic", variable.name = "reference",
-           value.name = "pvalue")
+pv <- melt(
+  data.table(topic = chi_cal$topic,
+             `chi-square` = chi_cal$pval_chisq,
+             bootstrap = chi_cal$pval,
+             moment = chi_cal_mm$pval),
+  id.vars = "topic", variable.name = "reference", value.name = "pvalue"
+)
 
 ggplot(pv, aes(x = topic, y = pvalue, color = reference)) +
   geom_line(linewidth = 0.7) +
@@ -298,25 +323,45 @@ ggplot(pv, aes(x = topic, y = pvalue, color = reference)) +
   theme_bw()
 ```
 
-```{r cal-picks}
-c(sequential_chisq = chi_seq[pval > alpha, topic][1],
-  sequential_calibrated = chi_cal[pval > alpha, topic][1])
+Because the p-values themselves do not depend on `alpha`, scanning the
+conventional thresholds is a one-liner per method on the tables we already
+have:
+
+```{r cal-alpha-sweep}
+alphas <- c(0.01, 0.05, 0.10)
+
+picks_alpha <- data.table(
+  alpha = alphas,
+  bootstrap = sapply(alphas, function(a) chi_cal[pval > a, topic][1]),
+  moment = sapply(alphas, function(a) chi_cal_mm[pval > a, topic][1]),
+  `chi-square` = sapply(alphas, function(a) chi_seq[pval > a, topic][1])
+)
+
+knitr::kable(picks_alpha,
+             caption = "Sequential pick by reference distribution as alpha varies")
 ```
 
-Where the asymptotic p-values jump between 0 and 1, the calibrated series
-moves through the interior, and `alpha` becomes a real Type-I error rate with
+How should this be read? The calibrated sequential pick answers a precise
+question: *what is the smallest K whose leftover discrepancy could plausibly
+be produced by multinomial sampling noise alone, if the fitted model were the
+truth?* On this corpus that happens already at
+K = `r chi_cal[pval > alpha, topic][1]`. The fit does keep improving beyond
+that — the `OpTop` curve keeps falling until its minimum at
+K = `r min_pick` — but from there onward the improvements are smaller than
+what sampling noise can account for at the chosen `alpha`. The uncalibrated
+scan stopped at K = `r seq_pick` not because that value is statistically
+special but because its reference distribution had the wrong scale. Raising
+`alpha` demands stronger evidence of adequacy, so the pick moves (weakly)
+upward, as the table shows — and `alpha` is now a real Type-I error rate with
 respect to the fitted-model null (at bootstrap resolution
-`1 / (n_boot + 1)`). Note how much earlier the calibrated scan stops: once
-the reference distribution has the right scale, the residual discrepancy at
-small K is already within what sampling noise produces under the fitted
-model, so the sequential rule reads "adequate" much sooner — while the
-global-minimum rule and the discrepancy indices below remain the tools for
-asking how much *more* fit additional topics buy. Two practical notes:
-`calibrate = "moment"` gives a closed-form approximation of the same null
-(no simulation — on this grid its sequential pick is
-K = `r chi_cal_mm[pval > alpha, topic][1]`, agreeing with the bootstrap),
-and both calibrations hold the estimated `theta` and `phi` fixed, so they do
-not account for estimation noise in the LDA parameters themselves.
+`1 / (n_boot + 1)`). In short: the calibrated sequential rule identifies the
+most parsimonious *statistically adequate* K, while the global-minimum rule
+and the discrepancy indices below quantify *maximal descriptive fit* — two
+different questions, and it is worth knowing which one you are asking.
+
+One caveat applies to both calibrations: they hold the estimated `theta` and
+`phi` fixed, so they do not account for estimation noise in the LDA
+parameters themselves (see `?optimal_topic`).
 
 ## The role of `q`
 

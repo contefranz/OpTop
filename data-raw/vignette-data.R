@@ -109,10 +109,15 @@ cal_time <- system.time(
                   do_plot = FALSE)
   )
 )
-chi_cal_mm <- optimal_topic(VEM_models, weighted_dfm, q = 0.95,
-                            alpha = alpha, calibrate = "moment",
-                            doc_lengths = doc_lens,
-                            do_plot = FALSE, verbose = FALSE)
+mm_run <- capture_cli(
+  optimal_topic(lda_models = VEM_models,
+                weighted_dfm = weighted_dfm,
+                q = 0.95,
+                alpha = alpha,
+                calibrate = "moment",
+                doc_lengths = doc_lens,
+                do_plot = FALSE)
+)
 
 # the returned table does not depend on the selection rule, so one call per q
 # is enough for the sweep; the picks mirror the documented rules
@@ -232,7 +237,8 @@ bundle <- list(
     console_min = min_run$console,
     chi_cal = cal_run$value,
     console_cal = cal_run$console,
-    chi_cal_mm = chi_cal_mm,
+    chi_cal_mm = mm_run$value,
+    console_cal_mm = mm_run$console,
     index_table = index_tab,
     word_snapshot = word_snapshot
   ),
