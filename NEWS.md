@@ -1,3 +1,23 @@
+# OpTop 0.9.10
+
+### New Features
+
+* **Vignette**: `vignette("OpTop")` walks through optimal-K selection on the U.S.
+  Presidential Inaugural Address corpus (both `selection = "sequential"` and
+  `selection = "min"`, and the role of `q`), the discrepancy indices, and a simulation
+  with known true K. The heavy LDA grid is precomputed by `data-raw/vignette-data.R`;
+  only the small derived tables ship with the package.
+
+### Minor Changes
+
+* `optimal_topic()`'s plot now uses `ggplot2::theme_bw()`.
+
+* Style: no spaces inside parentheses in the maintained files.
+
+* `AUDIT.md` records the proposal for calibrating Test 1's null distribution
+  (parametric-bootstrap null, moment matching, count-based statistic), planned as a
+  dedicated future release.
+
 # OpTop 0.9.9
 
 ### Major Changes — `optimal_topic()` calibrated to the published test

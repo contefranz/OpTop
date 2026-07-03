@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.9.9-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.9.9)
+[![release](https://img.shields.io/badge/release-v0.9.10-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.9.10)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -71,6 +71,9 @@ Journal of Machine Learning Research, 3(Jan):993–1022.
 # install.packages("remotes")
 remotes::install_github("contefranz/OpTop")
 ```
+
+A full walkthrough — optimal-K selection, the role of `q`, the discrepancy indices, and a
+simulation with known truth — is in the package vignette: `vignette("OpTop")`.
 
 ### Quick Start
 
