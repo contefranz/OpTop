@@ -259,8 +259,14 @@ the same corpus, and (as the q-sweep below shows) insensitive to the choice
 of `q`. One practical remark: the minimum rule needs a grid that extends past
 the flattening of the curve to settle — on a grid truncated at K = 100 the
 minimum sits at the boundary, and only the full K ≤ 200 scan lets it come to
-rest. The sequential rule, by construction, stops at the first adequate K and
-does not care how far the grid extends.
+rest. There is a structural reason for that creep: the `df` column falls
+steadily with K (the envelopes shrink as the fitted distributions
+concentrate), and since the null level of the standardized statistic scales
+with the envelope size, part of the curve's long decline reflects envelope
+shrinkage rather than genuine fit improvement. The calibrated p-values of the
+next section absorb this drift automatically; the raw curve does not. The
+sequential rule, by construction, stops at the first adequate K and does not
+care how far the grid extends.
 
 A look at the p-value column explains when and why the two rules diverge:
 
@@ -451,9 +457,21 @@ truth?* On this corpus that happens already at
 K = `r chi_cal[pval > alpha, topic][1]`. The fit does keep improving beyond
 that — the `OpTop` curve keeps falling until its minimum at
 K = `r min_pick` — but from there onward the improvements are smaller than
-what sampling noise can account for at the chosen `alpha`. The uncalibrated
-scan stopped at K = `r seq_pick` not because that value is statistically
-special but because its reference distribution had the wrong scale. Raising
+what sampling noise can account for at the chosen `alpha`.
+
+The uncalibrated scan is best understood as a *reduced-chi-square heuristic*:
+with `df` this large the asymptotic p-values saturate to 0 or 1, so in
+practice the rule stops at the first K where the standardized discrepancy
+drops below 1 — a sensible engineering criterion, but one whose implicit
+threshold is not tied to the actual null level of the statistic. On this
+corpus the bootstrap places that null level nearer 2 than 1, so the heuristic
+demands more than noise-level adequacy and stops later, at
+K = `r seq_pick` — and fragilely so: on this grid the very next model,
+K = `r seq_pick + 2`, is rejected again, and the q-sweep below moves the pick
+from 20 to 38. When the implicit threshold happens to sit close to the true
+null level the same heuristic performs well — the simulation at the end of
+this vignette, where the truth is known, is exactly such a case. What
+calibration adds is therefore not a different answer but a guarantee: raising
 `alpha` demands stronger evidence of adequacy, so the pick moves (weakly)
 upward, as the table shows — and `alpha` is now a real Type-I error rate with
 respect to the fitted-model null (at bootstrap resolution
@@ -647,8 +665,13 @@ reports (its Figure 7). As the paper notes, the identified optimum is not
 always exactly `K_sim` but typically adjacent to it: here the sequential rule
 stops at K = `r sim_picks$sequential` with the truth at `r meta$true_K`,
 while the global minimum drifts to the grid edge as the curve keeps creeping
-down past the bend. Treat the tools as locating the *region* of adequate K,
-with the discrepancy indices quantifying what each candidate buys you.
+down past the bend. Note that this is the *uncalibrated* sequential rule
+performing well: on this corpus the post-truth plateau of the standardized
+statistic sits below 1, so the implicit reduced-chi-square threshold of the
+saturated p-values lands close to the actual null level — the favorable case
+discussed in the calibration section. Treat the tools as locating the
+*region* of adequate K, with the discrepancy indices quantifying what each
+candidate buys you.
 
 ## Notes
 
