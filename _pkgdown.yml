@@ -1,0 +1,52 @@
+url: https://contefranz.github.io/OpTop/
+
+template:
+  bootstrap: 5
+  math-rendering: katex
+
+navbar:
+  structure:
+    left: [intro, reference, news]
+    right: [github]
+
+home:
+  title: OpTop
+  description: >
+    Parametric tests and discrepancy indices to select the optimal number of
+    topics and assess goodness-of-fit across topic models in R.
+  sidebar: false
+
+news:
+  cran_dates: false
+
+reference:
+  - title: Optimal number of topics
+    desc: Parametric selection of the topic count that best describes the corpus.
+    contents:
+      - optimal_topic
+
+  - title: Goodness-of-fit indices
+    desc: Regression-style discrepancy indices and grid summaries for topic-model fits.
+    contents:
+      - optop_index
+      - optop_index_table
+
+  - title: Harmonized comparisons across K
+    desc: Fixed partition and baseline so all indices share a common support.
+    contents:
+      - optop_make_partition
+      - optop_make_baseline
+
+  - title: Utilities
+    desc: Simulate corpora for tests and examples.
+    contents:
+      - sim_dfm
+
+  - title: Deprecated
+    desc: Legacy redundant-topic diagnostics, scheduled for removal before v1.0.0.
+    contents:
+      - topic_stability
+      - agg_topic_stability
+      - agg_document_stability
+      - topic_match
+      - get_topic_models
