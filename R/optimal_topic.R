@@ -5,7 +5,7 @@ if (getRversion() >= "2.15.1") {
                            "pval", "OpTop", "raw", "df", "pval_chisq",
                            "docid"))
 }
-#' Find the optimal number of topics from a pool of LDA models
+#' Find the optimal number of topics from a pool of topic models
 #'
 #' Identify the number of topics that best describes the corpus with the
 #' Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
@@ -14,11 +14,18 @@ if (getRversion() >= "2.15.1") {
 #' the fitted-model null, and selects the optimal topic count with one of
 #' three rules; see Details.
 #'
-#' @param lda_models A list of `topicmodels::LDA` objects (VEM), ordered by
-#'   increasing number of topics. The grid should span the candidate values
-#'   of \eqn{K}.
+#' @param topic_models A list of fitted topic models spanning the candidate
+#'   values of \eqn{K}, one model per \eqn{K} (an unordered grid is sorted by
+#'   increasing \eqn{K}). Supported classes: `topicmodels::LDA()` fits (VEM
+#'   or Gibbs), `topicmodels::CTM()` fits, the seededlda models
+#'   (`seededlda::textmodel_lda()`, `seededlda::textmodel_seededlda()`,
+#'   `seededlda::textmodel_seqlda()`) and NLPstudio fits (`nlp_topic_fit`).
+#'   Classes can be mixed within a grid as long as every model was fitted on
+#'   the same corpus and vocabulary; the test consumes the models only
+#'   through their fitted word probabilities (see Details).
 #' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
-#'   for each document; it is recommended that document ids are available via
+#'   for each document, built from the same counts dfm the models were
+#'   fitted on; it is recommended that document ids are available via
 #'   `quanteda::docid()`.
 #' @param q Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 #'   "relatively important" words; the remaining words are collapsed into a
@@ -50,8 +57,12 @@ if (getRversion() >= "2.15.1") {
 #'   calibration if any (default `TRUE`).
 #' @param verbose Logical; if `TRUE` (default), report progress (a `cli`
 #'   progress bar across the model grid) and a selection summary. Regardless
-#'   of `verbose`, dropping documents that the models never saw and the
-#'   sequential rule's fallback are always signalled.
+#'   of `verbose`, corrective actions (dropping documents the models never
+#'   saw, reordering models or features, the sequential rule's fallback) are
+#'   always signalled.
+#' @param lda_models `r lifecycle::badge("deprecated")` Renamed to
+#'   `topic_models`, which accepts more than `topicmodels::LDA()` fits; the
+#'   old name still works but warns, and will be removed before v1.0.0.
 #'
 #' @details
 #' For each document \eqn{j}, the fitted word probabilities are sorted in
@@ -67,6 +78,14 @@ if (getRversion() >= "2.15.1") {
 #' raw statistic on its full degrees of freedom by default, or the calibrated
 #' value when `calibrate != "none"`.
 #'
+#' The statistic touches each model only through its fitted word
+#' probabilities \eqn{I_j = \theta_j^\top \Phi}{I_j = theta_j' Phi}, where
+#' \eqn{\theta_j}{theta_j} is the document's topic distribution and
+#' \eqn{\Phi}{Phi} the topic-word matrix. Any implementation that provides
+#' those two (row-stochastic) matrices is therefore admissible, whatever its
+#' estimation method — which is what the supported classes listed under
+#' `topic_models` have in common.
+#'
 #' **Selection rules.**
 #' - `"sequential"` (default): scan \eqn{K} upward and select the smallest
 #'   \eqn{K} the test fails to reject (`pval > alpha`) — the classical
@@ -77,7 +96,7 @@ if (getRversion() >= "2.15.1") {
 #' - `"legacy"`: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
 #'   with the crossing word collapsed, \eqn{P_j} scaling, lower-tail p-value
 #'   with 1 degree of freedom, "first `pval <= alpha`" rule). Deprecated; it
-#'   will be removed before v1.0.0.
+#'   only accepts `LDA_VEM` fits and will be removed before v1.0.0.
 #'
 #' **Calibration.**
 #' The chi-square reference of Equation 8 is a yardstick rather than an exact
@@ -86,11 +105,11 @@ if (getRversion() >= "2.15.1") {
 #' \eqn{N_j}; Equation 8 works on proportions scaled by the bin count
 #' \eqn{P_j + 1} instead, so the statistic's null magnitude is off by roughly
 #' \eqn{N_j / (P_j + 1)} per document. Second, the expected probabilities are
-#' estimated (by VEM) from the same data they are tested against. The
-#' practical consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of
-#' freedom in the thousands the chi-square quantiles are razor-thin and
-#' upper-tail p-values saturate at 0 or 1 unless the fit is genuinely
-#' borderline — `alpha` is not a true Type-I error rate.
+#' estimated from the same data they are tested against. The practical
+#' consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
+#' the thousands the chi-square quantiles are razor-thin and upper-tail
+#' p-values saturate at 0 or 1 unless the fit is genuinely borderline —
+#' `alpha` is not a true Type-I error rate.
 #'
 #' Calibration replaces the chi-square reference with the distribution of the
 #' statistic under the **conditional fitted-model null**: document \eqn{j} is
@@ -132,18 +151,22 @@ if (getRversion() >= "2.15.1") {
 #'
 #' One caveat applies to both: the null holds the estimated
 #' \eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
-#' of the LDA — the "double bootstrap" would be exact but computationally
+#' of the model — the "double bootstrap" would be exact but computationally
 #' prohibitive). Calibrated p-values are therefore conditional on the fitted
 #' parameters and do not account for estimation noise in \eqn{\theta}{theta}
 #' and \eqn{\phi}{phi}.
 #'
 #' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
-#' proportions (row-wise). Document identifiers are taken from
-#' `quanteda::docid(weighted_dfm)` and matched to the LDA fits; documents not
-#' present in the first model’s `@documents` slot are dropped (with a warning)
-#' to ensure alignment. The remaining documents are paired with the rows of
-#' `@gamma` by identifier, so the row order of `weighted_dfm` does not need to
-#' follow the order in which the models saw the documents.
+#' proportions (row-wise), built from the same counts dfm the models were
+#' fitted on. Its features must match the models' common vocabulary: when
+#' they are the same set in a different order the columns are reordered
+#' automatically (signalled), any other mismatch is an error. Document
+#' identifiers are taken from `quanteda::docid(weighted_dfm)` and matched
+#' against each model's own document identifiers: documents not present in
+#' *every* model are dropped (with a warning), and each retained dfm row is
+#' paired with the corresponding row of \eqn{\theta}{theta} *per model*.
+#' Neither the row order of `weighted_dfm` nor the order in which each model
+#' saw the documents matters — alignment is always by identifier.
 #'
 #' **Performance note.** The core computation is delegated to C++ compiled
 #' code; the bootstrap operates on the collapsed bins through vectorized
@@ -164,14 +187,14 @@ if (getRversion() >= "2.15.1") {
 #' @examples
 #' \dontrun{
 #' # Asymptotic p-values (Equation 8)
-#' test1 <- optimal_topic(lda_models = lda_list,
+#' test1 <- optimal_topic(topic_models = lda_list,
 #'                        weighted_dfm = weighted_dfm,
 #'                        q = 0.95,
 #'                        alpha = 0.05,
 #'                        selection = "sequential")
 #'
 #' # Bootstrap-calibrated p-values: document lengths come from the counts dfm
-#' test1_cal <- optimal_topic(lda_models = lda_list,
+#' test1_cal <- optimal_topic(topic_models = lda_list,
 #'                            weighted_dfm = weighted_dfm,
 #'                            calibrate = "bootstrap",
 #'                            n_boot = 200,
@@ -193,28 +216,35 @@ if (getRversion() >= "2.15.1") {
 #' Davison, A. C. and Hinkley, D. V. (1997). *Bootstrap Methods and their
 #' Application*. Cambridge University Press, Cambridge.
 #'
-#' @seealso [topicmodels::LDA()]
+#' @seealso [topicmodels::LDA()], [topicmodels::CTM()],
+#'   [seededlda::textmodel_lda()]
 #'
 #' @import data.table
 #' @export
 
-optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
+optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                           selection = c("sequential", "min", "legacy"),
                           calibrate = c("none", "bootstrap", "moment"),
                           n_boot = 200L, doc_lengths = NULL, seed = NULL,
-                          do_plot = TRUE, verbose = TRUE) {
+                          do_plot = TRUE, verbose = TRUE,
+                          lda_models = lifecycle::deprecated()) {
 
-  if (!is.list(lda_models)) {
-    stop("lda_models must be a list")
+  if (lifecycle::is_present(lda_models)) {
+    lifecycle::deprecate_warn(when = "0.11.0",
+                              what = "optimal_topic(lda_models)",
+                              with = "optimal_topic(topic_models)")
+    if (missing(topic_models)) {
+      topic_models <- lda_models
+    }
   }
-  if (length(lda_models) == 1L) {
-    stop(paste("length(lda_models) = 1.",
-               "This is strange since the test should be perfomed",
-               "on multiple LDA models."))
+
+  if (!is.list(topic_models)) {
+    stop("topic_models must be a list of fitted topic models")
   }
-  if (!all(sapply(lda_models, is.LDA_VEM))) {
-    stop(paste("lda_models must contain LDA_VEM obects as computed",
-               "by topicmodels::LDA()"))
+  if (length(topic_models) == 1L) {
+    stop(paste("length(topic_models) = 1.",
+               "This is strange since the test should be performed",
+               "on multiple topic models."))
   }
   if (!quanteda::is.dfm(weighted_dfm)) {
     stop("weighted_dfm must be a dfm")
@@ -231,7 +261,8 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     stop("verbose must be either TRUE or FALSE")
   }
 
-  if (selection == "legacy") {
+  legacy <- selection == "legacy"
+  if (legacy) {
     if (calibrate != "none") {
       stop('calibration is not available with selection = "legacy"')
     }
@@ -242,6 +273,11 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
                       "freedom) predates the calibration to the published",
                       "test and will be removed before v1.0.0.")
     )
+    if (!all(sapply(topic_models, is.LDA_VEM))) {
+      stop(paste('selection = "legacy" reproduces the pre-0.9.9 pipeline,',
+                 "which supports only LDA_VEM objects as computed by",
+                 "topicmodels::LDA()"))
+    }
   }
 
   calibrating <- calibrate != "none"
@@ -266,19 +302,106 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cli::cli_h2("Optimal topic selection")
   }
   docs <- as.character(quanteda::docid(weighted_dfm))
+  if (anyDuplicated(docs)) {
+    stop(paste("weighted_dfm has duplicated document ids; document",
+               "alignment would be ambiguous"))
+  }
   if (calibrating && is.null(names(doc_lengths)) &&
       length(doc_lengths) != length(docs)) {
     stop(paste("unnamed doc_lengths must have one entry per document of",
                "weighted_dfm, in the same row order"))
   }
 
-  # drop documents the models never saw; all models are assumed to share the
-  # document set of the first one (a document the LDA drops is dropped for
-  # every k), so the check runs against lda_models[[1L]] only
-  doc_check <- docs %in% lda_models[[1L]]@documents
-  if (!all(doc_check)) {
-    id_toremove <- which(!doc_check)
-    if (length(id_toremove) < length(doc_check)) {
+  if (legacy) {
+    # frozen pre-0.9.9 semantics: membership is checked against the first
+    # model only and one map is shared by the grid (VEM fits all see the
+    # documents in input order)
+    doc_check <- docs %in% topic_models[[1L]]@documents
+    if (!all(doc_check)) {
+      id_toremove <- which(!doc_check)
+      if (length(id_toremove) < length(doc_check)) {
+        cli::cli_alert_warning(
+          "Removed {length(id_toremove)} document{?s} not present in the models"
+        )
+        weighted_dfm <- weighted_dfm[-id_toremove, ]
+        docs <- docs[-id_toremove]
+      } else {
+        stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
+      }
+    }
+    doc_map <- match(docs, topic_models[[1L]]@documents) - 1L
+    ks <- vapply(topic_models, function(m) as.integer(m@k), integer(1L))
+  } else {
+    # adapt every model to the common (theta, phi, K, docs, terms) contract,
+    # keeping only the light fields: the weight matrices are re-extracted one
+    # model at a time inside the loop, so peak memory stays at a single model
+    # regardless of the grid size
+    meta <- vector("list", length(topic_models))
+    for (i_mod in seq_along(topic_models)) {
+      tp <- optop_as_theta_phi(topic_models[[i_mod]])
+      .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
+      meta[[i_mod]] <- tp[c("K", "docs", "terms")]
+    }
+    ks <- vapply(meta, function(m) as.integer(m$K), integer(1L))
+    if (anyDuplicated(ks)) {
+      stop(paste("topic_models contains more than one model with the same",
+                 "number of topics; the grid must have one model per K"))
+    }
+    if (is.unsorted(ks)) {
+      ord <- order(ks)
+      topic_models <- topic_models[ord]
+      meta <- meta[ord]
+      ks <- ks[ord]
+      cli::cli_alert_warning(
+        "Reordered topic_models by increasing number of topics"
+      )
+    }
+
+    # one common vocabulary across the grid, in one common order
+    ref_terms <- meta[[1L]]$terms
+    same_terms <- vapply(meta[-1L], function(m) identical(m$terms, ref_terms),
+                         logical(1L))
+    if (!all(same_terms)) {
+      stop(paste("all models must share the same vocabulary in the same",
+                 "order; refit the grid on a common dfm"))
+    }
+    feats <- quanteda::featnames(weighted_dfm)
+    if (!identical(feats, ref_terms)) {
+      if (length(feats) == length(ref_terms) && !anyDuplicated(feats) &&
+          setequal(feats, ref_terms)) {
+        # a permutation preserves the row proportions, so it is safe to fix
+        weighted_dfm <- weighted_dfm[, ref_terms]
+        cli::cli_alert_warning(
+          "Reordered the features of weighted_dfm to the models' vocabulary"
+        )
+      } else {
+        stop(paste("the features of weighted_dfm do not match the models'",
+                   "vocabulary. Rebuild the weighted dfm from the counts dfm",
+                   "the models were fitted on, e.g.",
+                   'quanteda::dfm_weight(counts_dfm, scheme = "prop")'))
+      }
+    }
+    row_mass <- Matrix::rowSums(weighted_dfm)
+    if (any(abs(row_mass - 1) > 1e-6)) {
+      cli::cli_alert_warning(paste(
+        "weighted_dfm rows do not sum to 1: expected word proportions as",
+        'produced by quanteda::dfm_weight(scheme = "prop")'
+      ))
+    }
+
+    # keep only the documents every model has seen: identifiers are matched
+    # per model, so the whole grid is evaluated on one fixed document set and
+    # the statistics stay comparable across K (and across engines)
+    keep <- rep(TRUE, length(docs))
+    for (m in meta) {
+      keep <- keep & docs %in% m$docs
+    }
+    if (!all(keep)) {
+      id_toremove <- which(!keep)
+      if (length(id_toremove) == length(docs)) {
+        stop(paste("Document matching went really wrong. Check the document",
+                   "ids of weighted_dfm against those stored in the models"))
+      }
       cli::cli_alert_warning(
         "Removed {length(id_toremove)} document{?s} not present in the models"
       )
@@ -287,8 +410,6 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
       if (calibrating && is.null(names(doc_lengths))) {
         doc_lengths <- doc_lengths[-id_toremove]
       }
-    } else {
-      stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
     }
   }
   if (calibrating && !is.null(names(doc_lengths))) {
@@ -298,11 +419,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
     }
   }
 
-  # map each dfm row to the corresponding row of @gamma (0-based for C++);
-  # membership was checked above, so no NA can survive the match
-  doc_map <- match(docs, lda_models[[1L]]@documents) - 1L
-
-  n_models <- length(lda_models)
+  n_models <- length(topic_models)
   if (verbose) {
     cli::cli_alert_info(paste(
       "Evaluating {n_models} models on {length(docs)} document{?s} and",
@@ -321,18 +438,29 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
         "chi-square) under the fitted-model null"
       ))
     }
-    cli::cli_progress_bar("Processing LDA grid", total = n_models)
+    cli::cli_progress_bar("Processing model grid", total = n_models)
   }
   if (calibrating && !is.null(seed)) {
     set.seed(seed)
   }
 
-  legacy <- selection == "legacy"
   Chi_K_rows <- vector("list", n_models)
   pval_cal <- rep(NA_real_, n_models)
+  if (!legacy) {
+    # transpose once: a document becomes a contiguous sparse column for the
+    # C++ core, and every per-model call shares the same copy
+    dfm_t <- Matrix::t(methods::as(weighted_dfm, "dgCMatrix"))
+  }
   for (i_mod in seq_len(n_models)) {
-    core_out <- optimal_topic_core(lda_models[i_mod], weighted_dfm, q,
-                                   doc_map, legacy, calibrating)
+    if (legacy) {
+      core_out <- optimal_topic_core_legacy(topic_models[i_mod], weighted_dfm,
+                                            q, doc_map)
+    } else {
+      tp <- optop_as_theta_phi(topic_models[[i_mod]])
+      doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
+      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map_i,
+                                     calibrating)
+    }
     Chi_K_rows[[i_mod]] <- core_out$stat
     if (calibrating) {
       probs <- .optop_split_envelope(core_out$bin_probs, core_out$bin_counts)
@@ -347,9 +475,7 @@ optimal_topic <- function(lda_models, weighted_dfm, q = 0.95, alpha = 0.05,
       }
     }
     if (verbose) {
-      cli::cli_progress_update(
-        status = paste0("k = ", lda_models[[i_mod]]@k)
-      )
+      cli::cli_progress_update(status = paste0("k = ", ks[i_mod]))
     }
   }
   if (verbose) {

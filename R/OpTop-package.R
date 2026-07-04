@@ -8,9 +8,14 @@
 #' structure that LDA itself assumes, so model choice and model assessment
 #' rest on statistical tests rather than heuristics such as perplexity.
 #'
-#' The package operates on
-#' **[topicmodels](https://cran.r-project.org/package=topicmodels)** fits
-#' within the **[quanteda](https://quanteda.io/)** ecosystem, returns
+#' The package operates within the **[quanteda](https://quanteda.io/)**
+#' ecosystem on fits from
+#' **[topicmodels](https://cran.r-project.org/package=topicmodels)** (LDA
+#' with VEM or Gibbs, and CTM),
+#' **[seededlda](https://cran.r-project.org/package=seededlda)** (all three
+#' constructors) and **NLPstudio** (`nlp_topic_fit`), reduced to a common
+#' \eqn{\theta}{theta}/\eqn{\phi}{phi} contract by an internal adapter
+#' family. It returns
 #' **[data.table](https://rdatatable.gitlab.io/data.table/)** objects
 #' throughout, and delegates its hot loops to compiled C++ so that large
 #' vocabularies and long model grids remain tractable.
@@ -19,7 +24,7 @@
 #' The toolkit is organized around three questions:
 #'
 #' - **Which K is optimal?**
-#'   [optimal_topic()] evaluates a grid of fitted LDA models with the Test 1
+#'   [optimal_topic()] evaluates a grid of fitted topic models with the Test 1
 #'   chi-square statistic of the paper (Equation 8) and selects the optimal
 #'   topic count with one of three rules: the sequential adequacy scan
 #'   (default), the global minimum of the standardized statistic (the rule of

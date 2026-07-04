@@ -16,6 +16,33 @@ optop_wprop_fixture <- function(fx) {
   list(wdfm = wdfm, W_prop = W_prop)
 }
 
+# Gibbs fits on the same corpus, for the engine-generalization tests: same
+# grid of K as the VEM fixture, cached alongside it.
+optop_gibbs_fixture <- function(fx) {
+  if (is.null(.optop_test_cache$gibbs)) {
+    .optop_test_cache$gibbs <- lapply(2:4, function(k) {
+      topicmodels::LDA(fx$counts, k = k, method = "Gibbs",
+                       control = list(seed = 2000 + k, burnin = 100,
+                                      iter = 300))
+    })
+  }
+  .optop_test_cache$gibbs
+}
+
+# Iteration-capped CTM fits (slow to converge, but the adapters and the
+# statistic only need valid fitted probabilities), cached alongside.
+optop_ctm_fixture <- function(fx) {
+  if (is.null(.optop_test_cache$ctm)) {
+    .optop_test_cache$ctm <- lapply(2:3, function(k) {
+      topicmodels::CTM(fx$counts, k = k,
+                       control = list(seed = 3000 + k,
+                                      em = list(iter.max = 30),
+                                      var = list(iter.max = 20)))
+    })
+  }
+  .optop_test_cache$ctm
+}
+
 optop_test_fixture <- function() {
   if (!is.null(.optop_test_cache$fixture)) {
     return(.optop_test_cache$fixture)

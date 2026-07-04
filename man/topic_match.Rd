@@ -9,7 +9,8 @@ topic_match(lda_models, optimal_model, var_correction = TRUE)
 \arguments{
 \item{lda_models}{A list of \code{topicmodels::LDA} objects (VEM), ordered by
 increasing number of topics. The grid should span the candidate values
-of \eqn{K}.}
+of \eqn{K}. (This deprecated function predates the engine
+generalization of \code{optimal_topic()} and keeps its original argument.)}
 
 \item{optimal_model}{Integer giving the number of topics of the optimal model;
 must match one entry in \code{lda_models}.}

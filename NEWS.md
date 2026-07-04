@@ -1,3 +1,55 @@
+# OpTop 0.11.0
+
+### New Features — engine generalization
+
+* **`optimal_topic()` accepts any supported topic model, not just `LDA_VEM`**: the first
+  argument is now `topic_models` and takes, through the `optop_as_theta_phi()` adapter
+  family, `topicmodels::LDA()` fits (VEM **and Gibbs**), `topicmodels::CTM()` fits, all
+  three seededlda models (`textmodel_lda()`, `textmodel_seededlda()`,
+  `textmodel_seqlda()`) and NLPstudio fits (`nlp_topic_fit`, via the stored `dtw`/`tww`
+  weights or, when absent, the raw backend `model_object`). Engines can be mixed within
+  one grid fitted on the same corpus. No statistical change is involved: the Test 1
+  statistic consumes each model only through its fitted word probabilities Θ Φ.
+
+* **The C++ core is model-agnostic** (and simpler): it receives plain `theta`/`phi`
+  matrices — no S4 slot access in compiled code — and the weighted dfm transposed once
+  for the whole grid. The hot path is now free of R API calls, the precondition for the
+  planned OpenMP parallelization. The pre-0.9.9 pipeline behind `selection = "legacy"`
+  is frozen verbatim in its own translation unit (`optimal_topic_core_legacy.cpp`),
+  remains VEM-only, and will be deleted together with the rule before v1.0.0.
+
+### Stronger input contracts
+
+* **Vocabulary alignment is now validated**: all models of a grid must share one
+  vocabulary in one order; `weighted_dfm` features that are the same set in a different
+  order are reordered automatically (signalled), any other mismatch is an error.
+  Previously a feature-permuted dfm was silently mis-scored.
+
+* **Document alignment is identifier-based, per model**: every model must expose unique
+  document identifiers (a mandatory field of the adapter contract — positional
+  alignment is never assumed). Documents missing from *any* model are dropped with a
+  warning (previously only the first model was checked), and each retained dfm row is
+  matched to that model's own theta row, so engines that saw the documents in different
+  orders are scored correctly.
+
+* Grids are sorted by increasing K (signalled) and duplicated K values are an error; a
+  `weighted_dfm` whose rows do not sum to 1 is flagged as well.
+
+### Deprecations
+
+* `optimal_topic(lda_models = )` is deprecated in favor of `topic_models`; the old name
+  keeps working with a lifecycle warning and will be removed before v1.0.0.
+
+### Internals
+
+* The adapter contract is extended to `list(theta, phi, K, docs, terms)` and enforced
+  by a dedicated validator (simplex rows, unique identifiers, consistent dimensions);
+  unsupported classes now fail with the list of supported engines.
+
+* seededlda joins Suggests (adapter tests cover all three constructors); the NLPstudio
+  adapter is tested against a hand-built object, so OpTop takes no dependency on
+  NLPstudio.
+
 # OpTop 0.10.1
 
 ### Minor Changes
