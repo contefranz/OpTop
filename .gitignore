@@ -11,3 +11,6 @@
 data-raw/*.rds
 vignettes/*.html
 vignettes/*.R
+
+# pkgdown site
+docs/

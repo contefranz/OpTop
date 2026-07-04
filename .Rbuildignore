@@ -4,7 +4,7 @@
 ^\.DS_Store$
 ^\.github$
 ^\.claude$
-^AUDIT\.md$
+^dev$
 ^codecov\.yml$
 ^data-raw$
 ^_pkgdown\.yml$
