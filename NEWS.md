@@ -48,7 +48,7 @@ compiled code under OpenMP.
 ### Minor Changes
 
 * New vignette section **"A Note On Computational Efficiency"** reporting a simulation
-  study (speed, thread scaling for one to eight threads, peak memory) across four
+  study (speed, thread scaling up to the machine's core count, peak memory) across four
   synthetic corpus scales, up to J = 10,000 documents and W = 20,000 features, with
   the pre-0.12.0 R bootstrap as baseline; reproducible via
   `data-raw/benchmark-efficiency.R`.

@@ -591,14 +591,13 @@ The study below evaluates VEM grids of ten models (five on the largest
 corpus) on four synthetic corpus scales, from J = 200 documents with
 W = 2,000 features up to J = 10,000 documents with W = 20,000 features,
 timing the statistic pass and the bootstrap-calibrated pass
-(B = `r bench$meta$n_boot`) for one to eight threads, with the pure-R
-bootstrap of v0.11.0 as baseline. Peak memory is the maximum resident set
-size reported by the operating system for a fresh R process per
-configuration. One property of the host must be kept in mind when reading
-the thread sweep: the machine exposes `r bench$meta$cores` logical cores,
-so the six- and eight-thread settings measure oversubscription and are
-expected to saturate near the four-thread level; on machines with more
-cores the same script produces genuine scaling measurements. The study is
+(B = `r bench$meta$n_boot`) for one, two, and four threads, with the
+pure-R bootstrap of v0.11.0 as baseline. The sweep ends at four threads
+because that is the host's logical core count; thread settings beyond the
+physical cores only measure oversubscription, so the benchmark driver caps
+the sweep at the core count and extends it automatically on machines with
+more cores. Peak memory is the maximum resident set size reported by the
+operating system for a fresh R process per configuration. The study is
 reproducible via `data-raw/benchmark-efficiency.R`; timings are
 machine-dependent (recorded here: `r bench$meta$cpu`,
 `r bench$meta$cores` logical cores, `r bench$meta$r_version`).
@@ -668,11 +667,10 @@ faster than the R implementation before any threading, and the gain grows
 with the vocabulary: the alias-table path costs $O(N_j)$ per replicate
 where the bin-wise method costs $O(k_j)$, and wide corpora have
 $k_j \gg N_j$. Second, the parallel
-document loop scales almost linearly up to the physical core count and
-saturates beyond it, as expected on this host: the best configuration on
-the largest corpus (`r best_large$threads` threads) runs the calibrated
-pass `r sprintf("%.1f", best_large$vs_R)`× faster than the 0.11.0
-baseline, falling from
+document loop scales almost linearly in the number of physical cores: the
+best configuration on the largest corpus (`r best_large$threads` threads)
+runs the calibrated pass `r sprintf("%.1f", best_large$vs_R)`× faster
+than the 0.11.0 baseline, falling from
 `r sprintf("%.1f", bres[scale == "large" & mode == "boot_r", elapsed_sec] / 60)` minutes
 to `r sprintf("%.0f", best_large$elapsed_sec)` seconds.
 The statistic pass shares the document-level parallelism and gains

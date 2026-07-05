@@ -18,9 +18,10 @@
 #   from system.time() inside the worker and peak RSS from the OS;
 # * modes: "stat" (statistic only), "boot" (bootstrap calibration, B = 200),
 #   "boot_r" (the 0.11.0 R bootstrap reimplemented verbatim as baseline);
-# * the thread sweep {1, 2, 4, 6, 8} is interpreted against the machine's
-#   physical core count, recorded in the metadata: settings above it
-#   quantify oversubscription rather than genuine scaling;
+# * the thread sweep is capped at the machine's core count: settings above
+#   it only measure oversubscription (verified once on a 4-core host, where
+#   6 and 8 threads sat within noise of the 4-thread times), so the driver
+#   never runs them and wider grids appear automatically on larger machines;
 # * correctness is asserted alongside: thread sweeps must be bit-identical,
 #   and the C++ bootstrap p-values must sit within Monte-Carlo resolution of
 #   the R baseline.
@@ -46,6 +47,7 @@ scales <- list(
                em_iter = 20L)
 )
 threads_sweep <- c(1L, 2L, 4L, 6L, 8L)
+threads_sweep <- threads_sweep[threads_sweep <= parallel::detectCores()]
 n_boot <- 200L
 
 fits_rds_for <- function(scale) {
@@ -197,8 +199,8 @@ meta <- list(
     error = function(e) NA_character_
   ),
   cores = parallel::detectCores(),
-  cores_note = paste("thread settings above the logical core count measure",
-                     "oversubscription, not scaling"),
+  cores_note = paste("the thread sweep is capped at the machine's core",
+                     "count; wider grids require more physical cores"),
   r_version = R.version.string,
   openmp = OpTop:::optop_openmp_available(),
   blas = extSoftVersion()[["BLAS"]],

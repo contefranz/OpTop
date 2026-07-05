@@ -301,8 +301,7 @@ fitted models, is flat across implementations at the medium/large scales
 Second pass (adaptive sampler, envelope selection, parallel densification),
 final study on four corpus scales — the former medium/large renamed
 medium-1/medium-2, plus a J = 10,000 scale — with the thread sweep
-{1, 2, 4, 6, 8} on the same 4-logical-core machine (settings above the
-core count measure oversubscription):
+{1, 2, 4} on the same 4-logical-core machine:
 
 Bootstrap-calibrated pass (statistic + calibration, whole grid):
 
@@ -321,8 +320,12 @@ Findings:
 - The pre-threading bootstrap gain grows monotonically with the vocabulary
   (1.9× / 5.3× / 8.6× / 15.2×), as expected from the O(N_j) alias path
   replacing the O(k_j) binomial path precisely where k_j ≫ N_j.
-- The 6- and 8-thread settings sit within noise of the 4-thread times on
-  every scale — the oversubscription plateau predicted for a 4-core host.
+- Thread settings above the physical core count were measured once (6 and
+  8 threads on this 4-core host) and sat within noise of the 4-thread
+  times on every scale — pure oversubscription. They are omitted from the
+  reported results, and the benchmark driver now caps the sweep at
+  `parallel::detectCores()`, so wider grids appear only on machines that
+  physically have the cores.
 - Peak memory is governed by what must be held (the fitted models and, on
   the largest corpus, the exported envelope bins, ~7.5–8.6 GB): the two
   implementations stay within ~15% of each other in either direction, and
