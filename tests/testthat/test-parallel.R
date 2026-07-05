@@ -104,3 +104,27 @@ test_that("n_threads is validated and the OpenMP probe returns a flag", {
   expect_true(is.logical(optop_openmp_available()))
   expect_length(optop_openmp_available(), 1L)
 })
+
+test_that("the index engine and partition kernel are thread-invariant", {
+  fx <- optop_test_fixture()
+
+  part4 <- optop_make_partition(fx$models, fx$dtm, c = 5, n_threads = 4L)
+  expect_identical(part4$rare_mask, fx$partition$rare_mask)
+
+  tab <- function(threads, lvl) {
+    as.data.frame(optop_index_table(fx$models, fx$dtm,
+                                    metrics = c("se", "chisq", "deviance"),
+                                    macro = TRUE, level = lvl,
+                                    partition = fx$partition,
+                                    baseline = fx$baseline,
+                                    n_threads = threads))
+  }
+  expect_identical(tab(4L, "document"), tab(1L, "document"))
+  expect_identical(tab(4L, "word"), tab(1L, "word"))
+
+  one <- optop_index_deviance(fx$models[[2]], fx$dtm, fx$partition,
+                              fx$baseline, macro = TRUE, n_threads = 4L)
+  ref <- optop_index_deviance(fx$models[[2]], fx$dtm, fx$partition,
+                              fx$baseline, macro = TRUE, n_threads = 1L)
+  expect_identical(one, ref)
+})

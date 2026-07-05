@@ -12,6 +12,21 @@ optop_openmp_available <- function() {
 }
 
 #' @keywords internal
+optop_pack_mask_core <- function(mask) {
+    .Call(`_OpTop_optop_pack_mask_core`, mask)
+}
+
+#' @keywords internal
+optop_index_word_core <- function(E_block, N, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
+    .Call(`_OpTop_optop_index_word_core`, E_block, N, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
+}
+
+#' @keywords internal
+optop_index_doc_core <- function(tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
+    .Call(`_OpTop_optop_index_doc_core`, tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
+}
+
+#' @keywords internal
 optimal_topic_core <- function(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads) {
     .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_t, q, doc_map, return_envelope, n_threads)
 }

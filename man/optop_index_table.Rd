@@ -16,7 +16,8 @@ optop_index_table(
   baseline = NULL,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE
+  ztest = FALSE,
+  n_threads = 1L
 )
 }
 \arguments{
@@ -66,6 +67,10 @@ memory usage. Only used when \code{level = "word"}.}
 
 \item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference.
 Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
+
+\item{n_threads}{Integer; number of OpenMP threads used by the compiled
+index engine and, when \code{partition} is computed internally, by the
+partition kernel (default \code{1L}). Results are identical for any value.}
 }
 \value{
 When \code{level = "document"}, a \code{data.frame} with one row per model and columns:

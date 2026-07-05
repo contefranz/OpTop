@@ -11,7 +11,7 @@
   metric = c("se", "chisq", "deviance"),
   level = c("document", "word"),
   block_size = NULL,
-  eps = 1e-12
+  n_threads = 1L
 )
 }
 \arguments{
@@ -28,7 +28,7 @@ returned by \code{.optop_validate_alignment()}.}
 
 \item{block_size}{Number of vocabulary columns per processing block.}
 
-\item{eps}{Numerical floor for expected counts.}
+\item{n_threads}{OpenMP threads used by the fused engine.}
 }
 \value{
 The per-document \eqn{D_{null}}{D_null} vector when
