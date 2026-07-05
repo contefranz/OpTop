@@ -1,3 +1,46 @@
+# OpTop 0.12.0
+
+The C++ performance release: both hot paths of `optimal_topic()` now run in
+compiled code under OpenMP.
+
+### Major Changes
+
+* **Parallel statistic core**: the per-document sort/cumsum/Pearson loop — the
+  profiled bottleneck since the blocked-gemm rewrite of 0.9.7 — runs under OpenMP
+  within each document block. Per-document results are reduced in a fixed order, so
+  the output is bit-identical for any thread count.
+
+* **The bootstrap moves to C++** (`calibrate = "bootstrap"`): the multinomial sampling
+  is fused with the Pearson reduction (no `bins × B` count and deviance temporaries,
+  visibly lower peak memory) and parallelized over documents. Each document owns a
+  private RNG stream seeded deterministically from `(seed, document index)`, so results
+  are bit-identical for any thread count and reproducible under `seed`; `set.seed()`
+  at the R level still governs when `seed = NULL`.
+
+* **New `n_threads` argument** on `optimal_topic()` (default `1L`), forwarded to both
+  cores. It only affects wall time, never the numbers. On toolchains without OpenMP
+  (e.g. the default macOS compiler) the cores run single-threaded; the thread-free
+  C++ bootstrap speedup is kept.
+
+* **RNG stream change**: the compiled bootstrap draws through its own generator
+  (splitmix64-seeded `std::mt19937_64`, conditional-binomial multinomial) instead of
+  R's `rmultinom()`. Bootstrap-calibrated p-values therefore agree with 0.11.0 up to
+  Monte-Carlo noise (order `1/sqrt(n_boot)`), not bit for bit. The test suite checks
+  the new stream against the pure-R oracle in distribution and against the exact
+  Haldane moments.
+
+### Minor Changes
+
+* New vignette section **"Computational efficiency"** reporting a simulation study
+  (speed, thread scaling, peak memory) across three synthetic corpus scales, with
+  the pre-0.12.0 R bootstrap as baseline; reproducible via
+  `data-raw/benchmark-efficiency.R`.
+
+* `src/Makevars` and `src/Makevars.win` add `$(SHLIB_OPENMP_CXXFLAGS)`.
+
+* New tests: bit-identical thread sweeps for both cores, seed reproducibility of the
+  compiled bootstrap, and distributional agreement with the `rmultinom()` oracle.
+
 # OpTop 0.11.0
 
 ### New Features — engine generalization

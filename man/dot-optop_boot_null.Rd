@@ -4,7 +4,7 @@
 \alias{.optop_boot_null}
 \title{Parametric bootstrap draw of the null Test 1 statistic}
 \usage{
-.optop_boot_null(probs, doc_lengths, n_boot)
+.optop_boot_null(probs, doc_lengths, n_boot, seed = NULL, n_threads = 1L)
 }
 \arguments{
 \item{probs}{List of per-document bin-probability vectors, as produced by
@@ -14,6 +14,12 @@
 with \code{probs}.}
 
 \item{n_boot}{Integer; number of bootstrap replicates.}
+
+\item{seed}{Integer seed for the compiled core's RNG, or \code{NULL} to draw
+one from the R session RNG.}
+
+\item{n_threads}{Integer; number of OpenMP threads (default \code{1L}). Has no
+effect on the result, only on wall time.}
 }
 \value{
 A numeric vector of length \code{n_boot} with the null replicates
@@ -29,6 +35,18 @@ the collapsed probabilities. Each replicate accumulates
 sum_j k_j sum_b (c_jb/N_j - p_jb)^2 / p_jb}, where the multiplier
 \eqn{k_j} is the number of bins of document \eqn{j}, matching the
 statistic's convention (\eqn{P_j + 1} with a min bin, \eqn{P_j} without).
-One \code{rmultinom()} call per document yields all replicates at once.
+}
+\details{
+The sampling runs in compiled code (\code{optop_boot_null_core()}), fused with
+the Pearson reduction and parallelized over documents with OpenMP.
+
+\strong{RNG contract.} R's RNG is not thread-safe, so the compiled core owns
+its generator: every document draws from a private stream seeded
+deterministically from \verb{(seed, document index)}, which makes the result
+bit-identical for any \code{n_threads}. When \code{seed} is \code{NULL} it is drawn once
+from the R session RNG, so \code{set.seed()} at the R level governs
+reproducibility exactly as before. The draws are a different (equally
+valid) stream than \code{rmultinom()}: calibrated p-values agree with the
+pre-0.12.0 implementation up to Monte-Carlo noise, not bit for bit.
 }
 \keyword{internal}

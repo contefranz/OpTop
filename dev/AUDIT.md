@@ -92,9 +92,9 @@ of the man page for the full reasoning):
    moments.
 
 Both are conditional on the fitted Θ̂, Φ̂ (no per-replicate refit — the double
-bootstrap remains out of scope). The per-document bootstrap loop lives in R
-on C-level primitives; it is the designated C++/OpenMP port if corpora with
-J ≫ 10⁴ ever make it the bottleneck.
+bootstrap remains out of scope). The per-document bootstrap loop originally
+lived in R on C-level primitives; since 0.12.0 it runs in
+`src/calibration_core.cpp` under OpenMP (see below).
 
 ## Generalization to arbitrary engines (implemented in 0.11.0)
 
@@ -128,23 +128,46 @@ the `generalize-core` branch:
   (still VEM-only), so bit-compatibility holds by construction; the file
   dies with the rule before v1.0.0.
 
+## Parallelization (implemented in 0.12.0)
+
+The OpenMP item deferred since 0.9.7 is closed, together with the bootstrap
+port it grew into, on the `parallel-calibration` branch:
+
+- **Statistic core.** The per-document sort/cumsum/Pearson loop — ~95% of
+  the runtime since the blocked-gemm rewrite — runs under
+  `#pragma omp parallel for` within each 256-document block. Each document
+  writes a private result slot and the slots are reduced serially in
+  document order, so the output is bit-identical for any `n_threads` and
+  `Rcpp::checkUserInterrupt()` stays at the block level, outside the
+  parallel region.
+- **Bootstrap core** (`src/calibration_core.cpp`). The multinomial sampling
+  (conditional binomial per bin) is fused with the Pearson reduction — the
+  `bins × B` count and deviance matrices of the R implementation are never
+  materialized — and parallelized over documents with the same
+  slot-plus-serial-reduction pattern. R's RNG is not thread-safe, so the
+  core owns its generator: each document draws from a `std::mt19937_64`
+  seeded deterministically from `(seed, document index)` via splitmix64.
+  Results are therefore bit-identical for any thread count and reproducible
+  under `seed` (drawn once from the R session RNG when `NULL`, so
+  `set.seed()` semantics are preserved). The draws are a different, equally
+  valid stream than `rmultinom()`: calibrated p-values agree with 0.11.0 up
+  to Monte-Carlo noise (`O(1/√B)`), not bit for bit — asserted against the
+  pure-R oracle in `tests/testthat/test-parallel.R`.
+- **API.** One `n_threads` argument on `optimal_topic()` (default 1),
+  forwarded to both cores; `src/Makevars(.win)` adds
+  `$(SHLIB_OPENMP_CXXFLAGS)` with an `#ifdef _OPENMP` fallback, so
+  no-OpenMP toolchains (Apple clang) build and run single-threaded — those
+  users keep the thread-free C++ speedup of the bootstrap, not the scaling.
+- Benchmarks: see "0.12.0 parallel cores" in the benchmark section;
+  reproducible via `data-raw/benchmark-efficiency.R`, reported in the
+  vignette's "Computational efficiency" section.
+
 ## Deferred
 
 - **Count-based statistic option**: the orthodox Pearson on counts
   (O = N_j·d, E = N_j·I), for which χ²_{P_j} is the textbook asymptotic —
   a different statistic than the published Eq. (8), so an alternative
   alongside it, not a replacement.
-
-- **OpenMP over the document loop.** Correct parallelization axis, and the
-  0.11.0 matrix core removed the blocker: the per-document loop is now pure
-  Armadillo with no R API inside (`Rcpp::checkUserInterrupt()` sits at the
-  block level and would move out of the parallel region). Still deliberately
-  deferred to a later release: it needs a `src/Makevars` with
-  `$(SHLIB_OPENMP_CXXFLAGS)`, a decision on the thread-count API, and a
-  fresh benchmark of the matrix core to justify it — see the benchmark
-  section. Note the platform caveat: CRAN's macOS binaries (and Apple clang
-  toolchains generally) build without OpenMP, so the speedup would accrue to
-  Linux/Windows users.
 
 - **text2vec (WarpLDA) adapter**: the `LDA_t2v` stub still fails
   informatively; mapping `doc_topic_distr`/`topic_word_distribution` to the
@@ -204,9 +227,9 @@ Findings:
   pre-adapted matrices — the R plumbing is not measurable next to the core.
 - **The sort still dominates (~95%).** The gemm is ~5% of the large-setting
   runtime; the per-document `sort_index`/`cumsum` machinery is where the
-  time goes, unchanged from the 0.9.7 profile. **OpenMP over the document
-  loop therefore remains the highest-leverage follow-up**, and the matrix
-  core has removed its thread-safety blocker (no R API in the hot path).
+  time goes, unchanged from the 0.9.7 profile. OpenMP over the document
+  loop was therefore the highest-leverage follow-up — implemented in
+  0.12.0, see the next benchmark.
 - A further algorithmic option: the Eq. (8) statistic only needs the *set*
   of top-`P_j` words (sums are order-independent), so a
   partial-sort/selection scheme could replace the full descending sort;
