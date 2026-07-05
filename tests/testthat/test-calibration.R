@@ -3,16 +3,6 @@
 # headline property — data simulated from a fitted model gets extreme
 # asymptotic chi-square p-values but interior calibrated ones.
 
-optop_envelope <- function(model, wdfm, q = 0.95) {
-  doc_map <- seq_len(quanteda::ndoc(wdfm)) - 1L
-  tp <- optop_as_theta_phi(model)
-  dfm_t <- Matrix::t(methods::as(wdfm, "dgCMatrix"))
-  out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map,
-                            return_envelope = TRUE, n_threads = 1L)
-  list(stat = out$stat,
-       probs = .optop_split_envelope(out$bin_probs, out$bin_counts))
-}
-
 # counts drawn from the fitted model itself: the conditional null is true by
 # construction, with the fixture's own document names and vocabulary
 optop_self_generated <- function(model, counts, seed) {
