@@ -22,12 +22,28 @@ compiled code under OpenMP.
   (e.g. the default macOS compiler) the cores run single-threaded; the thread-free
   C++ bootstrap speedup is kept.
 
+* **Adaptive bootstrap sampler**: each document picks its sampling strategy from the
+  data alone. Wide envelopes (more bins than tokens, the common regime on large
+  vocabularies) draw the tokens directly through a Walker alias table at O(N_j) per
+  replicate, with a closed-form Pearson contribution for untouched bins; narrow
+  envelopes keep the conditional-binomial method with an early exit once the count is
+  exhausted. Thread-count invariance and seed reproducibility are unaffected.
+
+* **Envelope selection replaces the full sort**: the statistic locates the top-`P_j`
+  head by `nth_element` selection with incremental slice sorts instead of sorting all
+  `W` fitted probabilities per document.
+
+* **Deterministic tie resolution**: envelope order is pinned to (probability
+  descending, index ascending), the semantics of R's stable `order()`. Results are now
+  identical across platforms even when fitted probabilities contain exact ties (as
+  Gibbs estimates routinely do); previously the boundary of the envelope could differ
+  between toolchains.
+
 * **RNG stream change**: the compiled bootstrap draws through its own generator
-  (splitmix64-seeded `std::mt19937_64`, conditional-binomial multinomial) instead of
-  R's `rmultinom()`. Bootstrap-calibrated p-values therefore agree with 0.11.0 up to
-  Monte-Carlo noise (order `1/sqrt(n_boot)`), not bit for bit. The test suite checks
-  the new stream against the pure-R oracle in distribution and against the exact
-  Haldane moments.
+  (splitmix64-seeded `std::mt19937_64`) instead of R's `rmultinom()`.
+  Bootstrap-calibrated p-values therefore agree with 0.11.0 up to Monte-Carlo noise
+  (order `1/sqrt(n_boot)`), not bit for bit. The test suite checks the new stream
+  against the pure-R oracle in distribution and against the exact Haldane moments.
 
 ### Minor Changes
 
@@ -38,8 +54,12 @@ compiled code under OpenMP.
 
 * `src/Makevars` and `src/Makevars.win` add `$(SHLIB_OPENMP_CXXFLAGS)`.
 
+* `optimal_topic()` keeps the adapter extractions for the evaluation loop under a
+  fixed memory budget instead of extracting every model twice.
+
 * New tests: bit-identical thread sweeps for both cores, seed reproducibility of the
-  compiled bootstrap, and distributional agreement with the `rmultinom()` oracle.
+  compiled bootstrap, distributional agreement with the `rmultinom()` oracle, and an
+  exact tie-resolution test against the R `order()` reference.
 
 # OpTop 0.11.0
 

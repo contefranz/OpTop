@@ -160,7 +160,35 @@ port it grew into, on the `parallel-calibration` branch:
   users keep the thread-free C++ speedup of the bootstrap, not the scaling.
 - Benchmarks: see "0.12.0 parallel cores" in the benchmark section;
   reproducible via `data-raw/benchmark-efficiency.R`, reported in the
-  vignette's "Computational efficiency" section.
+  vignette's "A Note On Computational Efficiency" section.
+
+### Second pass (audit of the parallel cores themselves)
+
+A profile of the first-pass cores exposed three structural costs, all
+resolved within 0.12.0:
+
+- **Bootstrap sampler complexity.** The conditional-binomial method is
+  O(k_j) per replicate, but on wide corpora k_j ≫ N_j (measured: 2,500–6,500
+  bins vs ~1,050 tokens per document). The sampler now chooses per document,
+  from the data alone (thread-invariant): a Walker alias table draws the
+  N_j tokens directly at O(N_j) per replicate when k_j > N_j, with the
+  untouched bins contributing their closed-form Pearson mass; otherwise the
+  binomial path runs with an early exit and suffix closed form once the
+  remaining count reaches zero.
+- **Serial share of the statistic pass.** At 4 threads the first-pass
+  statistic was ~50% serial (Amdahl on 8.70 s → 3.47 s). The sparse-block
+  densification now runs in parallel under the same slot pattern.
+- **Sort length.** The envelope needs only the top-P_j head, so the full
+  O(W log W) descending sort was replaced by `nth_element` selection with
+  incremental slice sorts, O(W · widenings + P_j log P_j). Tie resolution is
+  pinned to (probability descending, index ascending) — R's stable
+  `order()` — closing the "partial sort" option recorded at 0.11.0 and
+  making results platform-deterministic under tied fitted probabilities;
+  the previously toolchain-sensitive Gibbs grid test now passes exactly
+  everywhere and a dedicated tie test guards the contract.
+- `optimal_topic()` additionally keeps the adapter extractions for the
+  evaluation loop under a 256 MB grid budget instead of extracting every
+  model twice.
 
 ## Deferred
 
@@ -235,7 +263,8 @@ Findings:
   partial-sort/selection scheme could replace the full descending sort;
   with the legacy pipeline frozen in its own translation unit, the modern
   core no longer needs to reproduce the `round(cum * 1e4)` cutoff, which
-  makes this cleaner than it was at 0.9.7.
+  makes this cleaner than it was at 0.9.7. *(Implemented in the 0.12.0
+  second pass, see above.)*
 
 ### 0.12.0 parallel cores
 
