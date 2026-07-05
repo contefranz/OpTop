@@ -190,6 +190,75 @@ resolved within 0.12.0:
   evaluation loop under a 256 MB grid budget instead of extracting every
   model twice.
 
+### Third pass (the discrepancy-index family moves to compiled code)
+
+The first audit had assessed the index family as "vectorized R whose cost
+is dominated by BLAS" — measured at the scales the efficiency study now
+targets, that no longer held. At medium-2 (J = 1,000, W = 10,000, grid of
+10) the three-metric table took ~15 s and the partition ~3.5 s, dominated
+by memory traffic over J × W dense temporaries (6–8 per metric per model,
+plus logical→double coercions of the rare mask), not by the algebra;
+extrapolated to the large scale this meant ~10 minutes and multi-GB
+temporaries (`i_min` alone is 1.6 GB). Resolved within 0.12.0:
+
+- **Fused index engine** (`src/index_core.cpp`). One compiled call per
+  (model, block) computes every requested metric — SE, Pearson χ²,
+  deviance — for the model and the no-topics baseline side simultaneously.
+  At the document level the sparse counts are consumed directly: a dense
+  pass accumulates the zero-count contributions and the collapsed-bin sums,
+  a sparse pass over the nonzeros applies the corrections; the rare mask is
+  bit-packed once per call (no logical→double coercion), and the baseline
+  B = L_j·π_w is formed on the fly, never materialized. At the word level
+  the fitted block from R BLAS is kept and the engine replaces the dense
+  N/B temporaries. `optop_index_table()` therefore performs a single sweep
+  per model for the whole metric set, and the D_null hoist (one baseline
+  sweep per grid) is preserved. The support decomposition and the eps
+  conventions are reproduced verbatim (χ² floors E element-wise before use
+  and takes the min bin from floored sums; deviance keeps the 0·log 0
+  convention and the unfloored E_min; SE is unfloored throughout) — the
+  naive-reference tests remain the arbiter, and a golden check against the
+  pre-engine implementation agreed to ≤ 4e-13 (document level) and
+  ≤ 4e-17 (word level) on the fixtures.
+- **Partition kernel** (`src/partition_core.cpp`).
+  `optop_make_partition()` keeps the running minimum across the grid one
+  vocabulary block at a time (one BLAS product per model per block feeding
+  an in-place minimum) and writes the rare mask directly from the block
+  buffer by exact comparison. The full J × W minimum matrix is never
+  materialized; the mask is bit-identical to the R `pmin()` chain.
+- **Envelope marshalling.** `optimal_topic()` now hands the statistic
+  core's flattened envelope export (`bin_probs`, `bin_counts`) directly to
+  the bootstrap core; the per-document list split survives only in the
+  moment-matching path. This closes the "deferred, micro" transient noted
+  in the second-pass benchmark (~1 GB on the large corpus).
+- **API.** `n_threads` (default 1) on the three index functions,
+  `optop_index_table()` and `optop_make_partition()`, with the established
+  OpenMP contract: per-document/word private slots, fixed-order serial
+  reduction, bit-identical output for any thread count (guarded in
+  `test-parallel.R`).
+
+**Methodological note (author's call, no code change).** With
+τ_j = c / L_j, the harmonized support degenerates on wide, flat corpora:
+as W grows at fixed document length, `min_K i_jw < c/L_j` eventually holds
+for *every* word, C_j* covers the whole vocabulary, and the evaluation
+support collapses to the single min bin. For such documents both D_K and
+D_null reduce to `(N_min − E_min)²` with N_min = L_j and E_min ≈ L_j,
+i.e. two O(ε²) rounding residuals, and the per-document
+R² = 1 − D_K/D_null is a ratio of floating-point noise. Measured on the
+benchmark corpora at the default c = 5: at the *small* scale
+(J = 200, W = 2,000) 132 of 200 documents are fully collapsed but the
+remaining 61 with D_null > 1 dominate the sums, so the micro indices stay
+meaningful while the macro (equal-weight) average is already contaminated;
+from medium-1 upward (W ≥ 5,000, L_j ≈ 600–1,500) **every** document
+collapses — at medium-1, Σ_j D_null(SE) = 1.5e-20 — and the micro indices
+themselves become noise ratios whose values legitimately differ between
+algebraically equivalent implementations. The efficiency study therefore
+evaluates the indices at c = 0.2 (no fully collapsed document at any
+scale, median rare share 0.84–0.97), and its correctness gate compares
+micro columns only. For the paper: if the indices are to be reported on
+corpora in this regime, a guard may be warranted — a minimum support
+size, a τ that adapts to W, or excluding (near-)collapsed documents from
+the macro average.
+
 ## Deferred
 
 - **Count-based statistic option**: the orthodox Pearson on counts
@@ -332,5 +401,38 @@ Findings:
   memory does not grow with `n_threads`. On the largest corpus the
   compiled path sits ~14% above the R baseline because `.optop_boot_null()`
   flattens the envelope list before the core call — one transient copy;
-  passing the core's flattened export directly would remove it (deferred,
-  micro).
+  passing the core's flattened export directly would remove it. *(Done in
+  the third pass, see above.)*
+
+### 0.12.0 index engine (third pass)
+
+Same harness, `indices` mode: `optop_make_partition()` plus a
+three-metric, document-level `optop_index_table()` over the grid, on
+counts reconstructed from the cached fits, at c = 0.2 (see the τ
+degeneracy note for why the default c = 5 is unusable on these corpora;
+the arithmetic volume does not depend on c). Baseline `indices_r` is the
+pre-engine vectorized R implementation reimplemented verbatim in the
+worker. Thread sweeps bit-identical; engine vs R indices agree to ≤ 4e-15
+(micro and macro columns alike) at every scale.
+
+| Corpus | Models | R implementation | engine 1 thread | engine 4 threads | total speedup | peak RSS |
+|---|---|---|---|---|---|---|
+| small: J = 200, W = 2,000 | 10 | 1.0 s | 0.18 s | 0.14 s | 7.1× | 345 → 274 MB |
+| medium-1: J = 500, W = 5,000 | 10 | 6.4 s | 0.87 s | 0.65 s | 9.8× | 610 → 401 MB |
+| medium-2: J = 1,000, W = 10,000 | 10 | 33.1 s | 3.7 s | 3.0 s | 11.1× | 1,216 → 625 MB |
+| large: J = 10,000, W = 20,000 | 5 | 331.3 s | 39.8 s | 32.9 s | 10.1× | 9,260 → 3,269 MB |
+
+Findings:
+
+- The pre-threading gain (5.5× / 7.4× / 9.1× / 8.3×) is the fused single
+  traversal itself: the R implementation's cost was the chain of J × W
+  temporaries, which the engine never allocates. Within the total, the
+  table sweep gains the most (large: 300 s → 21 s, 14.5×); the partition
+  (large: 32 s → 12 s) remains BLAS-dominated.
+- Thread scaling is modest by design of the workload (large: 1.2× from
+  1 → 4 threads): the dense per-document pass is memory-bandwidth-bound
+  and the partition's gemm stays serial inside the BLAS. `n_threads`
+  helps, but the headline win is thread-free.
+- Peak memory at the large scale drops 2.8× (9.3 → 3.3 GB): no `i_min`
+  (1.6 GB), no dense count/baseline/difference blocks; what remains is
+  the logical `rare_mask` (800 MB), the sparse counts, and the fits.

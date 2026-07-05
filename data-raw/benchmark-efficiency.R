@@ -17,7 +17,10 @@
 #   data-raw/benchmark-worker.R under /usr/bin/time -v, so wall time comes
 #   from system.time() inside the worker and peak RSS from the OS;
 # * modes: "stat" (statistic only), "boot" (bootstrap calibration, B = 200),
-#   "boot_r" (the 0.11.0 R bootstrap reimplemented verbatim as baseline);
+#   "boot_r" (the 0.11.0 R bootstrap reimplemented verbatim as baseline),
+#   "indices" (harmonized partition plus three-metric document-level index
+#   table on reconstructed counts, compiled engine), "indices_r" (the
+#   pre-engine vectorized R implementation as baseline);
 # * the thread sweep is capped at the machine's core count: settings above
 #   it only measure oversubscription (verified once on a 4-core host, where
 #   6 and 8 threads sat within noise of the 4-thread times), so the driver
@@ -28,7 +31,9 @@
 #
 # Model fits are cached per scale in data-raw/benchmark-fits-<scale>.rds
 # (gitignored); delete a cache file to refit that scale. Results go to
-# inst/extdata/optop-benchmark-results.rds.
+# inst/extdata/optop-benchmark-results.rds; configurations already present
+# there are not rerun, so new modes or wider sweeps only add the missing
+# rows (delete the results file for a full rerun).
 
 suppressMessages({
   library(OpTop)
@@ -126,11 +131,22 @@ configs <- do.call(rbind, lapply(names(scales), function(nm) {
   rbind(
     data.frame(scale = nm, mode = "boot_r", threads = 1L),
     expand.grid(scale = nm, mode = c("stat", "boot"),
+                threads = threads_sweep, stringsAsFactors = FALSE),
+    data.frame(scale = nm, mode = "indices_r", threads = 1L),
+    expand.grid(scale = nm, mode = "indices",
                 threads = threads_sweep, stringsAsFactors = FALSE)
   )
 }))
 
+# per-run outputs are cached like the fits, so an interrupted session or a
+# failed correctness gate does not discard finished timings; delete
+# data-raw/benchmark-runs/ to re-measure
+runs_dir <- file.path("data-raw", "benchmark-runs")
+dir.create(runs_dir, showWarnings = FALSE)
+
 run_config <- function(scale, mode, threads) {
+  cache <- file.path(runs_dir, sprintf("%s-%s-%d.rds", scale, mode, threads))
+  if (file.exists(cache)) return(readRDS(cache))
   res_file <- tempfile(fileext = ".rds")
   time_file <- tempfile(fileext = ".txt")
   status <- system2("/usr/bin/time",
@@ -143,7 +159,19 @@ run_config <- function(scale, mode, threads) {
   rss_line <- grep("Maximum resident set size", readLines(time_file),
                    value = TRUE)
   out$max_rss_mb <- as.numeric(sub(".*: ", "", rss_line)) / 1024
+  saveRDS(out, cache)
   out
+}
+
+# configurations already stored in the results file are kept, not rerun
+prior <- if (file.exists(out_rds)) readRDS(out_rds)$results else NULL
+if (!is.null(prior)) {
+  for (col in c("partition_sec", "table_sec")) {
+    if (is.null(prior[[col]])) prior[[col]] <- NA_real_
+  }
+  have <- paste(prior$scale, prior$mode, prior$threads)
+  keep <- !(paste(configs$scale, configs$mode, configs$threads) %in% have)
+  configs <- configs[keep, , drop = FALSE]
 }
 
 runs <- vector("list", nrow(configs))
@@ -159,8 +187,13 @@ results <- do.call(rbind, lapply(runs, function(r) {
   data.frame(scale = r$scale, J = sc$J, W = sc$W,
              n_models = length(sc$K_grid), mode = r$mode,
              threads = r$threads,
-             elapsed_sec = r$elapsed, max_rss_mb = r$max_rss_mb)
+             elapsed_sec = r$elapsed, max_rss_mb = r$max_rss_mb,
+             partition_sec = if (is.null(r$elapsed_partition)) NA_real_
+                             else r$elapsed_partition,
+             table_sec = if (is.null(r$elapsed_table)) NA_real_
+                         else r$elapsed_table)
 }))
+results <- rbind(prior, results)
 
 # ---- correctness checks -----------------------------------------------------
 
@@ -173,19 +206,41 @@ pick <- function(scale, mode, threads) {
   NULL
 }
 
+# checks run on whatever was executed in this session; configurations taken
+# over from a previous results file were checked when they were produced
 for (nm in names(scales)) {
   # thread sweeps are bit-identical
-  for (mode in c("stat", "boot")) {
+  for (mode in c("stat", "boot", "indices")) {
     base <- pick(nm, mode, 1L)
+    if (is.null(base)) next
     for (th in setdiff(threads_sweep, 1L)) {
-      stopifnot(identical(base, pick(nm, mode, th)))
+      alt <- pick(nm, mode, th)
+      if (!is.null(alt)) stopifnot(identical(base, alt))
     }
   }
   # the C++ bootstrap agrees with the R baseline within MC resolution:
   # different RNG streams, so p-values differ by O(1/sqrt(B))
   p_cpp <- pick(nm, "boot", 1L)$pval
   p_r <- pick(nm, "boot_r", 1L)$pval
-  stopifnot(max(abs(p_cpp - p_r)) <= 5 * sqrt(0.25 / n_boot) + 2 / (n_boot + 1))
+  if (!is.null(p_cpp) && !is.null(p_r)) {
+    stopifnot(max(abs(p_cpp - p_r)) <= 5 * sqrt(0.25 / n_boot) + 2 / (n_boot + 1))
+  }
+  # the compiled index engine reproduces the R implementation: same micro
+  # values up to summation order. The macro columns are excluded on purpose:
+  # documents whose support (nearly) collapses into the min bin have a
+  # D_null of rounding-residual size, and their per-document R2 -- a ratio
+  # of such residuals -- legitimately differs between summation orders; the
+  # equal-weight macro average inherits that noise while the micro sums do
+  # not (see dev/AUDIT.md on the tau_j support degeneracy, and the worker
+  # for why these corpora are benchmarked at c = 0.2)
+  i_cpp <- pick(nm, "indices", 1L)
+  i_r <- pick(nm, "indices_r", 1L)
+  if (!is.null(i_cpp) && !is.null(i_r)) {
+    micro <- c("K", "R2_SE", "R2_chisq", "R2_dev")
+    stopifnot(identical(dim(i_cpp), dim(i_r)),
+              max(abs(as.matrix(i_cpp[, micro]) -
+                      as.matrix(i_r[, micro]))) < 1e-6)
+  }
 }
 message("correctness checks passed")
 

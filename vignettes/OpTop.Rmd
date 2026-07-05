@@ -550,18 +550,23 @@ bres <- as.data.table(bench$results)
 scale_labels <- c(small = "small", medium1 = "medium-1",
                   medium2 = "medium-2", large = "large")
 bres[, scale := factor(scale_labels[scale], levels = scale_labels)]
-bres[, config := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
-                        sprintf("%s, %d thread%s",
-                                ifelse(mode == "stat", "statistic", "C++ bootstrap"),
-                                threads, ifelse(threads > 1, "s", "")))]
+thread_label <- sprintf("%d thread%s", bres$threads,
+                        ifelse(bres$threads > 1, "s", ""))
+bres[, config := fcase(
+  mode == "boot_r", "R bootstrap (0.11.0)",
+  mode == "indices_r", "R implementation (pre-engine)",
+  mode == "stat", paste0("statistic, ", thread_label),
+  mode == "boot", paste0("C++ bootstrap, ", thread_label),
+  mode == "indices", paste0("engine, ", thread_label)
+)]
 ```
 
 Both computational stages of `optimal_topic()` are implemented in compiled
-code and, as of v0.12.0, run in parallel. This section describes the
-implementation and reports a simulation study of its speed, thread scaling,
-and memory use. It concerns `optimal_topic()` only; the discrepancy indices
-of the next section are vectorized R code whose cost is dominated by BLAS
-operations.
+code and, as of v0.12.0, run in parallel, and the same design extends to
+the goodness-of-fit tools of the next section, whose partition and index
+computations are evaluated by a fused compiled engine. This section
+describes the implementations and reports a simulation study of their
+speed, thread scaling, and memory use.
 
 **The statistic.** For each model, the fitted word probabilities of a block
 of 256 documents are obtained with a single BLAS matrix product, since the
@@ -590,9 +595,10 @@ p-values are reproducible under `seed`.
 The study below evaluates VEM grids of ten models (five on the largest
 corpus) on four synthetic corpus scales, from J = 200 documents with
 W = 2,000 features up to J = 10,000 documents with W = 20,000 features,
-timing the statistic pass and the bootstrap-calibrated pass
-(B = `r bench$meta$n_boot`) for one, two, and four threads, with the
-pure-R bootstrap of v0.11.0 as baseline. The sweep ends at four threads
+timing the statistic pass, the bootstrap-calibrated pass
+(B = `r bench$meta$n_boot`), and the goodness-of-fit evaluation for one,
+two, and four threads, with the corresponding pure-R implementations as
+baselines. The sweep ends at four threads
 because that is the host's logical core count; thread settings beyond the
 physical cores only measure oversubscription, so the benchmark driver caps
 the sweep at the core count and extends it automatically on machines with
@@ -682,10 +688,62 @@ fitted models and, on the largest corpus, the exported envelope bins,
 rather than by the sampling itself: the two implementations stay within
 roughly 15% of one another in either direction, and the per-thread state
 amounts to one result slot per document, so peak memory does not grow with
-`n_threads`. On toolchains
+`n_threads`.
+
+**The discrepancy indices.** The goodness-of-fit tools of the next section
+follow the same design. The harmonized partition of
+`optop_make_partition()` keeps the running minimum across the model grid
+one vocabulary block at a time in compiled code, so the full
+J $\times$ W minimum matrix is never materialized, and the three
+discrepancy indices are evaluated by a fused engine that computes all
+requested metrics, for the model and for the no-topics baseline side, in a
+single traversal of each document block. The evaluation consumes the
+sparse counts directly, forms the baseline on the fly, and parallelizes
+over documents under the contract stated above: results are bit-identical
+for every value of `n_threads`, exposed on the index functions and on
+`optop_make_partition()`. The table reports the wall time of the full
+evaluation, the partition followed by a three-metric document-level
+`optop_index_table()` over the grid, with the vectorized R implementation
+that preceded the engine as baseline. The rare-word threshold is set so
+that the harmonized support remains non-trivial at every scale of these
+synthetic corpora; the computational cost of the evaluation does not
+depend on that choice.
+
+```{r bench-indices-table, echo = FALSE}
+idx_wide <- dcast(bres[mode %in% c("indices", "indices_r")],
+                  scale + J + W ~ config, value.var = "elapsed_sec")
+setorder(idx_wide, J)
+setcolorder(idx_wide, c("scale", "J", "W", "R implementation (pre-engine)"))
+knitr::kable(idx_wide, digits = 1,
+             caption = paste("Wall time (seconds) of the goodness-of-fit",
+                             "evaluation (partition plus three-metric index",
+                             "table) by thread count, with the pre-engine R",
+                             "implementation as baseline"))
+```
+
+```{r bench-indices-inline, include = FALSE}
+idx_r_large <- bres[scale == "large" & mode == "indices_r", elapsed_sec]
+idx_best_large <- bres[scale == "large" & mode == "indices"][which.min(elapsed_sec)]
+idx_ram_r <- bres[scale == "large" & mode == "indices_r", max_rss_mb]
+idx_ram_cpp <- bres[scale == "large" & mode == "indices" &
+                      threads == idx_best_large$threads, max_rss_mb]
+```
+
+On the largest corpus the evaluation falls from
+`r sprintf("%.1f", idx_r_large / 60)` minutes to
+`r sprintf("%.1f", idx_best_large$elapsed_sec)` seconds at
+`r idx_best_large$threads` threads, a
+`r sprintf("%.1f", idx_r_large / idx_best_large$elapsed_sec)`-fold
+reduction, and peak memory falls from
+`r sprintf("%.1f", idx_ram_r / 1024)` GB to
+`r sprintf("%.1f", idx_ram_cpp / 1024)` GB, since neither the minimum
+matrix nor the dense count and baseline blocks are formed.
+
+On toolchains
 without OpenMP support (notably the default macOS compiler) the cores run
 single-threaded; the thread-independent speedup of the compiled bootstrap
-is retained, while the scaling with `n_threads` is not. The internal helper
+and of the index engine is retained, while the scaling with `n_threads` is
+not. The internal helper
 `OpTop:::optop_openmp_available()` reports whether the installed build
 supports OpenMP.
 

@@ -9,6 +9,7 @@
 .Rproj.user
 /utils.R
 data-raw/*.rds
+data-raw/benchmark-runs/
 vignettes/*.html
 vignettes/*.R
 

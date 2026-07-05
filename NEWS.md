@@ -11,8 +11,8 @@ compiled code under OpenMP.
   the output is bit-identical for any thread count.
 
 * **The bootstrap moves to C++** (`calibrate = "bootstrap"`): the multinomial sampling
-  is fused with the Pearson reduction (no `bins × B` count and deviance temporaries,
-  visibly lower peak memory) and parallelized over documents. Each document owns a
+  is fused with the Pearson reduction (no `bins × B` count and deviance temporaries)
+  and parallelized over documents. Each document owns a
   private RNG stream seeded deterministically from `(seed, document index)`, so results
   are bit-identical for any thread count and reproducible under `seed`; `set.seed()`
   at the R level still governs when `seed = NULL`.
@@ -45,22 +45,48 @@ compiled code under OpenMP.
   (order `1/sqrt(n_boot)`), not bit for bit. The test suite checks the new stream
   against the pure-R oracle in distribution and against the exact Haldane moments.
 
+* **The discrepancy indices move to C++**: `optop_index_se()`, `optop_index_chisq()`,
+  `optop_index_deviance()` and `optop_index_table()` are evaluated by a fused OpenMP
+  engine (`src/index_core.cpp`) that computes every requested metric, for both the
+  model and the no-topics baseline side, in a single traversal of each document block,
+  at the document and at the word level. `optop_index_table()` now performs one sweep
+  per model for the whole metric set, and the baseline side is still computed once per
+  grid. The support decomposition and the epsilon conventions are reproduced exactly;
+  results are unchanged and bit-identical for any thread count.
+
+* **Compiled harmonized partition**: `optop_make_partition()` computes the running
+  minimum across the model grid one vocabulary block at a time in compiled code
+  (`src/partition_core.cpp`). The `J × W` minimum matrix is no longer materialized:
+  peak memory is the returned rare mask plus one `J × block` buffer.
+
+* **`n_threads` on the index family**: `optop_index_se()`, `optop_index_chisq()`,
+  `optop_index_deviance()`, `optop_index_table()` and `optop_make_partition()` gain an
+  `n_threads` argument (default `1L`) with the same contract as `optimal_topic()`:
+  wall time only, never the numbers.
+
+* **Bootstrap envelope marshalling**: `optimal_topic()` passes the statistic core's
+  flattened envelope export directly to the bootstrap core; the per-document list
+  round trip and its transient copy (about 1 GB on the largest benchmark corpus) are
+  gone. The list split remains only in the moment-matching path, which needs it.
+
 ### Minor Changes
 
 * New vignette section **"A Note On Computational Efficiency"** reporting a simulation
   study (speed, thread scaling up to the machine's core count, peak memory) across four
   synthetic corpus scales, up to J = 10,000 documents and W = 20,000 features, with
   the pre-0.12.0 R bootstrap as baseline; reproducible via
-  `data-raw/benchmark-efficiency.R`.
+  `data-raw/benchmark-efficiency.R`. The study also covers the harmonized partition
+  and the three-metric index table, with the pre-engine R implementation as baseline.
 
 * `src/Makevars` and `src/Makevars.win` add `$(SHLIB_OPENMP_CXXFLAGS)`.
 
 * `optimal_topic()` keeps the adapter extractions for the evaluation loop under a
   fixed memory budget instead of extracting every model twice.
 
-* New tests: bit-identical thread sweeps for both cores, seed reproducibility of the
-  compiled bootstrap, distributional agreement with the `rmultinom()` oracle, and an
-  exact tie-resolution test against the R `order()` reference.
+* New tests: bit-identical thread sweeps for all compiled cores (statistic, bootstrap,
+  index engine, partition kernel), seed reproducibility of the compiled bootstrap,
+  distributional agreement with the `rmultinom()` oracle, and an exact tie-resolution
+  test against the R `order()` reference.
 
 # OpTop 0.11.0
 
