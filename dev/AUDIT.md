@@ -291,9 +291,28 @@ Statistic-only pass:
 | J = 500, W = 5,000 | 2.12 s | 0.90 s | 2.3× |
 | J = 1,000, W = 10,000 | 8.70 s | 3.47 s | 2.5× |
 
-Findings: the fused sampling+reduction is worth 1.4–1.5× before threading;
-the bootstrap's document loop scales essentially linearly (3.8–4.0× on 4
-cores), the statistic sub-linearly (the gemm and the sparse-block
-densification stay serial). Peak RSS is dominated by the fitted models, is
-flat across implementations at the medium/large scales (~12% saving at the
-small one), and does not grow with `n_threads`.
+Findings (first pass): the fused sampling+reduction is worth 1.4–1.5×
+before threading; the bootstrap's document loop scales essentially linearly
+(3.8–4.0× on 4 cores), the statistic sub-linearly (the gemm and the
+sparse-block densification stay serial). Peak RSS is dominated by the
+fitted models, is flat across implementations at the medium/large scales
+(~12% saving at the small one), and does not grow with `n_threads`.
+
+Second pass (adaptive sampler, envelope selection, parallel densification;
+same machine and settings):
+
+| Corpus | R bootstrap (0.11.0) | C++ 1 thread | C++ 4 threads | total speedup |
+|---|---|---|---|---|
+| J = 200, W = 2,000 | 32.6 s | 18.0 s | 4.7 s | 6.9× |
+| J = 500, W = 5,000 | 165.8 s | 30.2 s | 8.7 s | 19.0× |
+| J = 1,000, W = 10,000 | 573.3 s | 67.0 s | 20.2 s | 28.4× |
+
+Statistic-only pass: 9.20 s → 3.21 s at 4 threads on the large corpus
+(2.9×; the single-thread time is unchanged within run-to-run noise on
+these flat synthetic fits, whose envelopes keep 50–65% of W — on Zipfian
+corpora, where P_j/W is far smaller, the selection saves proportionally
+more). The pre-threading bootstrap gain grows with the vocabulary
+(1.8× / 5.5× / 8.6× across the scales), as expected from the O(N_j)
+alias path replacing the O(k_j) binomial path precisely where k_j ≫ N_j.
+Peak memory is unchanged: flat across implementations and thread counts,
+dominated by the fitted models.

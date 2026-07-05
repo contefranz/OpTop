@@ -572,7 +572,12 @@ the documents of each block with OpenMP.
 null replicates of the statistic per model, each requiring one multinomial
 draw per document. Since v0.12.0 the draws are generated in compiled code
 and fused with the Pearson reduction, so that no intermediate count matrices
-are materialized, and the document loop is parallelized. Each document draws
+are materialized, and the document loop is parallelized. The sampler is
+chosen per document from the data alone: when the envelope holds more bins
+than the document holds tokens, the common regime on large vocabularies,
+the tokens are drawn directly through an alias table at $O(N_j)$ per
+replicate and the untouched bins contribute a closed-form Pearson term;
+otherwise the conditional-binomial method is used. Each document draws
 from a private random-number stream seeded deterministically from the pair
 (`seed`, document index), and all reductions are performed in a fixed order.
 Two properties follow: the output is bit-identical for every value of
@@ -636,8 +641,10 @@ ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = config)) +
 
 Three regularities hold across the scales. First, the compiled bootstrap is
 `r sprintf("%.1f", min(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`–`r sprintf("%.1f", max(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`×
-faster than the R implementation before any threading, a consequence of
-fusing the sampling with the Pearson reduction. Second, the parallel
+faster than the R implementation before any threading, and the gain grows
+with the vocabulary: the alias-table path costs $O(N_j)$ per replicate
+where the bin-wise method costs $O(k_j)$, and wide corpora have
+$k_j \gg N_j$. Second, the parallel
 document loop scales almost linearly: at 4 threads the calibrated pass is
 `r sprintf("%.1f", max(boot_runs[threads == 4, vs_R]))`× faster than the
 0.11.0 baseline on the largest corpus, falling from
@@ -646,7 +653,7 @@ to `r sprintf("%.0f", bres[scale == "large" & mode == "boot" & threads == 4, ela
 The statistic pass shares the document-level parallelism and gains
 `r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / bres[scale == "large" & mode == "stat" & threads == 4, elapsed_sec])`×
 at 4 threads on the same corpus; its speedup is sub-linear because the BLAS
-product and the sparse-block densification remain serial. Third, peak
+product remains serial. Third, peak
 memory is governed by the fitted models held in memory rather than by the
 evaluation itself: the fused reduction yields a visible saving only at the
 smallest scale, and the per-thread state amounts to one result slot per
