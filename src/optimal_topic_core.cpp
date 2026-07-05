@@ -1,12 +1,23 @@
 #include <RcppArmadillo.h>
 // [Rcpp::depends(RcppArmadillo)]
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // Model-agnostic core of the Test 1 statistic (Eq. 8 in Lewis & Grossetti
 // 2022): the caller adapts whatever topic model it holds to a document-topic
 // matrix theta (J_model x K, rows summing to 1) and a topic-word matrix phi
-// (K x W, rows summing to 1) and calls this once per model. Keeping the hot
-// path free of R API objects (no S4 slot access) is also what makes it
-// eligible for OpenMP parallelization over documents later on.
+// (K x W, rows summing to 1) and calls this once per model. The hot path is
+// free of R API objects (no S4 slot access), which is what allows the
+// per-document loop to run under OpenMP.
+//
+// Threading contract: documents are independent, so within each block the
+// per-document sort/cumsum/Pearson work runs in parallel, each document
+// writing its own result slot; the slots are then accumulated serially in
+// document order. The floating-point summation order (and the exported
+// envelope layout) therefore never depends on the schedule, and the output
+// is bit-identical for any n_threads.
 
 //' @keywords internal
 // [[Rcpp::export]]
@@ -15,7 +26,8 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                               const arma::sp_mat& dfm_t,
                               double q,
                               const arma::uvec& doc_map,
-                              bool return_envelope)
+                              bool return_envelope,
+                              int n_threads)
 {
     // dfm_t is the weighted dfm transposed once by the caller (W x J): a
     // document is a contiguous CSC column, so densifying a block of
@@ -41,6 +53,9 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
         Rcpp::stop("document mapping points past the rows of theta: "
                    "the dfm and the model are misaligned");
     }
+    if (n_threads < 1) {
+        n_threads = 1;
+    }
 
     // documents are processed in fixed-size blocks: one BLAS product per
     // block replaces a dense W x K temporary per document, while keeping
@@ -64,18 +79,28 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
         bin_counts.reserve(n_docs);
     }
 
+    // per-document slots for one block, written in parallel and reduced
+    // serially in document order
+    std::vector<double> chi_slot(block_size);
+    std::vector<double> df_slot(block_size);
+    std::vector<std::vector<double>> env_slot(return_envelope ? block_size : 0);
+
     for (arma::uword block_start = 0; block_start < n_docs; block_start += block_size)
     {
         Rcpp::checkUserInterrupt();
 
         const arma::uword block_end = std::min(block_start + block_size, n_docs) - 1;
+        const int block_len = static_cast<int>(block_end - block_start + 1);
 
         // W x b slabs, one column per document
         const arma::mat dfm_block(dfm_t.cols(block_start, block_end));
         const arma::uvec theta_rows = doc_map.subvec(block_start, block_end);
         const arma::mat X_block = tww * arma::mat(theta.rows(theta_rows)).t();
 
-        for (arma::uword j_col = 0; j_col < X_block.n_cols; ++j_col)
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic) num_threads(n_threads)
+#endif
+        for (int j_col = 0; j_col < block_len; ++j_col)
         {
             // get cumulative sum of sorted word probabilities
             arma::vec X = X_block.col(j_col);
@@ -112,17 +137,31 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                 n_bins += 1;
             }
 
-            sum_chi += double(n_bins) * pearson;
-            sum_df += double(n_bins - 1);
+            chi_slot[j_col] = double(n_bins) * pearson;
+            df_slot[j_col] = double(n_bins - 1);
 
             if (return_envelope) {
+                std::vector<double>& bins = env_slot[j_col];
+                bins.clear();
+                bins.reserve(n_bins);
                 for (std::size_t p = 0; p < p_j; ++p) {
-                    bin_probs.push_back(X(p));
+                    bins.push_back(X(p));
                 }
                 if (n_tail > 0) {
-                    bin_probs.push_back(tail_X);
+                    bins.push_back(tail_X);
                 }
-                bin_counts.push_back(int(n_bins));
+            }
+        }
+
+        // serial reduction in document order: the summation order (and the
+        // envelope layout) is independent of the schedule
+        for (int j_col = 0; j_col < block_len; ++j_col) {
+            sum_chi += chi_slot[j_col];
+            sum_df += df_slot[j_col];
+            if (return_envelope) {
+                const std::vector<double>& bins = env_slot[j_col];
+                bin_probs.insert(bin_probs.end(), bins.begin(), bins.end());
+                bin_counts.push_back(int(bins.size()));
             }
         }
     }

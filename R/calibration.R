@@ -10,11 +10,12 @@
 # determined by the per-document bin probabilities exported by the C++ core —
 # no full-vocabulary simulation is ever needed.
 #
-# Performance note: the loops below touch only C-level primitives (rmultinom,
-# colSums, vector arithmetic) at ~n_boot x df flops per model. Should corpora
-# with J >> 10^4 documents ever make the per-document R loop the bottleneck,
-# this file is the designated C++/OpenMP port — the envelope export already
-# provides all of its inputs.
+# Performance note: since v0.12.0 the bootstrap runs in compiled code
+# (src/calibration_core.cpp), which fuses the multinomial sampling with the
+# Pearson reduction and parallelizes over documents with OpenMP; see
+# .optop_boot_null() for the RNG and thread-invariance contract. The
+# closed-form moment matching below stays in R — it is a single pass over the
+# envelope bins and never shows up in profiles.
 
 #' Split the flattened envelope into per-document bins
 #'
@@ -47,28 +48,44 @@
 #' sum_j k_j sum_b (c_jb/N_j - p_jb)^2 / p_jb}, where the multiplier
 #' \eqn{k_j} is the number of bins of document \eqn{j}, matching the
 #' statistic's convention (\eqn{P_j + 1} with a min bin, \eqn{P_j} without).
-#' One `rmultinom()` call per document yields all replicates at once.
+#'
+#' The sampling runs in compiled code (`optop_boot_null_core()`), fused with
+#' the Pearson reduction and parallelized over documents with OpenMP.
+#'
+#' **RNG contract.** R's RNG is not thread-safe, so the compiled core owns
+#' its generator: every document draws from a private stream seeded
+#' deterministically from `(seed, document index)`, which makes the result
+#' bit-identical for any `n_threads`. When `seed` is `NULL` it is drawn once
+#' from the R session RNG, so `set.seed()` at the R level governs
+#' reproducibility exactly as before. The draws are a different (equally
+#' valid) stream than `rmultinom()`: calibrated p-values agree with the
+#' pre-0.12.0 implementation up to Monte-Carlo noise, not bit for bit.
 #'
 #' @param probs List of per-document bin-probability vectors, as produced by
 #'   `.optop_split_envelope()`.
 #' @param doc_lengths Numeric vector of document lengths \eqn{N_j}, aligned
 #'   with `probs`.
 #' @param n_boot Integer; number of bootstrap replicates.
+#' @param seed Integer seed for the compiled core's RNG, or `NULL` to draw
+#'   one from the R session RNG.
+#' @param n_threads Integer; number of OpenMP threads (default `1L`). Has no
+#'   effect on the result, only on wall time.
 #'
 #' @return A numeric vector of length `n_boot` with the null replicates
 #'   \eqn{T^\ast}{T*}.
 #'
 #' @keywords internal
-.optop_boot_null <- function(probs, doc_lengths, n_boot) {
-  T_null <- numeric(n_boot)
-  for (j in seq_along(probs)) {
-    p <- probs[[j]]
-    n <- doc_lengths[j]
-    cnt <- stats::rmultinom(n_boot, size = n, prob = p)
-    dev <- (cnt / n - p)^2 / p
-    T_null <- T_null + length(p) * colSums(dev)
+.optop_boot_null <- function(probs, doc_lengths, n_boot, seed = NULL,
+                             n_threads = 1L) {
+  if (is.null(seed)) {
+    seed <- sample.int(.Machine$integer.max, 1L)
   }
-  T_null
+  optop_boot_null_core(unlist(probs, use.names = FALSE),
+                       lengths(probs),
+                       as.numeric(doc_lengths),
+                       as.integer(n_boot),
+                       as.numeric(seed),
+                       as.integer(n_threads))
 }
 
 #' Exact null moments of the Test 1 statistic and their Satterthwaite match

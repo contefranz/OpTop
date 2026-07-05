@@ -51,6 +51,13 @@ if (getRversion() >= "2.15.1") {
 #'   unnamed, the vector must follow the row order of `weighted_dfm`.
 #' @param seed Optional integer passed to [set.seed()] before the bootstrap,
 #'   for reproducible calibrated p-values (default `NULL`).
+#' @param n_threads Integer; number of OpenMP threads used by the compiled
+#'   cores (the per-document statistic loop and the bootstrap), default
+#'   `1L`. Results are **bit-identical for any value**: every document owns a
+#'   deterministic RNG stream and all reductions run in a fixed order, so
+#'   `n_threads` only affects wall time. On builds without OpenMP (e.g. the
+#'   default macOS toolchain) the value is ignored and the cores run
+#'   single-threaded.
 #' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
 #'   topics with vertical and horizontal guides at the selected optimum and a
 #'   subtitle reporting the selection method, the selected \eqn{K}, and the
@@ -168,10 +175,14 @@ if (getRversion() >= "2.15.1") {
 #' Neither the row order of `weighted_dfm` nor the order in which each model
 #' saw the documents matters — alignment is always by identifier.
 #'
-#' **Performance note.** The core computation is delegated to C++ compiled
-#' code; the bootstrap operates on the collapsed bins through vectorized
-#' calls (`rmultinom`, `colSums`), costing about \eqn{B \times
-#' \mathrm{df}}{B x df} floating-point operations per model.
+#' **Performance note.** Both hot paths run in C++ compiled code and
+#' parallelize over documents with OpenMP (see `n_threads`): the statistic
+#' evaluates each block of documents with one BLAS product and sorts the
+#' fitted probabilities per document, and the bootstrap draws the null
+#' replicates directly on the collapsed bins, fused with the Pearson
+#' reduction, at about \eqn{B \times \mathrm{df}}{B x df} floating-point
+#' operations per model. See the "Computational efficiency" section of the
+#' vignette for measurements.
 #'
 #' @return A `data.table` with columns:
 #' - `topic`: integer number of topics (\eqn{K}).
@@ -226,7 +237,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                           selection = c("sequential", "min", "legacy"),
                           calibrate = c("none", "bootstrap", "moment"),
                           n_boot = 200L, doc_lengths = NULL, seed = NULL,
-                          do_plot = TRUE, verbose = TRUE,
+                          n_threads = 1L, do_plot = TRUE, verbose = TRUE,
                           lda_models = lifecycle::deprecated()) {
 
   if (lifecycle::is_present(lda_models)) {
@@ -260,6 +271,11 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   if (!is.logical(verbose)) {
     stop("verbose must be either TRUE or FALSE")
   }
+  if (!is.numeric(n_threads) || length(n_threads) != 1L ||
+      !is.finite(n_threads) || n_threads < 1) {
+    stop("n_threads must be a single integer >= 1")
+  }
+  n_threads <- as.integer(n_threads)
 
   legacy <- selection == "legacy"
   if (legacy) {
@@ -459,14 +475,15 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
       tp <- optop_as_theta_phi(topic_models[[i_mod]])
       doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
       core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map_i,
-                                     calibrating)
+                                     calibrating, n_threads)
     }
     Chi_K_rows[[i_mod]] <- core_out$stat
     if (calibrating) {
       probs <- .optop_split_envelope(core_out$bin_probs, core_out$bin_counts)
       T_obs <- core_out$stat[1L, 2L]
       if (calibrate == "bootstrap") {
-        T_null <- .optop_boot_null(probs, doc_lengths, n_boot)
+        T_null <- .optop_boot_null(probs, doc_lengths, n_boot,
+                                   n_threads = n_threads)
         pval_cal[i_mod] <- (1 + sum(T_null >= T_obs)) / (n_boot + 1)
       } else {
         mm <- .optop_moment_null(probs, doc_lengths)

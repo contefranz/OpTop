@@ -2,8 +2,18 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' @keywords internal
-optimal_topic_core <- function(theta, phi, dfm_t, q, doc_map, return_envelope) {
-    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_t, q, doc_map, return_envelope)
+optop_boot_null_core <- function(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads) {
+    .Call(`_OpTop_optop_boot_null_core`, bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads)
+}
+
+#' @keywords internal
+optop_openmp_available <- function() {
+    .Call(`_OpTop_optop_openmp_available`)
+}
+
+#' @keywords internal
+optimal_topic_core <- function(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads) {
+    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_t, q, doc_map, return_envelope, n_threads)
 }
 
 #' @keywords internal

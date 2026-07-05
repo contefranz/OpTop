@@ -11,9 +11,35 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// optop_boot_null_core
+Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs, const Rcpp::IntegerVector& bin_counts, const Rcpp::NumericVector& doc_lengths, int n_boot, double seed, int n_threads);
+RcppExport SEXP _OpTop_optop_boot_null_core(SEXP bin_probsSEXP, SEXP bin_countsSEXP, SEXP doc_lengthsSEXP, SEXP n_bootSEXP, SEXP seedSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type bin_probs(bin_probsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type bin_counts(bin_countsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type doc_lengths(doc_lengthsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_boot(n_bootSEXP);
+    Rcpp::traits::input_parameter< double >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_boot_null_core(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// optop_openmp_available
+bool optop_openmp_available();
+RcppExport SEXP _OpTop_optop_openmp_available() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(optop_openmp_available());
+    return rcpp_result_gen;
+END_RCPP
+}
 // optimal_topic_core
-Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const arma::sp_mat& dfm_t, double q, const arma::uvec& doc_map, bool return_envelope);
-RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_tSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP) {
+Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const arma::sp_mat& dfm_t, double q, const arma::uvec& doc_map, bool return_envelope, int n_threads);
+RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_tSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -23,7 +49,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
     Rcpp::traits::input_parameter< bool >::type return_envelope(return_envelopeSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_t, q, doc_map, return_envelope));
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -68,7 +95,9 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 6},
+    {"_OpTop_optop_boot_null_core", (DL_FUNC) &_OpTop_optop_boot_null_core, 6},
+    {"_OpTop_optop_openmp_available", (DL_FUNC) &_OpTop_optop_openmp_available, 0},
+    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 7},
     {"_OpTop_optimal_topic_core_legacy", (DL_FUNC) &_OpTop_optimal_topic_core_legacy, 4},
     {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
