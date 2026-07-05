@@ -363,7 +363,10 @@ $$
 $$
 
 so `alpha` is a genuine Type-I error rate with respect to the conditional
-null, at resolution $1/(B+1)$. The table now carries two p-value columns:
+null, at resolution $1/(B+1)$. The bootstrap is the costliest step of the
+whole pipeline; the [Computational efficiency] section below measures it and
+shows how `n_threads` brings it down to seconds. The table now carries two
+p-value columns:
 `pval` (calibrated — what the selection rules use) and `pval_chisq` (the
 asymptotic value, kept for comparison):
 
@@ -537,6 +540,108 @@ Larger `q` keeps more words per document, so the degrees of freedom grow and
 the envelope covers more of each document's distribution; smaller `q` makes
 the comparison coarser and cheaper. The sequential pick moves with `q` while
 the global minimum stays put. The default `q = 0.95` follows the paper.
+
+## Computational efficiency
+
+```{r bench-load, include = FALSE}
+bench <- readRDS(system.file("extdata", "optop-benchmark-results.rds",
+                             package = "OpTop"))
+bres <- as.data.table(bench$results)
+bres[, config := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
+                        sprintf("%s, %d thread%s",
+                                ifelse(mode == "stat", "statistic", "C++ bootstrap"),
+                                threads, ifelse(threads > 1, "s", "")))]
+```
+
+Everything shown so far runs through two compiled hot paths, and as of
+v0.12.0 both are parallel. This section documents where the time goes and
+reports a simulation study; it concerns `optimal_topic()` only — the
+discrepancy indices of the next section are vectorized R whose cost is
+dominated by BLAS.
+
+**The statistic.** For each model, the fitted word probabilities of a block
+of 256 documents are produced by a single BLAS matrix product (the
+per-document algebra of Equation 8 is one row of $\gamma\,e^{\beta}$), after
+which each document needs only a descending sort, a cumulative sum, and a
+scalar Pearson reduction. That per-document work — the profiled bottleneck
+once the algebra became a matrix product — now runs under OpenMP within each
+block.
+
+**The bootstrap.** Calibration is the expensive step: $B$ null replicates of
+the statistic per model, each requiring one multinomial draw per document.
+Since v0.12.0 the draws happen in compiled code, fused with the Pearson
+reduction — no intermediate count matrices are ever materialized — and the
+document loop runs under OpenMP. Every document owns a private RNG stream
+seeded deterministically from `(seed, document index)`, and all reductions
+happen in a fixed order, which yields a guarantee worth stating explicitly:
+**`n_threads` never changes the numbers, only the wall time** — the output
+is bit-identical for any thread count, and reproducible under `seed`.
+
+The study below evaluates grids of `r length(bench$meta$K_grid)` VEM models
+on three synthetic corpus scales, timing the statistic pass and the
+bootstrap-calibrated pass (B = `r bench$meta$n_boot`) for 1–4 threads, with
+the pre-0.12.0 pure-R bootstrap as baseline. Peak memory is the OS-reported
+maximum resident set size of a fresh R process per configuration. The script
+is `data-raw/benchmark-efficiency.R`; numbers are machine-dependent
+(recorded here: `r bench$meta$cpu`, `r bench$meta$cores` cores,
+`r bench$meta$r_version`).
+
+```{r bench-speed-table, echo = FALSE}
+speed <- dcast(bres, scale + J + W ~ config, value.var = "elapsed_sec")
+setorder(speed, J)
+knitr::kable(speed, digits = 1,
+             caption = paste("Wall time (seconds) of optimal_topic() across",
+                             "the grid: statistic pass and bootstrap-calibrated",
+                             "pass, by thread count"))
+```
+
+```{r bench-scaling-plot, echo = FALSE}
+boot_runs <- bres[mode == "boot"]
+boot_runs[, speedup := elapsed_sec[threads == 1] / elapsed_sec, by = scale]
+baseline_r <- bres[mode == "boot_r", .(scale, base_r = elapsed_sec)]
+boot_runs <- merge(boot_runs, baseline_r, by = "scale")
+boot_runs[, vs_R := base_r / elapsed_sec]
+
+ggplot(boot_runs, aes(x = threads, y = vs_R, color = scale)) +
+  geom_line(linewidth = 0.7) +
+  geom_point() +
+  geom_hline(yintercept = 1, linetype = 3) +
+  scale_x_continuous(breaks = sort(unique(boot_runs$threads))) +
+  labs(x = "Threads", y = "Speedup vs the 0.11.0 R bootstrap",
+       color = "Corpus scale",
+       title = "What the compiled bootstrap buys",
+       subtitle = "Total speedup of the calibrated pass over the pre-0.12.0 implementation") +
+  theme_bw()
+```
+
+```{r bench-ram, echo = FALSE}
+ram <- bres[(mode == "boot" & threads == 1) | mode == "boot_r"]
+ram[, what := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
+                     "C++ bootstrap (0.12.0)")]
+ram[, corpus := sprintf("J = %d, W = %d", J, W)]
+ram[, corpus := factor(corpus, levels = unique(corpus[order(J)]))]
+
+ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = what)) +
+  geom_col(position = "dodge") +
+  labs(x = NULL, y = "Peak resident set size (MB)", fill = NULL,
+       title = "Peak memory of the calibrated pass",
+       subtitle = "Fresh R process per run; the fused C++ reduction allocates no count matrices") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+Three observations, stable across scales. First, the compiled bootstrap is
+substantially faster than the R implementation *before any threading*: the
+sampling is fused with the reduction, so the per-document
+$\text{bins} \times B$ count and deviance matrices of the R path are never
+allocated — which is also why its peak memory sits visibly lower. Second,
+threads buy close-to-linear additional speedup on the document loop, so the
+calibrated pass — a minute-scale computation in 0.11.0 — drops to seconds.
+Third, the statistic pass shares the same document-level parallelism, which
+matters on long grids even without calibration. The single caveat: on
+toolchains without OpenMP (notably the default macOS compiler) the cores run
+single-threaded — the first, thread-free speedup is kept, the scaling is
+not; `OpTop:::optop_openmp_available()` reports which build you have.
 
 ## Goodness-of-fit: the discrepancy indices
 
