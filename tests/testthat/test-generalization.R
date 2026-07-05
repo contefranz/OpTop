@@ -58,6 +58,60 @@ test_that("a Gibbs grid matches the naive Eq. (8) reference", {
   expect_equal(got$pval, ref$pval, tolerance = 1e-10)
 })
 
+test_that("tied fitted probabilities resolve like R's stable order()", {
+  # exact ties by construction: every vocabulary column duplicated, so the
+  # envelope boundary straddles tied values in essentially every document.
+  # The compiled comparator (probability descending, index ascending) must
+  # reproduce order(X, decreasing = TRUE) exactly on every platform.
+  set.seed(42)
+  K <- 3L; W <- 40L; J <- 12L
+  phi_half <- matrix(rgamma(K * (W / 2), 1), K, W / 2)
+  phi <- cbind(phi_half, phi_half)
+  phi <- phi / rowSums(phi)
+  theta <- matrix(rgamma(J * K, 1), J, K)
+  theta <- theta / rowSums(theta)
+  colnames(phi) <- sprintf("w%02d", seq_len(W))
+  rownames(theta) <- sprintf("d%02d", seq_len(J))
+  o <- matrix(rgamma(J * W, 1), J, W)
+  o <- o / rowSums(o)
+
+  q <- 0.95
+  dfm_t <- Matrix::t(methods::as(Matrix::Matrix(o, sparse = TRUE),
+                                 "CsparseMatrix"))
+  got <- optimal_topic_core(theta, phi, dfm_t, q,
+                            doc_map = seq_len(J) - 1L,
+                            return_envelope = TRUE, n_threads = 1L)
+
+  X <- theta %*% phi
+  chi <- df <- numeric(J)
+  bins_ref <- vector("list", J)
+  for (j in seq_len(J)) {
+    ord <- order(X[j, ], decreasing = TRUE)   # stable: ties by index
+    x <- X[j, ord]
+    oo <- o[j, ord]
+    p_j <- which(cumsum(x) > q)[1]
+    if (is.na(p_j)) p_j <- W
+    head_idx <- seq_len(p_j)
+    pearson <- sum((oo[head_idx] - x[head_idx])^2 / x[head_idx])
+    n_bins <- p_j
+    bins_ref[[j]] <- x[head_idx]
+    if (p_j < W) {
+      tail_x <- sum(x) - sum(x[head_idx])
+      tail_o <- sum(oo) - sum(oo[head_idx])
+      pearson <- pearson + (tail_o - tail_x)^2 / tail_x
+      n_bins <- n_bins + 1L
+      bins_ref[[j]] <- c(bins_ref[[j]], tail_x)
+    }
+    chi[j] <- n_bins * pearson
+    df[j] <- n_bins - 1L
+  }
+
+  expect_equal(got$stat[1, 2], sum(chi), tolerance = 1e-12)
+  expect_equal(got$stat[1, 3], sum(df))
+  expect_equal(OpTop:::.optop_split_envelope(got$bin_probs, got$bin_counts),
+               bins_ref, tolerance = 1e-12, ignore_attr = TRUE)
+})
+
 test_that("a CTM grid matches the naive Eq. (8) reference", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)

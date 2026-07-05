@@ -348,15 +348,24 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     doc_map <- match(docs, topic_models[[1L]]@documents) - 1L
     ks <- vapply(topic_models, function(m) as.integer(m@k), integer(1L))
   } else {
-    # adapt every model to the common (theta, phi, K, docs, terms) contract,
-    # keeping only the light fields: the weight matrices are re-extracted one
-    # model at a time inside the loop, so peak memory stays at a single model
-    # regardless of the grid size
+    # adapt every model to the common (theta, phi, K, docs, terms) contract.
+    # The extracted weight matrices are kept for the evaluation loop as long
+    # as the whole grid fits a fixed memory budget (typical grids amount to a
+    # few MB); past the budget the remaining models are re-extracted one at a
+    # time inside the loop, so peak memory stays bounded on very large
+    # vocabularies
     meta <- vector("list", length(topic_models))
+    tp_cache <- vector("list", length(topic_models))
+    cache_bytes <- 0
+    cache_budget <- 256 * 1024^2
     for (i_mod in seq_along(topic_models)) {
       tp <- optop_as_theta_phi(topic_models[[i_mod]])
       .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
       meta[[i_mod]] <- tp[c("K", "docs", "terms")]
+      cache_bytes <- cache_bytes + 8 * (length(tp$theta) + length(tp$phi))
+      if (cache_bytes <= cache_budget) {
+        tp_cache[[i_mod]] <- tp[c("theta", "phi")]
+      }
     }
     ks <- vapply(meta, function(m) as.integer(m$K), integer(1L))
     if (anyDuplicated(ks)) {
@@ -367,6 +376,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
       ord <- order(ks)
       topic_models <- topic_models[ord]
       meta <- meta[ord]
+      tp_cache <- tp_cache[ord]
       ks <- ks[ord]
       cli::cli_alert_warning(
         "Reordered topic_models by increasing number of topics"
@@ -472,7 +482,10 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
       core_out <- optimal_topic_core_legacy(topic_models[i_mod], weighted_dfm,
                                             q, doc_map)
     } else {
-      tp <- optop_as_theta_phi(topic_models[[i_mod]])
+      tp <- tp_cache[[i_mod]]
+      if (is.null(tp)) {
+        tp <- optop_as_theta_phi(topic_models[[i_mod]])
+      }
       doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
       core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map_i,
                                      calibrating, n_threads)
