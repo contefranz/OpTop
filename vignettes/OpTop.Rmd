@@ -363,10 +363,10 @@ $$
 $$
 
 so `alpha` is a genuine Type-I error rate with respect to the conditional
-null, at resolution $1/(B+1)$. The bootstrap is the costliest step of the
-whole pipeline; the [Computational efficiency] section below measures it and
-shows how `n_threads` brings it down to seconds. The table now carries two
-p-value columns:
+null, at resolution $1/(B+1)$. The bootstrap is the most expensive stage of
+the pipeline; its cost, and the effect of the `n_threads` argument, are
+quantified in the section [A Note On Computational Efficiency]. The table
+now carries two p-value columns:
 `pval` (calibrated — what the selection rules use) and `pval_chisq` (the
 asymptotic value, kept for comparison):
 
@@ -541,7 +541,7 @@ the envelope covers more of each document's distribution; smaller `q` makes
 the comparison coarser and cheaper. The sequential pick moves with `q` while
 the global minimum stays put. The default `q = 0.95` follows the paper.
 
-## Computational efficiency
+## A Note On Computational Efficiency
 
 ```{r bench-load, include = FALSE}
 bench <- readRDS(system.file("extdata", "optop-benchmark-results.rds",
@@ -553,37 +553,40 @@ bres[, config := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
                                 threads, ifelse(threads > 1, "s", "")))]
 ```
 
-Everything shown so far runs through two compiled hot paths, and as of
-v0.12.0 both are parallel. This section documents where the time goes and
-reports a simulation study; it concerns `optimal_topic()` only — the
-discrepancy indices of the next section are vectorized R whose cost is
-dominated by BLAS.
+Both computational stages of `optimal_topic()` are implemented in compiled
+code and, as of v0.12.0, run in parallel. This section describes the
+implementation and reports a simulation study of its speed, thread scaling,
+and memory use. It concerns `optimal_topic()` only; the discrepancy indices
+of the next section are vectorized R code whose cost is dominated by BLAS
+operations.
 
 **The statistic.** For each model, the fitted word probabilities of a block
-of 256 documents are produced by a single BLAS matrix product (the
-per-document algebra of Equation 8 is one row of $\gamma\,e^{\beta}$), after
-which each document needs only a descending sort, a cumulative sum, and a
-scalar Pearson reduction. That per-document work — the profiled bottleneck
-once the algebra became a matrix product — now runs under OpenMP within each
-block.
+of 256 documents are obtained with a single BLAS matrix product, since the
+per-document algebra of Equation 8 is one row of $\gamma\,e^{\beta}$. The
+remaining per-document work (a descending sort, a cumulative sum, and a
+scalar Pearson reduction), which profiling identified as the dominant cost
+once the algebra had been reduced to a matrix product, is parallelized over
+the documents of each block with OpenMP.
 
-**The bootstrap.** Calibration is the expensive step: $B$ null replicates of
-the statistic per model, each requiring one multinomial draw per document.
-Since v0.12.0 the draws happen in compiled code, fused with the Pearson
-reduction — no intermediate count matrices are ever materialized — and the
-document loop runs under OpenMP. Every document owns a private RNG stream
-seeded deterministically from `(seed, document index)`, and all reductions
-happen in a fixed order, which yields a guarantee worth stating explicitly:
-**`n_threads` never changes the numbers, only the wall time** — the output
-is bit-identical for any thread count, and reproducible under `seed`.
+**The bootstrap.** Calibration is the most expensive stage: it draws $B$
+null replicates of the statistic per model, each requiring one multinomial
+draw per document. Since v0.12.0 the draws are generated in compiled code
+and fused with the Pearson reduction, so that no intermediate count matrices
+are materialized, and the document loop is parallelized. Each document draws
+from a private random-number stream seeded deterministically from the pair
+(`seed`, document index), and all reductions are performed in a fixed order.
+Two properties follow: the output is bit-identical for every value of
+`n_threads`, which therefore affects wall time only, and the calibrated
+p-values are reproducible under `seed`.
 
 The study below evaluates grids of `r length(bench$meta$K_grid)` VEM models
 on three synthetic corpus scales, timing the statistic pass and the
-bootstrap-calibrated pass (B = `r bench$meta$n_boot`) for 1–4 threads, with
-the pre-0.12.0 pure-R bootstrap as baseline. Peak memory is the OS-reported
-maximum resident set size of a fresh R process per configuration. The script
-is `data-raw/benchmark-efficiency.R`; numbers are machine-dependent
-(recorded here: `r bench$meta$cpu`, `r bench$meta$cores` cores,
+bootstrap-calibrated pass (B = `r bench$meta$n_boot`) for 1 to 4 threads,
+with the pure-R bootstrap of v0.11.0 as baseline. Peak memory is the maximum
+resident set size reported by the operating system for a fresh R process per
+configuration. The study is reproducible via
+`data-raw/benchmark-efficiency.R`; timings are machine-dependent (recorded
+here: `r bench$meta$cpu`, `r bench$meta$cores` cores,
 `r bench$meta$r_version`).
 
 ```{r bench-speed-table, echo = FALSE}
@@ -607,10 +610,10 @@ ggplot(boot_runs, aes(x = threads, y = vs_R, color = scale)) +
   geom_point() +
   geom_hline(yintercept = 1, linetype = 3) +
   scale_x_continuous(breaks = sort(unique(boot_runs$threads))) +
-  labs(x = "Threads", y = "Speedup vs the 0.11.0 R bootstrap",
+  labs(x = "Threads", y = "Speedup over the 0.11.0 R bootstrap",
        color = "Corpus scale",
-       title = "What the compiled bootstrap buys",
-       subtitle = "Total speedup of the calibrated pass over the pre-0.12.0 implementation") +
+       title = "Speedup of the calibrated pass",
+       subtitle = "Total speedup over the pre-0.12.0 R implementation, by thread count") +
   theme_bw()
 ```
 
@@ -626,34 +629,33 @@ ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = config)) +
   geom_col(position = "dodge") +
   labs(x = NULL, y = "Peak resident set size (MB)", fill = NULL,
        title = "Peak memory of the calibrated pass",
-       subtitle = "Fresh R process per run; memory is flat across implementations and thread counts") +
+       subtitle = "Maximum resident set size of a fresh R process per configuration") +
   theme_bw() +
   theme(legend.position = "bottom")
 ```
 
-Three observations, stable across the scales. First, the compiled bootstrap
-is `r sprintf("%.1f", min(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`–`r sprintf("%.1f", max(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`×
-faster than the R implementation *before any threading*, from fusing the
-sampling with the Pearson reduction. Second, threads buy near-linear
-additional speedup on the document loop —
-`r sprintf("%.1f", max(boot_runs[threads == 4, vs_R]))`× total over the
-0.11.0 baseline at 4 threads on the largest corpus, where the calibrated
-pass drops from
+Three regularities hold across the scales. First, the compiled bootstrap is
+`r sprintf("%.1f", min(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`–`r sprintf("%.1f", max(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`×
+faster than the R implementation before any threading, a consequence of
+fusing the sampling with the Pearson reduction. Second, the parallel
+document loop scales almost linearly: at 4 threads the calibrated pass is
+`r sprintf("%.1f", max(boot_runs[threads == 4, vs_R]))`× faster than the
+0.11.0 baseline on the largest corpus, falling from
 `r sprintf("%.1f", bres[scale == "large" & mode == "boot_r", elapsed_sec] / 60)` minutes
 to `r sprintf("%.0f", bres[scale == "large" & mode == "boot" & threads == 4, elapsed_sec])` seconds.
-The statistic pass shares the document-level parallelism
-(`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / bres[scale == "large" & mode == "stat" & threads == 4, elapsed_sec])`×
-at 4 threads on the large corpus — sub-linear, since the BLAS product and
-the sparse-block densification stay serial), which matters on long grids
-even without calibration. Third, memory: peak RSS is dominated by the
-fitted models held in memory, not by the evaluation — the fused C++
-reduction shows a visible saving only at the small scale, and, more to the
-point, **parallelism is memory-free**: per-thread state is a single result
-slot per document, so peak RSS does not grow with `n_threads`. The single
-caveat: on toolchains without OpenMP (notably the default macOS compiler)
-the cores run single-threaded — the thread-free speedup is kept, the
-scaling is not; `OpTop:::optop_openmp_available()` reports which build you
-have.
+The statistic pass shares the document-level parallelism and gains
+`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / bres[scale == "large" & mode == "stat" & threads == 4, elapsed_sec])`×
+at 4 threads on the same corpus; its speedup is sub-linear because the BLAS
+product and the sparse-block densification remain serial. Third, peak
+memory is governed by the fitted models held in memory rather than by the
+evaluation itself: the fused reduction yields a visible saving only at the
+smallest scale, and the per-thread state amounts to one result slot per
+document, so peak memory does not grow with `n_threads`. On toolchains
+without OpenMP support (notably the default macOS compiler) the cores run
+single-threaded; the thread-independent speedup of the compiled bootstrap
+is retained, while the scaling with `n_threads` is not. The internal helper
+`OpTop:::optop_openmp_available()` reports whether the installed build
+supports OpenMP.
 
 ## Goodness-of-fit: the discrepancy indices
 
