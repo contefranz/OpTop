@@ -615,33 +615,45 @@ ggplot(boot_runs, aes(x = threads, y = vs_R, color = scale)) +
 ```
 
 ```{r bench-ram, echo = FALSE}
-ram <- bres[(mode == "boot" & threads == 1) | mode == "boot_r"]
-ram[, what := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
-                     "C++ bootstrap (0.12.0)")]
+ram <- bres[mode %in% c("boot", "boot_r")]
 ram[, corpus := sprintf("J = %d, W = %d", J, W)]
 ram[, corpus := factor(corpus, levels = unique(corpus[order(J)]))]
+ram[, config := factor(config, levels = c("R bootstrap (0.11.0)",
+                                          grep("C\\+\\+", unique(config),
+                                               value = TRUE)))]
 
-ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = what)) +
+ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = config)) +
   geom_col(position = "dodge") +
   labs(x = NULL, y = "Peak resident set size (MB)", fill = NULL,
        title = "Peak memory of the calibrated pass",
-       subtitle = "Fresh R process per run; the fused C++ reduction allocates no count matrices") +
+       subtitle = "Fresh R process per run; memory is flat across implementations and thread counts") +
   theme_bw() +
   theme(legend.position = "bottom")
 ```
 
-Three observations, stable across scales. First, the compiled bootstrap is
-substantially faster than the R implementation *before any threading*: the
-sampling is fused with the reduction, so the per-document
-$\text{bins} \times B$ count and deviance matrices of the R path are never
-allocated — which is also why its peak memory sits visibly lower. Second,
-threads buy close-to-linear additional speedup on the document loop, so the
-calibrated pass — a minute-scale computation in 0.11.0 — drops to seconds.
-Third, the statistic pass shares the same document-level parallelism, which
-matters on long grids even without calibration. The single caveat: on
-toolchains without OpenMP (notably the default macOS compiler) the cores run
-single-threaded — the first, thread-free speedup is kept, the scaling is
-not; `OpTop:::optop_openmp_available()` reports which build you have.
+Three observations, stable across the scales. First, the compiled bootstrap
+is `r sprintf("%.1f", min(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`–`r sprintf("%.1f", max(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`×
+faster than the R implementation *before any threading*, from fusing the
+sampling with the Pearson reduction. Second, threads buy near-linear
+additional speedup on the document loop —
+`r sprintf("%.1f", max(boot_runs[threads == 4, vs_R]))`× total over the
+0.11.0 baseline at 4 threads on the largest corpus, where the calibrated
+pass drops from
+`r sprintf("%.1f", bres[scale == "large" & mode == "boot_r", elapsed_sec] / 60)` minutes
+to `r sprintf("%.0f", bres[scale == "large" & mode == "boot" & threads == 4, elapsed_sec])` seconds.
+The statistic pass shares the document-level parallelism
+(`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / bres[scale == "large" & mode == "stat" & threads == 4, elapsed_sec])`×
+at 4 threads on the large corpus — sub-linear, since the BLAS product and
+the sparse-block densification stay serial), which matters on long grids
+even without calibration. Third, memory: peak RSS is dominated by the
+fitted models held in memory, not by the evaluation — the fused C++
+reduction shows a visible saving only at the small scale, and, more to the
+point, **parallelism is memory-free**: per-thread state is a single result
+slot per document, so peak RSS does not grow with `n_threads`. The single
+caveat: on toolchains without OpenMP (notably the default macOS compiler)
+the cores run single-threaded — the thread-free speedup is kept, the
+scaling is not; `OpTop:::optop_openmp_available()` reports which build you
+have.
 
 ## Goodness-of-fit: the discrepancy indices
 

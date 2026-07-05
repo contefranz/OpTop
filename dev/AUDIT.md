@@ -236,3 +236,35 @@ Findings:
   with the legacy pipeline frozen in its own translation unit, the modern
   core no longer needs to reproduce the `round(cum * 1e4)` cutoff, which
   makes this cleaner than it was at 0.9.7.
+
+### 0.12.0 parallel cores
+
+Simulation study of `data-raw/benchmark-efficiency.R` (Intel Xeon @
+2.10 GHz, 4 cores, Linux, gcc 13, reference BLAS, R 4.3.3; grids of 10 VEM
+models, B = 200, q = 0.95; wall time from `system.time()` in a fresh R
+process per configuration, peak RSS from GNU time). Thread sweeps verified
+bit-identical; C++ vs R bootstrap p-values verified within Monte-Carlo
+resolution.
+
+Bootstrap-calibrated pass (statistic + calibration, whole grid):
+
+| Corpus | R bootstrap (0.11.0) | C++ 1 thread | C++ 4 threads | total speedup |
+|---|---|---|---|---|
+| J = 200, W = 2,000 | 36.8 s | 26.1 s | 6.8 s | 5.4× |
+| J = 500, W = 5,000 | 180.5 s | 120.6 s | 31.4 s | 5.7× |
+| J = 1,000, W = 10,000 | 638.0 s | 426.5 s | 107.5 s | 5.9× |
+
+Statistic-only pass:
+
+| Corpus | 1 thread | 4 threads | speedup |
+|---|---|---|---|
+| J = 200, W = 2,000 | 0.34 s | 0.16 s | 2.2× |
+| J = 500, W = 5,000 | 2.12 s | 0.90 s | 2.3× |
+| J = 1,000, W = 10,000 | 8.70 s | 3.47 s | 2.5× |
+
+Findings: the fused sampling+reduction is worth 1.4–1.5× before threading;
+the bootstrap's document loop scales essentially linearly (3.8–4.0× on 4
+cores), the statistic sub-linearly (the gemm and the sparse-block
+densification stay serial). Peak RSS is dominated by the fitted models, is
+flat across implementations at the medium/large scales (~12% saving at the
+small one), and does not grow with `n_threads`.
