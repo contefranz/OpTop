@@ -62,26 +62,36 @@
 #' pre-0.12.0 implementation up to Monte-Carlo noise, not bit for bit.
 #'
 #' @param probs List of per-document bin-probability vectors, as produced by
-#'   `.optop_split_envelope()`.
+#'   `.optop_split_envelope()`; ignored when the flattened form is supplied.
 #' @param doc_lengths Numeric vector of document lengths \eqn{N_j}, aligned
-#'   with `probs`.
+#'   with the documents of the envelope.
 #' @param n_boot Integer; number of bootstrap replicates.
 #' @param seed Integer seed for the compiled core's RNG, or `NULL` to draw
 #'   one from the R session RNG.
 #' @param n_threads Integer; number of OpenMP threads (default `1L`). Has no
 #'   effect on the result, only on wall time.
+#' @param bin_probs,bin_counts Optional flattened envelope exactly as
+#'   exported by `optimal_topic_core()`; when supplied, `probs` is not
+#'   touched and no per-document list is ever materialized. The flattened
+#'   layout is identical to `unlist(probs)`, so both entry points draw the
+#'   same replicates under the same seed.
 #'
 #' @return A numeric vector of length `n_boot` with the null replicates
 #'   \eqn{T^\ast}{T*}.
 #'
 #' @keywords internal
 .optop_boot_null <- function(probs, doc_lengths, n_boot, seed = NULL,
-                             n_threads = 1L) {
+                             n_threads = 1L, bin_probs = NULL,
+                             bin_counts = NULL) {
   if (is.null(seed)) {
     seed <- sample.int(.Machine$integer.max, 1L)
   }
-  optop_boot_null_core(unlist(probs, use.names = FALSE),
-                       lengths(probs),
+  if (is.null(bin_probs)) {
+    bin_probs <- unlist(probs, use.names = FALSE)
+    bin_counts <- lengths(probs)
+  }
+  optop_boot_null_core(bin_probs,
+                       as.integer(bin_counts),
                        as.numeric(doc_lengths),
                        as.integer(n_boot),
                        as.numeric(seed),

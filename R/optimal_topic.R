@@ -492,13 +492,17 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     }
     Chi_K_rows[[i_mod]] <- core_out$stat
     if (calibrating) {
-      probs <- .optop_split_envelope(core_out$bin_probs, core_out$bin_counts)
       T_obs <- core_out$stat[1L, 2L]
       if (calibrate == "bootstrap") {
-        T_null <- .optop_boot_null(probs, doc_lengths, n_boot,
-                                   n_threads = n_threads)
+        # the flattened envelope goes to the compiled core as exported: no
+        # per-document list, no unlist round trip
+        T_null <- .optop_boot_null(doc_lengths = doc_lengths, n_boot = n_boot,
+                                   n_threads = n_threads,
+                                   bin_probs = core_out$bin_probs,
+                                   bin_counts = core_out$bin_counts)
         pval_cal[i_mod] <- (1 + sum(T_null >= T_obs)) / (n_boot + 1)
       } else {
+        probs <- .optop_split_envelope(core_out$bin_probs, core_out$bin_counts)
         mm <- .optop_moment_null(probs, doc_lengths)
         pval_cal[i_mod] <- stats::pchisq(T_obs / mm$a, df = mm$nu,
                                          lower.tail = FALSE)

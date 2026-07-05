@@ -68,6 +68,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// optop_partition_fill_core
+void optop_partition_fill_core(Rcpp::LogicalMatrix rare_mask, const Rcpp::List& theta_list, const Rcpp::List& phi_list, const Rcpp::NumericVector& tau, int block, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_fill_core(SEXP rare_maskSEXP, SEXP theta_listSEXP, SEXP phi_listSEXP, SEXP tauSEXP, SEXP blockSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::LogicalMatrix >::type rare_mask(rare_maskSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type theta_list(theta_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type phi_list(phi_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< int >::type block(blockSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    optop_partition_fill_core(rare_mask, theta_list, phi_list, tau, block, n_threads);
+    return R_NilValue;
+END_RCPP
+}
 // topic_match_core
 Rcpp::List topic_match_core(const Rcpp::List& lda_models, std::size_t best_pos, std::size_t optimal_k, bool var_correction);
 RcppExport SEXP _OpTop_topic_match_core(SEXP lda_modelsSEXP, SEXP best_posSEXP, SEXP optimal_kSEXP, SEXP var_correctionSEXP) {
@@ -99,6 +114,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_OpTop_optop_openmp_available", (DL_FUNC) &_OpTop_optop_openmp_available, 0},
     {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 7},
     {"_OpTop_optimal_topic_core_legacy", (DL_FUNC) &_OpTop_optimal_topic_core_legacy, 4},
+    {"_OpTop_optop_partition_fill_core", (DL_FUNC) &_OpTop_optop_partition_fill_core, 6},
     {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
     {NULL, NULL, 0}

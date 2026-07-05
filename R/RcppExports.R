@@ -22,6 +22,11 @@ optimal_topic_core_legacy <- function(lda_models, weighted_dfm, q, doc_map) {
 }
 
 #' @keywords internal
+optop_partition_fill_core <- function(rare_mask, theta_list, phi_list, tau, block, n_threads) {
+    invisible(.Call(`_OpTop_optop_partition_fill_core`, rare_mask, theta_list, phi_list, tau, block, n_threads))
+}
+
+#' @keywords internal
 topic_match_core <- function(lda_models, best_pos, optimal_k, var_correction) {
     .Call(`_OpTop_topic_match_core`, lda_models, best_pos, optimal_k, var_correction)
 }
