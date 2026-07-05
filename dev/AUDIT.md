@@ -298,21 +298,36 @@ sparse-block densification stay serial). Peak RSS is dominated by the
 fitted models, is flat across implementations at the medium/large scales
 (~12% saving at the small one), and does not grow with `n_threads`.
 
-Second pass (adaptive sampler, envelope selection, parallel densification;
-same machine and settings):
+Second pass (adaptive sampler, envelope selection, parallel densification),
+final study on four corpus scales — the former medium/large renamed
+medium-1/medium-2, plus a J = 10,000 scale — with the thread sweep
+{1, 2, 4, 6, 8} on the same 4-logical-core machine (settings above the
+core count measure oversubscription):
 
-| Corpus | R bootstrap (0.11.0) | C++ 1 thread | C++ 4 threads | total speedup |
-|---|---|---|---|---|
-| J = 200, W = 2,000 | 32.6 s | 18.0 s | 4.7 s | 6.9× |
-| J = 500, W = 5,000 | 165.8 s | 30.2 s | 8.7 s | 19.0× |
-| J = 1,000, W = 10,000 | 573.3 s | 67.0 s | 20.2 s | 28.4× |
+Bootstrap-calibrated pass (statistic + calibration, whole grid):
 
-Statistic-only pass: 9.20 s → 3.21 s at 4 threads on the large corpus
-(2.9×; the single-thread time is unchanged within run-to-run noise on
-these flat synthetic fits, whose envelopes keep 50–65% of W — on Zipfian
-corpora, where P_j/W is far smaller, the selection saves proportionally
-more). The pre-threading bootstrap gain grows with the vocabulary
-(1.8× / 5.5× / 8.6× across the scales), as expected from the O(N_j)
-alias path replacing the O(k_j) binomial path precisely where k_j ≫ N_j.
-Peak memory is unchanged: flat across implementations and thread counts,
-dominated by the fitted models.
+| Corpus | Models | R bootstrap (0.11.0) | C++ 1 thread | C++ 4 threads | total speedup |
+|---|---|---|---|---|---|
+| small: J = 200, W = 2,000 | 10 | 33.5 s | 18.1 s | 4.7 s | 7.1× |
+| medium-1: J = 500, W = 5,000 | 10 | 165.9 s | 31.3 s | 8.7 s | 19.0× |
+| medium-2: J = 1,000, W = 10,000 | 10 | 579.2 s | 67.0 s | 20.5 s | 28.3× |
+| large: J = 10,000, W = 20,000 | 5 | 6,407 s (1 h 47 m) | 421.0 s | 141.9 s | 45.2× |
+
+Statistic-only pass (1 thread → 4 threads): 0.37 → 0.18 s, 2.29 → 0.81 s,
+9.36 → 3.17 s, 109.9 → 37.2 s (2.1–3.0×).
+
+Findings:
+
+- The pre-threading bootstrap gain grows monotonically with the vocabulary
+  (1.9× / 5.3× / 8.6× / 15.2×), as expected from the O(N_j) alias path
+  replacing the O(k_j) binomial path precisely where k_j ≫ N_j.
+- The 6- and 8-thread settings sit within noise of the 4-thread times on
+  every scale — the oversubscription plateau predicted for a 4-core host.
+- Peak memory is governed by what must be held (the fitted models and, on
+  the largest corpus, the exported envelope bins, ~7.5–8.6 GB): the two
+  implementations stay within ~15% of each other in either direction, and
+  memory does not grow with `n_threads`. On the largest corpus the
+  compiled path sits ~14% above the R baseline because `.optop_boot_null()`
+  flattens the envelope list before the core call — one transient copy;
+  passing the core's flattened export directly would remove it (deferred,
+  micro).

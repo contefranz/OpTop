@@ -31,9 +31,14 @@ different topic counts directly comparable.
   As of v0.12.0, both the Test 1 statistic and the bootstrap calibration are parallelized
   with OpenMP, controlled by the `n_threads` argument of `optimal_topic()`. Results are
   bit-identical for any thread count and reproducible under a seed; on toolchains without
-  OpenMP support the routines run single-threaded. On a 4-core machine the
-  bootstrap-calibrated pass runs up to 5.9 times faster than in v0.11.0; see the vignette
-  section "A Note On Computational Efficiency" for the full simulation study.
+  OpenMP support the routines run single-threaded. The bootstrap selects its sampling
+  algorithm per document (alias-table token draws on wide envelopes, conditional-binomial
+  draws otherwise) and envelope ties are resolved deterministically, so results are
+  identical across platforms, including under the tied fitted probabilities that Gibbs
+  estimators produce. On a 4-core machine the bootstrap-calibrated pass runs up to 45
+  times faster than in v0.11.0 (a corpus of 10,000 documents and 20,000 features drops
+  from 1 h 47 m to 142 s); see the vignette section "A Note On Computational Efficiency"
+  for the full simulation study.
 
 - **Current support and extensions**  
   As of v0.11.0, `optimal_topic()` and the discrepancy indices accept — through the 

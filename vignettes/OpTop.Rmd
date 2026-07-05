@@ -547,6 +547,9 @@ the global minimum stays put. The default `q = 0.95` follows the paper.
 bench <- readRDS(system.file("extdata", "optop-benchmark-results.rds",
                              package = "OpTop"))
 bres <- as.data.table(bench$results)
+scale_labels <- c(small = "small", medium1 = "medium-1",
+                  medium2 = "medium-2", large = "large")
+bres[, scale := factor(scale_labels[scale], levels = scale_labels)]
 bres[, config := ifelse(mode == "boot_r", "R bootstrap (0.11.0)",
                         sprintf("%s, %d thread%s",
                                 ifelse(mode == "stat", "statistic", "C++ bootstrap"),
@@ -584,23 +587,42 @@ Two properties follow: the output is bit-identical for every value of
 `n_threads`, which therefore affects wall time only, and the calibrated
 p-values are reproducible under `seed`.
 
-The study below evaluates grids of `r length(bench$meta$K_grid)` VEM models
-on three synthetic corpus scales, timing the statistic pass and the
-bootstrap-calibrated pass (B = `r bench$meta$n_boot`) for 1 to 4 threads,
-with the pure-R bootstrap of v0.11.0 as baseline. Peak memory is the maximum
-resident set size reported by the operating system for a fresh R process per
-configuration. The study is reproducible via
-`data-raw/benchmark-efficiency.R`; timings are machine-dependent (recorded
-here: `r bench$meta$cpu`, `r bench$meta$cores` cores,
-`r bench$meta$r_version`).
+The study below evaluates VEM grids of ten models (five on the largest
+corpus) on four synthetic corpus scales, from J = 200 documents with
+W = 2,000 features up to J = 10,000 documents with W = 20,000 features,
+timing the statistic pass and the bootstrap-calibrated pass
+(B = `r bench$meta$n_boot`) for one to eight threads, with the pure-R
+bootstrap of v0.11.0 as baseline. Peak memory is the maximum resident set
+size reported by the operating system for a fresh R process per
+configuration. One property of the host must be kept in mind when reading
+the thread sweep: the machine exposes `r bench$meta$cores` logical cores,
+so the six- and eight-thread settings measure oversubscription and are
+expected to saturate near the four-thread level; on machines with more
+cores the same script produces genuine scaling measurements. The study is
+reproducible via `data-raw/benchmark-efficiency.R`; timings are
+machine-dependent (recorded here: `r bench$meta$cpu`,
+`r bench$meta$cores` logical cores, `r bench$meta$r_version`).
 
 ```{r bench-speed-table, echo = FALSE}
-speed <- dcast(bres, scale + J + W ~ config, value.var = "elapsed_sec")
-setorder(speed, J)
-knitr::kable(speed, digits = 1,
-             caption = paste("Wall time (seconds) of optimal_topic() across",
-                             "the grid: statistic pass and bootstrap-calibrated",
-                             "pass, by thread count"))
+boot_wide <- dcast(bres[mode %in% c("boot", "boot_r")],
+                   scale + J + W ~ config, value.var = "elapsed_sec")
+setorder(boot_wide, J)
+setcolorder(boot_wide, c("scale", "J", "W", "R bootstrap (0.11.0)"))
+knitr::kable(boot_wide, digits = 1,
+             caption = paste("Wall time (seconds) of the bootstrap-calibrated",
+                             "pass across the grid, by thread count, with the",
+                             "0.11.0 R implementation as baseline"))
+```
+
+```{r bench-speed-table-stat, echo = FALSE}
+stat_wide <- dcast(bres[mode == "stat"],
+                   scale + J + W ~ sprintf("%d thread%s", threads,
+                                           ifelse(threads > 1, "s", "")),
+                   value.var = "elapsed_sec")
+setorder(stat_wide, J)
+knitr::kable(stat_wide, digits = 2,
+             caption = paste("Wall time (seconds) of the statistic pass",
+                             "across the grid, by thread count"))
 ```
 
 ```{r bench-scaling-plot, echo = FALSE}
@@ -609,6 +631,7 @@ boot_runs[, speedup := elapsed_sec[threads == 1] / elapsed_sec, by = scale]
 baseline_r <- bres[mode == "boot_r", .(scale, base_r = elapsed_sec)]
 boot_runs <- merge(boot_runs, baseline_r, by = "scale")
 boot_runs[, vs_R := base_r / elapsed_sec]
+best_large <- boot_runs[scale == "large"][which.min(elapsed_sec)]
 
 ggplot(boot_runs, aes(x = threads, y = vs_R, color = scale)) +
   geom_line(linewidth = 0.7) +
@@ -645,19 +668,23 @@ faster than the R implementation before any threading, and the gain grows
 with the vocabulary: the alias-table path costs $O(N_j)$ per replicate
 where the bin-wise method costs $O(k_j)$, and wide corpora have
 $k_j \gg N_j$. Second, the parallel
-document loop scales almost linearly: at 4 threads the calibrated pass is
-`r sprintf("%.1f", max(boot_runs[threads == 4, vs_R]))`× faster than the
-0.11.0 baseline on the largest corpus, falling from
+document loop scales almost linearly up to the physical core count and
+saturates beyond it, as expected on this host: the best configuration on
+the largest corpus (`r best_large$threads` threads) runs the calibrated
+pass `r sprintf("%.1f", best_large$vs_R)`× faster than the 0.11.0
+baseline, falling from
 `r sprintf("%.1f", bres[scale == "large" & mode == "boot_r", elapsed_sec] / 60)` minutes
-to `r sprintf("%.0f", bres[scale == "large" & mode == "boot" & threads == 4, elapsed_sec])` seconds.
+to `r sprintf("%.0f", best_large$elapsed_sec)` seconds.
 The statistic pass shares the document-level parallelism and gains
-`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / bres[scale == "large" & mode == "stat" & threads == 4, elapsed_sec])`×
-at 4 threads on the same corpus; its speedup is sub-linear because the BLAS
-product remains serial. Third, peak
-memory is governed by the fitted models held in memory rather than by the
-evaluation itself: the fused reduction yields a visible saving only at the
-smallest scale, and the per-thread state amounts to one result slot per
-document, so peak memory does not grow with `n_threads`. On toolchains
+`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / min(bres[scale == "large" & mode == "stat", elapsed_sec]))`×
+at its best thread setting on the same corpus; its speedup is sub-linear
+because the BLAS product remains serial. Third, peak
+memory is governed by the objects the evaluation must hold, namely the
+fitted models and, on the largest corpus, the exported envelope bins,
+rather than by the sampling itself: the two implementations stay within
+roughly 15% of one another in either direction, and the per-thread state
+amounts to one result slot per document, so peak memory does not grow with
+`n_threads`. On toolchains
 without OpenMP support (notably the default macOS compiler) the cores run
 single-threaded; the thread-independent speedup of the compiled bootstrap
 is retained, while the scaling with `n_threads` is not. The internal helper
