@@ -28,6 +28,12 @@ different topic counts directly comparable.
   Core routines are implemented in C/C++ for large vocabularies and model grids. As of
   v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
   documents with the fitted models by identifier, so the dfm row order no longer matters.
+  As of v0.12.0, both the Test 1 statistic and the bootstrap calibration are parallelized
+  with OpenMP, controlled by the `n_threads` argument of `optimal_topic()`. Results are
+  bit-identical for any thread count and reproducible under a seed; on toolchains without
+  OpenMP support the routines run single-threaded. On a 4-core machine the
+  bootstrap-calibrated pass runs up to 5.9 times faster than in v0.11.0; see the vignette
+  section "A Note On Computational Efficiency" for the full simulation study.
 
 - **Current support and extensions**  
   As of v0.11.0, `optimal_topic()` and the discrepancy indices accept — through the 
