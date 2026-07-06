@@ -16,6 +16,8 @@ vignette: >
 /* the html_vignette theme styles section h4s with a left margin and a bottom
    border; the author/date lines are h4s too and would inherit both */
 h4.author, h4.date { margin-left: 0; border-bottom: none; }
+/* wide display equations scroll horizontally instead of clipping */
+.katex-display { overflow-x: auto; overflow-y: hidden; }
 </style>
 
 ```{r, include = FALSE}
@@ -72,19 +74,20 @@ if (have_models) {
 OpTop implements the parametric tests of Lewis and Grossetti (2022, JMLR
 23(58)) for identifying the optimal number of topics of a Latent Dirichlet
 Allocation (LDA) model, together with a family of regression-style
-goodness-of-fit indices. This vignette walks through both on a real corpus,
-then closes with a simulation where the true number of topics is known.
+goodness-of-fit (GoF) indices. This vignette illustrates both on the corpus
+of the paper's case study and concludes with a simulation study in which the
+true number of topics is known.
 
-The only step run offline is the LDA fitting itself
-(`r length(meta$K_grid)` models); everything downstream — every
-`optimal_topic()` call, table, plot, and number quoted in the text — is
-computed from those fits.
+The only step performed offline is the estimation of the LDA models
+(`r length(meta$K_grid)` fits). Everything downstream, from every
+`optimal_topic()` call to each table, figure, and number quoted in the text,
+is computed from those fits.
 
 ## Setting Up: Corpus, Grid, Models
 
-We use the U.S. Presidential Inaugural Address corpus that ships with
-**quanteda** — the same corpus as the paper's case study — with a standard
-preprocessing pipeline and a vocabulary trim. The grid spans
+We use the U.S. Presidential Inaugural Address corpus distributed with
+**quanteda**, the same corpus analyzed in the paper's case study, with a
+standard preprocessing pipeline and a vocabulary trim. The grid spans
 K = `r min(meta$K_grid)` to `r max(meta$K_grid)` in steps of 2.
 
 ```{r fitting, eval = FALSE}
@@ -120,61 +123,83 @@ VEM_models <- parallel::mclapply(
 
 After trimming, the corpus has `r meta$ndoc` documents and
 `r meta$nfeat_trimmed` features (down from `r meta$nfeat_full`). The VEM fits
-above are unseeded, so re-running the pipeline can shift individual
+above are unseeded, so re-running the pipeline may alter individual
 statistics slightly; the numbers quoted in this vignette come from one such
 run.
 
 ## The Test 1 Statistic
 
-The test rests on the multinomial structure that LDA itself assumes. A fitted
-$K$-topic model describes document $j$ by a vector of document–topic weights
-$\theta_j^K$ and every topic by a distribution over the $P$ vocabulary words,
-collected in the topic–word matrix $\phi^K$. The model's fitted probability
-of word $p$ in document $j$ is therefore
+The test evaluates overall model adequacy: how well a $K$-topic model
+explains the corpus. It relies on the multinomial structure that LDA itself
+assumes. A fitted $K$-topic model describes document $j$ by a vector of
+document-topic weights $\theta_j^K$ and each topic by a distribution over
+the $P$ vocabulary words, collected in the topic-word matrix $\phi^K$. The
+model's fitted probability of word $p$ in document $j$ is
 
 $$
-I_{jp}^{K} \;=\; \sum_{k=1}^{K} \theta_{jk}^{K}\,\phi_{kp}^{K},
+I_{jp}^{K} = \sum_{k=1}^{K} \theta_{jk}^{K}\,\phi_{kp}^{K},
+\tag{1}
 $$
 
-and the paper's Equation 4 views the observed word-proportion vector $d_j$ as
-this fitted distribution plus multinomial sampling noise. If the $K$-topic
-model fully characterizes the corpus, the observed and fitted word
-distributions should be statistically indistinguishable — a classical
+which is Equation 5 in the paper. Equation 4 of the paper represents the
+observed word-proportion vector $d_j$ as this fitted distribution plus
+multinomial sampling noise. If the $K$-topic model fully characterizes the
+corpus, one would be unable to reject the hypothesis that the observed and
+estimated word distributions are statistically indistinct: a classical
 goodness-of-fit situation.
 
-Because most of the vocabulary carries near-zero fitted probability, the
-comparison is made on a per-document **envelope**: sort $I_{jp}^K$ in
-decreasing order and keep the smallest head whose cumulative mass exceeds
-$q$ — these are the $P_j$ "relatively important" words — while the remaining
-words are collapsed into a single bin with fitted mass
-$I^K_{j,\min} = \sum_{p \notin \text{head}} I^K_{jp} < 1 - q$ and observed
-mass $D_{j,\min}$ (Equations 5–7; the paper's numerical setting
-$I^K = 0.05$ corresponds to `q = 0.95`). Test 1 (Equation 8) then aggregates
-the Pearson discrepancies over documents:
+Because a large number of words carry near-zero fitted probability, the
+comparison is made on a per-document **envelope**. The fitted probabilities
+$I_{jp}^K$ are sorted in decreasing order and the smallest leading set whose
+cumulative mass exceeds $q$ is retained; these are the $P_j$ relatively
+important words of document $j$. The remaining, relatively unimportant words
+are collapsed into a single bin (the paper's Equations 6 and 7). With the
+words of document $j$ indexed in decreasing order of $I_{jp}^K$, the fitted
+and observed masses of that bin are
 
 $$
-\mathrm{OpTop}_J^K \;=\; \sum_{j=1}^{J} \left[\, (P_j + 1) \left(
+\begin{gathered}
+I^{K}_{j,\min} = \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
+\\
+D_{j,\min} = \sum_{p = P_j + 1}^{P} D_{jp}.
+\end{gathered}
+\tag{2}
+$$
+
+Collapsing the relatively unimportant words in this manner preserves the
+underlying multinomial assumption. Note that the basis for the cutoff is the
+fitted model rather than the observed documents; the paper's numerical
+setting $I^K = 0.05$ corresponds to `q = 0.95`. Test 1 (Equation 8 of the
+paper) then aggregates the Pearson discrepancies over documents:
+
+$$
+\begin{split}
+\mathrm{OpTop}_J^K = \sum_{j=1}^{J} & \left[\, (P_j + 1) \left(
 \sum_{p=1}^{P_j} \frac{\bigl(D_{jp} - I_{jp}^K\bigr)^2}{I_{jp}^K}
-\;+\; \frac{\bigl(D_{j,\min} - I_{j,\min}^K\bigr)^2}{I_{j,\min}^K}
-\right) \right]
-\;\sim\; \chi^2_{P_J},
-\qquad P_J = \sum_{j=1}^{J} P_j .
+\right.\right. \\
+& \left.\left. \quad
++\; \frac{\bigl(D_{j,\min} - I_{j,\min}^K\bigr)^2}{I_{j,\min}^K}
+\right) \right] \sim \chi^2_{P_J},
+\end{split}
+\tag{3}
 $$
 
-Misspecification — a $K$ too coarse to reproduce the word distributions —
-can only inflate the statistic, so evidence against adequacy lives in the
-upper tail. The package reports the **standardized** statistic
-$\mathrm{OpTop}_J^K / P_J$ (the version plotted in the paper's Figure 2,
-fluctuating around 1 under a model that fits) in the `OpTop` column, the
-degrees of freedom $P_J$ in `df`, and the upper-tail p-value in `pval`.
+where $\mathrm{OpTop}_J^K$ is distributed chi-square with
+$P_J = \sum_{j=1}^{J} P_j$ degrees of freedom. Misspecification, that is a
+$K$ too coarse to reproduce the word distributions, can only inflate the
+statistic, so evidence against adequacy is found in the upper tail. The
+package reports the *standardized* statistic $\mathrm{OpTop}_J^K / P_J$
+(the version plotted in the paper's Figure 2, which fluctuates around 1
+under an adequate model) in the `OpTop` column, the degrees of freedom $P_J$
+in `df`, and the upper-tail p-value in `pval`.
 
 ## Running the Test
 
-`optimal_topic()` consumes **word proportions** (`weighted_dfm` above), while
-the discrepancy indices of the second part consume the raw **counts** — keep
-both objects around. With `verbose = TRUE` the function reports its setup,
-progress across the grid, the selected model with the rule that chose it, and
-the elapsed time:
+`optimal_topic()` consumes *word proportions* (`weighted_dfm` above),
+while the discrepancy indices of the second part consume the raw *counts*;
+both objects are therefore required. With `verbose = TRUE`, the function
+reports its setup, its progress across the grid, the selected model together
+with the rule that chose it, and the elapsed time:
 
 ```{r optimal-call-seq, eval = have_models}
 # Use the sequential approach
@@ -212,17 +237,18 @@ cat(res$inaugural$console_min, sep = "\n")
 head(chi_seq)
 ```
 
-- `OpTop` is the **standardized** Test 1 statistic (the raw chi-square of
-  Equation 8 divided by its degrees of freedom) — the quantity plotted in the
-  paper's Figure 2. Under a model that fits, it fluctuates around 1.
-- `df` is `sum_j P_j`, the total count of "relatively important" words across
-  documents.
-- `pval` is the upper-tail p-value of the raw statistic: small values mean
-  the observed discrepancy is larger than sampling noise can explain, i.e.
-  the K-topic model is rejected.
+- `OpTop` is the *standardized* Test 1 statistic, the raw chi-square of
+  Equation (3) divided by its degrees of freedom, and the quantity plotted
+  in the paper's Figure 2. Under an adequate model it fluctuates around 1.
+- `df` is $P_J = \sum_j P_j$, the total number of relatively important words
+  across documents.
+- `pval` is the upper-tail p-value of the raw statistic. Small values
+  indicate that the observed discrepancy is larger than sampling noise can
+  explain, so the $K$-topic model is rejected.
 
 The `selection` rule affects which K is *reported* as optimal (and the plot
-guides), never the table itself — the two calls above return the same data:
+guides), never the table itself. The two calls above return identical
+tables:
 
 ```{r rule-independence}
 all.equal(chi_seq, chi_min)
@@ -230,8 +256,8 @@ all.equal(chi_seq, chi_min)
 
 ### The Two Selection Rules
 
-Both rules are one-liners on the returned table, so it is worth seeing them
-spelled out:
+Both rules are direct computations on the returned table and can be stated
+explicitly:
 
 ```{r selection-rules}
 alpha <- 0.01
@@ -245,30 +271,32 @@ min_pick <- chi_seq[which.min(OpTop), topic]
 c(sequential = seq_pick, min = min_pick)
 ```
 
-**`selection = "sequential"`** implements the classical scan for model order:
-walk K upward and stop at the first model the test *fails to reject*
-(`pval > alpha`). The idea is parsimony — take the smallest K that the data
-cannot distinguish from adequate. On this corpus the sequential rule selects
-**K = `r seq_pick`**. (If every model were rejected, `optimal_topic()` falls
-back to the global minimum with a warning.)
+**`selection = "sequential"`** implements the classical sequential scan for
+model order: $K$ is increased until the first model the test *fails to
+reject* (`pval > alpha`). The rationale is parsimony: the rule selects the
+smallest $K$ that the data cannot distinguish from adequate. On this corpus
+the sequential rule selects **K = `r seq_pick`**. If every model were
+rejected, `optimal_topic()` would fall back to the global minimum with a
+warning.
 
-**`selection = "min"`** reproduces the published case study: take the K with
-the minimum standardized statistic. Here that is **K = `r min_pick`** —
-remarkably close to the 92 the paper reports on the untrimmed vocabulary of
-the same corpus, and (as the q-sweep below shows) insensitive to the choice
-of `q`. One practical remark: the minimum rule needs a grid that extends past
-the flattening of the curve to settle — on a grid truncated at K = 100 the
-minimum sits at the boundary, and only the full K ≤ 200 scan lets it come to
-rest. There is a structural reason for that creep: the `df` column falls
-steadily with K (the envelopes shrink as the fitted distributions
-concentrate), and since the null level of the standardized statistic scales
-with the envelope size, part of the curve's long decline reflects envelope
-shrinkage rather than genuine fit improvement. The calibrated p-values of the
-next section absorb this drift automatically; the raw curve does not. The
-sequential rule, by construction, stops at the first adequate K and does not
-care how far the grid extends.
+**`selection = "min"`** reproduces the published case study: the optimum is
+identified as the $K$-topic model with the minimum standardized statistic
+across the grid. Here the minimum is at **K = `r min_pick`**, close to the
+92 topics the paper identifies on the untrimmed vocabulary of the same
+corpus and, as the sweep below shows, insensitive to the choice of `q`. One
+practical remark is in order: the minimum rule requires a grid that extends
+beyond the flattening of the curve. On a grid truncated at K = 100 the
+minimum sits at the boundary, and only the full scan up to K = 200 allows it
+to stabilize. The behavior has a structural explanation. The `df` column
+decreases steadily with $K$ because the envelopes shrink as the fitted
+distributions concentrate, and since the null level of the standardized
+statistic scales with the envelope size, part of the curve's long decline
+reflects envelope shrinkage rather than genuine improvement in fit. The
+calibrated p-values of the next section absorb this effect automatically;
+the raw curve does not. The sequential rule, by construction, stops at the
+first adequate $K$ and is unaffected by the extent of the grid.
 
-A look at the p-value column explains when and why the two rules diverge:
+The p-value column explains when and why the two rules diverge:
 
 ```{r pval-summary}
 summary(chi_seq$pval)
@@ -277,15 +305,16 @@ summary(chi_seq$pval)
 With `df` of the order of
 `r format(round(median(chi_seq$df)), big.mark = ",")`, the chi-square
 reference distribution is extremely concentrated, so p-values saturate:
-models whose standardized statistic is materially above 1 get p-values of
-essentially 0, and models at or below 1 get p-values of essentially 1. When
-every model is rejected, the sequential rule falls back to the global minimum
-(with a warning); when several are accepted it stops at the smallest — which
-may sit well before the minimum. This is a documented calibration caveat of
-the chi-square yardstick (see `?optimal_topic`): in saturated regimes the
-*shape* of the `OpTop` curve, and its minimum, carry the information.
+models whose standardized statistic is materially above 1 receive p-values
+of essentially 0, and models at or below 1 receive p-values of essentially
+1. When every model is rejected, the sequential rule falls back to the
+global minimum with a warning; when several models are accepted, it stops at
+the smallest, which may precede the minimum by a wide margin. This is a
+documented calibration caveat of the chi-square reference (see
+`?optimal_topic`): in saturated regimes the information is carried by the
+*shape* of the `OpTop` curve and by its minimum.
 
-Because the table is the return value, any plot is one `ggplot2` call away:
+Because the return value is a table, custom figures follow directly:
 
 ```{r optop-curve}
 ggplot(chi_seq, aes(x = topic, y = OpTop)) +
@@ -303,38 +332,41 @@ ggplot(chi_seq, aes(x = topic, y = OpTop)) +
 
 ## Calibrated p-Values
 
-The saturation above has a precise cause: the $\chi^2_{P_J}$ reference is a
-yardstick, not the exact null law of the statistic. Write $k_j = P_j + 1$ for
-the number of envelope bins of document $j$ and $N_j$ for its length in
-tokens. The classical Pearson statistic on *counts*,
+The saturation above has a precise cause: the $\chi^2_{P_J}$ reference is an
+asymptotic guide rather than the exact null law of the statistic. Write
+$k_j = P_j + 1$ for the number of envelope bins of document $j$ and $N_j$
+for its length in tokens. The classical Pearson statistic on *counts*,
 $X^2_j = N_j \sum_b (d_{jb} - p_{jb})^2 / p_{jb}$, is the object with the
-textbook $\chi^2_{k_j - 1}$ asymptotics; the document term of Equation 8 is
-instead
+textbook $\chi^2_{k_j - 1}$ asymptotics; the document term of Equation (3)
+is instead
 
 $$
-S_j \;=\; (P_j + 1) \sum_b \frac{(d_{jb} - p_{jb})^2}{p_{jb}}
-\;=\; \frac{k_j}{N_j}\, X^2_j ,
+S_j = (P_j + 1) \sum_b \frac{(d_{jb} - p_{jb})^2}{p_{jb}}
+= \frac{k_j}{N_j}\, X^2_j ,
+\tag{4}
 $$
 
-off from the calibrated object by the factor $k_j / N_j$ — and on top of
-that, the fitted probabilities are estimated from the same data they are
+which differs from the calibrated object by the factor $k_j / N_j$. In
+addition, the fitted probabilities are estimated from the same data they are
 tested against. Calibration therefore replaces the $\chi^2$ reference with
 the distribution of $T = \sum_j S_j$ under the **conditional fitted-model
 null**
 
 $$
-c_j \;\sim\; \mathrm{Multinomial}\bigl(N_j,\; I_j^K\bigr),
+c_j \sim \mathrm{Multinomial}\bigl(N_j,\; I_j^K\bigr),
 \qquad j = 1, \dots, J,
+\tag{5}
 $$
 
 with $\hat\theta$ and $\hat\phi$ held fixed at their estimates. Two
-properties make this exact and fast: the envelope depends only on the model
-(never on the data), and a multinomial collapsed over bins is multinomial on
-the collapsed probabilities — so the null replicates can be drawn *directly
-on the $k_j$ bins* $p_j = (I^K_{j1}, \dots, I^K_{jP_j}, I^K_{j,\min})$,
-which is equivalent to simulating whole documents over the vocabulary at a
-tiny fraction of the cost. The only new ingredient the user supplies is the
-vector of document lengths $N_j$:
+properties make this exact and fast: the envelope depends only on the model,
+never on the data, and a multinomial collapsed over bins is multinomial on
+the collapsed probabilities. The null replicates can therefore be drawn
+*directly on the $k_j$ bins*
+$p_j = (I^K_{j1}, \dots, I^K_{jP_j}, I^K_{j,\min})$, which is equivalent to
+simulating entire documents over the vocabulary at a small fraction of the
+cost. The only new ingredient the user supplies is the vector of document
+lengths $N_j$:
 
 ```{r optimal-call-cal, eval = have_models}
 doc_lens <- quanteda::ntoken(mydfm_sub)
@@ -359,16 +391,17 @@ $T^{*}_1, \dots, T^{*}_B$ are drawn as above and the reported p-value is the
 empirical upper tail with the standard finite-sample correction,
 
 $$
-\hat{p} \;=\; \frac{1 + \#\{\, b : T^{*}_b \ge T \,\}}{B + 1},
+\hat{p} = \frac{1 + \#\{\, b : T^{*}_b \ge T \,\}}{B + 1},
+\tag{6}
 $$
 
 so `alpha` is a genuine Type-I error rate with respect to the conditional
 null, at resolution $1/(B+1)$. The bootstrap is the most expensive stage of
 the pipeline; its cost, and the effect of the `n_threads` argument, are
 quantified in the section [A Note On Computational Efficiency]. The table
-now carries two p-value columns:
-`pval` (calibrated — what the selection rules use) and `pval_chisq` (the
-asymptotic value, kept for comparison):
+now carries two p-value columns: `pval` (the calibrated value used by the
+selection rules) and `pval_chisq` (the asymptotic value, kept for
+comparison):
 
 ```{r cal-table}
 head(chi_cal)
@@ -379,10 +412,14 @@ same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
 
 $$
-\mathrm{E}\bigl[X^2_j\bigr] = k_j - 1,
-\qquad
-\mathrm{Var}\bigl[X^2_j\bigr] = 2(k_j - 1) +
-\frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+\begin{split}
+\mathrm{E}\bigl[X^2_j\bigr] &= k_j - 1,
+\\
+\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1)
+\\
+&\quad + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+\end{split}
+\tag{7}
 $$
 
 Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
@@ -392,14 +429,19 @@ $\sigma^2 = \sum_j (k_j/N_j)^2\,\mathrm{Var}[X^2_j]$, and the reference is
 the Satterthwaite scaled chi-square matching them:
 
 $$
-T \;\overset{\text{approx}}{\sim}\; a\,\chi^2_\nu,
+\begin{gathered}
+T \overset{\text{approx}}{\sim} a\,\chi^2_\nu,
 \qquad a = \frac{\sigma^2}{2\mu},
 \qquad \nu = \frac{2\mu^2}{\sigma^2},
-\qquad \hat{p} = \Pr\!\left(\chi^2_\nu \ge T/a\right).
+\\
+\hat{p} = \Pr\!\left(\chi^2_\nu \ge T/a\right).
+\end{gathered}
+\tag{8}
 $$
 
-No simulation, no seed — a fast approximation that corrects the location and
-scale of the reference but not its higher moments:
+The method requires no simulation and no seed; it is a fast approximation
+that corrects the location and the scale of the reference, although not its
+higher moments:
 
 ```{r optimal-call-mm, eval = have_models}
 chi_cal_mm <- optimal_topic(topic_models = VEM_models,
@@ -415,7 +457,7 @@ chi_cal_mm <- optimal_topic(topic_models = VEM_models,
 cat(res$inaugural$console_cal_mm, sep = "\n")
 ```
 
-The three references side by side make the point visually:
+The following figure compares the three reference distributions:
 
 ```{r cal-plot}
 pv <- melt(
@@ -430,14 +472,13 @@ ggplot(pv, aes(x = topic, y = pvalue, color = reference)) +
   geom_line(linewidth = 0.7) +
   geom_hline(yintercept = alpha, linetype = 3) +
   labs(x = "Topics", y = "p-value",
-       title = "Calibration replaces a saturated reference with a usable one",
+       title = "P-values under the three reference distributions",
        subtitle = sprintf("dotted line: alpha = %.2f", alpha)) +
   theme_bw()
 ```
 
-Because the p-values themselves do not depend on `alpha`, scanning the
-conventional thresholds is a one-liner per method on the tables we already
-have:
+Because the p-values themselves do not depend on `alpha`, the conventional
+thresholds can be scanned directly on the tables already computed:
 
 ```{r cal-alpha-sweep}
 alphas <- c(0.01, 0.05, 0.10)
@@ -453,35 +494,36 @@ knitr::kable(picks_alpha,
              caption = "Sequential pick by reference distribution as alpha varies")
 ```
 
-How should this be read? The calibrated sequential pick answers a precise
-question: *what is the smallest K whose leftover discrepancy could plausibly
-be produced by multinomial sampling noise alone, if the fitted model were the
-truth?* On this corpus that happens already at
-K = `r chi_cal[pval > alpha, topic][1]`. The fit does keep improving beyond
-that — the `OpTop` curve keeps falling until its minimum at
-K = `r min_pick` — but from there onward the improvements are smaller than
-what sampling noise can account for at the chosen `alpha`.
+Interpretation follows from the null the calibration targets. The calibrated
+sequential pick answers a precise question: *what is the smallest $K$ whose
+residual discrepancy could plausibly be produced by multinomial sampling
+noise alone, if the fitted model were the truth?* On this corpus this
+happens already at K = `r chi_cal[pval > alpha, topic][1]`. The fit does
+continue to improve beyond that point, since the `OpTop` curve decreases
+until its minimum at K = `r min_pick`, but from there onward the
+improvements are smaller than what sampling noise can account for at the
+chosen `alpha`.
 
-The uncalibrated scan is best understood as a *reduced-chi-square heuristic*:
-with `df` this large the asymptotic p-values saturate to 0 or 1, so in
-practice the rule stops at the first K where the standardized discrepancy
-drops below 1 — a sensible engineering criterion, but one whose implicit
-threshold is not tied to the actual null level of the statistic. On this
-corpus the bootstrap places that null level nearer 2 than 1, so the heuristic
-demands more than noise-level adequacy and stops later, at
-K = `r seq_pick` — and fragilely so: on this grid the very next model,
-K = `r seq_pick + 2`, is rejected again, and the q-sweep below moves the pick
-from 20 to 38. When the implicit threshold happens to sit close to the true
-null level the same heuristic performs well — the simulation at the end of
-this vignette, where the truth is known, is exactly such a case. What
-calibration adds is therefore not a different answer but a guarantee: raising
-`alpha` demands stronger evidence of adequacy, so the pick moves (weakly)
-upward, as the table shows — and `alpha` is now a real Type-I error rate with
-respect to the fitted-model null (at bootstrap resolution
-`1 / (n_boot + 1)`). In short: the calibrated sequential rule identifies the
-most parsimonious *statistically adequate* K, while the global-minimum rule
-and the discrepancy indices below quantify *maximal descriptive fit* — two
-different questions, and it is worth knowing which one you are asking.
+The uncalibrated scan is best understood as a *reduced-chi-square
+heuristic*. With `df` this large the asymptotic p-values saturate at 0 or 1,
+so in practice the rule stops at the first $K$ whose standardized
+discrepancy falls below 1. This is a reasonable descriptive criterion, but
+its implicit threshold is not tied to the actual null level of the
+statistic. On this corpus the bootstrap places that null level closer to 2
+than to 1, so the heuristic demands more than noise-level adequacy and stops
+later, at K = `r seq_pick`. The selection is also unstable: on this grid the
+next model, K = `r seq_pick + 2`, is rejected again, and the sweep of `q`
+below moves the pick from 20 to 38. When the implicit threshold happens to
+lie close to the true null level, the same heuristic performs well; the
+simulation study at the end of this vignette, where the ground truth is
+known, is such a case. What calibration adds is therefore not a different
+answer but a guarantee. Raising `alpha` demands stronger evidence of
+adequacy, so the pick moves weakly upward, as the table shows, and `alpha`
+becomes a genuine Type-I error rate with respect to the fitted-model null,
+at bootstrap resolution `1 / (n_boot + 1)`. In summary, the calibrated
+sequential rule identifies the most parsimonious *statistically adequate*
+$K$, while the global-minimum rule and the discrepancy indices below
+quantify *maximal descriptive fit*. The two questions are distinct.
 
 One caveat applies to both calibrations: they hold the estimated `theta` and
 `phi` fixed, so they do not account for estimation noise in the LDA
@@ -489,12 +531,12 @@ parameters themselves (see `?optimal_topic`).
 
 ## The Role of `q`
 
-`q` controls the per-document envelope: sort each document's fitted word
-probabilities in decreasing order and keep the smallest head whose cumulative
-mass exceeds `q` — those are the `P_j` "relatively important" words; the rest
-are collapsed into a single bin whose mass stays strictly below `1 - q`. In
-the paper's notation `q = 1 - I^K`; its numerical setting `I^K = 0.05`
-corresponds to the default `q = 0.95`.
+`q` controls the per-document envelope introduced in Equation (2): the
+fitted word probabilities are sorted in decreasing order and the smallest
+leading set whose cumulative mass exceeds `q` is retained, while the
+relatively unimportant words are collapsed into a single bin whose mass
+remains strictly below `1 - q`. In the paper's notation `q = 1 - I^K`, and
+its numerical setting `I^K = 0.05` corresponds to the default `q = 0.95`.
 
 Re-running the test across a sweep of `q` values is a direct sensitivity
 check:
@@ -519,12 +561,12 @@ q_curves <- rbindlist(
 ggplot(q_curves, aes(x = topic, y = OpTop, color = factor(q))) +
   geom_line(linewidth = 0.7) +
   labs(x = "Topics", y = expression(OpTop[J]^{K}), color = "q",
-       title = "The envelope parameter shifts the level, not the story") +
+       title = "Standardized Test 1 statistic across the q sweep") +
   theme_bw()
 ```
 
-Applying the two selection rules to each element of the sweep — the same
-one-liners as before — shows how the picks react to `q`:
+Applying the two selection rules to each element of the sweep shows how the
+selected $K$ responds to `q`:
 
 ```{r q-picks}
 picks_by_q <- data.table(
@@ -536,10 +578,11 @@ picks_by_q <- data.table(
 knitr::kable(picks_by_q, caption = "Selected K by rule as q varies")
 ```
 
-Larger `q` keeps more words per document, so the degrees of freedom grow and
-the envelope covers more of each document's distribution; smaller `q` makes
-the comparison coarser and cheaper. The sequential pick moves with `q` while
-the global minimum stays put. The default `q = 0.95` follows the paper.
+Larger `q` retains more words per document, so the degrees of freedom grow
+and the envelope covers more of each document's distribution, while smaller
+`q` makes the comparison coarser and computationally cheaper. The sequential
+pick moves with `q`, whereas the global minimum is unaffected. The default
+`q = 0.95` follows the paper.
 
 ## Goodness-of-Fit: The Discrepancy Indices
 
@@ -547,8 +590,8 @@ The second family of tools asks a complementary question: not *which K is
 optimal* but *how much of the word-count structure a given model explains*.
 The indices compare each model against the no-topics corpus baseline on a
 **harmonized support**: a fixed, document-specific set of rare words
-(computed across the whole grid) is collapsed so that every K is evaluated on
-the same bins. They consume raw counts:
+(computed across the whole grid) is collapsed so that every K is evaluated
+on the same bins. They consume raw counts:
 
 ```{r indices-call, eval = FALSE}
 dtm_counts <- methods::as(mydfm_sub, "CsparseMatrix")
@@ -574,16 +617,18 @@ ggplot(idx, aes(x = K, y = R2, color = metric)) +
   theme_bw()
 ```
 
-All three indices are regression-style R-squared analogues: 0 means the model
-explains no more than the corpus-wide baseline, 1 means a perfect account of
-the (harmonized) word counts. They typically rise steeply at small K and
-flatten once additional topics stop buying explanatory power — the elbow
-region is where the Test 1 machinery above places the optimum.
+All three indices are regression-style R-squared analogues: 0 indicates that
+the model explains no more than the corpus-wide baseline, and 1 indicates a
+perfect account of the harmonized word counts. They typically rise steeply
+at small $K$ and flatten once additional topics no longer provide
+significant incremental explanatory power; the region where the curves
+flatten corresponds to the neighborhood in which Test 1 locates the optimum.
 
-The indices also exist at the **word level**, which is useful diagnostics:
-which words does the selected model capture well, and which does it miss?
-For the sequential pick (K = `r word_r2$k`), the micro word-level chi-square
-index is `r round(word_r2$micro, 3)`; the tails look like this:
+The indices are also available at the **word level**, which serves as a
+diagnostic: it identifies the words the selected model captures well and
+those it misses. For the sequential pick (K = `r word_r2$k`), the micro
+word-level chi-square index is `r round(word_r2$micro, 3)`; the ten highest-
+and lowest-index words are reported below:
 
 ```{r word-snapshot}
 knitr::kable(
@@ -594,18 +639,20 @@ knitr::kable(
     R2_worst = round(unname(word_r2$worst), 3),
     check.names = FALSE
   ),
-  caption = sprintf("Word-level chi-square R2 at K = %d: the 10 best and worst captured words",
+  caption = sprintf("Word-level chi-square R2 at K = %d: the ten best and worst captured words",
                     word_r2$k)
 )
 ```
 
 ## A Simulation with Known Truth
 
-Real corpora never reveal their true K. To see the machinery work where the
-answer is known, we simulate one corpus from the LDA generative process
-itself: `r meta$J_sim` documents over `r meta$W_sim` words drawn from
-**`r meta$true_K` topics**, using `sim_dfm()` (a thin wrapper around
-`LDATS::sim_LDA_data()`), then re-fit a grid around the truth.
+In empirical corpora the true number of topics is unknown. Following the
+paper, we therefore validate the procedure through a simulation study in
+which the ground truth is known: one corpus is simulated from the LDA
+generative process itself, with `r meta$J_sim` documents over
+`r meta$W_sim` words drawn from **`r meta$true_K` topics**, using
+`sim_dfm()` (a thin wrapper around `LDATS::sim_LDA_data()`), and a grid of
+models is re-estimated around the truth.
 
 ```{r sim-call, eval = FALSE}
 rdirichlet <- function(n, alpha) {
@@ -642,7 +689,7 @@ ggplot(sim_chi, aes(x = topic, y = OpTop)) +
   geom_vline(xintercept = sim_picks$sequential, linetype = 2) +
   geom_vline(xintercept = sim_picks$min, linetype = 3) +
   labs(x = "Topics", y = expression(OpTop[J]^{K}),
-       title = "Simulated corpus: the truth is K = 10 (solid red)",
+       title = "Simulated corpus with ground truth K = 10 (solid red)",
        subtitle = sprintf("sequential pick: K = %d (dashed) | global minimum: K = %d (dotted)",
                           sim_picks$sequential, sim_picks$min)) +
   theme_bw()
@@ -662,19 +709,20 @@ ggplot(sim_idx, aes(x = K, y = R2, color = metric)) +
   theme_bw()
 ```
 
-The statistic bends in the neighborhood of the true K and the indices stop
-improving there — the same qualitative behavior the paper's simulation study
-reports (its Figure 7). As the paper notes, the identified optimum is not
-always exactly `K_sim` but typically adjacent to it: here the sequential rule
-stops at K = `r sim_picks$sequential` with the truth at `r meta$true_K`,
-while the global minimum drifts to the grid edge as the curve keeps creeping
-down past the bend. Note that this is the *uncalibrated* sequential rule
-performing well: on this corpus the post-truth plateau of the standardized
-statistic sits below 1, so the implicit reduced-chi-square threshold of the
-saturated p-values lands close to the actual null level — the favorable case
-discussed in the calibration section. Treat the tools as locating the
-*region* of adequate K, with the discrepancy indices quantifying what each
-candidate buys you.
+The statistic bends in the neighborhood of the true $K$ and the indices stop
+improving there, the same qualitative behavior reported in the paper's
+simulation study (its Figure 7). As the paper acknowledges, the identified
+optimum is not always exactly $K_{sim}$ but is typically adjacent or in
+close proximity to it: here the sequential rule stops at
+K = `r sim_picks$sequential` with the truth at `r meta$true_K`, while the
+global minimum moves toward the grid boundary as the curve continues to
+decrease past the bend. Note that this is the *uncalibrated* sequential rule
+performing well. On this corpus the post-truth plateau of the standardized
+statistic lies below 1, so the implicit reduced-chi-square threshold of the
+saturated p-values falls close to the actual null level, which is the
+favorable case discussed in the calibration section. The tools should be
+read as locating the *region* of adequate $K$, with the discrepancy indices
+quantifying the incremental explanatory power of each candidate.
 
 ## A Note On Computational Efficiency
 
@@ -697,19 +745,20 @@ bres[, config := fcase(
 ```
 
 Both computational stages of `optimal_topic()` are implemented in compiled
-code and, as of v0.12.0, run in parallel, and the same design extends to
-the goodness-of-fit tools presented above, whose partition and index
+code and, as of v0.12.0, run in parallel. The same design extends to the
+goodness-of-fit tools presented above, whose partition and index
 computations are evaluated by a fused compiled engine. This section
 describes the implementations and reports a simulation study of their
 speed, thread scaling, and memory use.
 
 **The statistic.** For each model, the fitted word probabilities of a block
 of 256 documents are obtained with a single BLAS matrix product, since the
-per-document algebra of Equation 8 is one row of $\gamma\,e^{\beta}$. The
-remaining per-document work (a descending sort, a cumulative sum, and a
-scalar Pearson reduction), which profiling identified as the dominant cost
-once the algebra had been reduced to a matrix product, is parallelized over
-the documents of each block with OpenMP.
+per-document algebra of Equation (3) reduces to one row of the matrix
+product $\theta^K \phi^K$. The remaining per-document work (a descending
+sort, a cumulative sum, and a scalar Pearson reduction), which profiling
+identified as the dominant cost once the algebra had been reduced to a
+matrix product, is parallelized over the documents of each block with
+OpenMP.
 
 **The bootstrap.** Calibration is the most expensive stage: it draws $B$
 null replicates of the statistic per model, each requiring one multinomial
@@ -848,8 +897,15 @@ depend on that choice.
 idx_wide <- dcast(bres[mode %in% c("indices", "indices_r")],
                   scale + J + W ~ config, value.var = "elapsed_sec")
 setorder(idx_wide, J)
-setcolorder(idx_wide, c("scale", "J", "W", "R implementation (pre-engine)"))
+setnames(idx_wide, "R implementation (pre-engine)",
+         "R base<br>(pre-engine)")
+engine_cols <- grep("^engine, ", names(idx_wide), value = TRUE)
+setnames(idx_wide, engine_cols,
+         sub("^engine, ", "C++ base<br>", engine_cols))
+setcolorder(idx_wide, c("scale", "J", "W",
+                        "R base<br>(pre-engine)"))
 knitr::kable(idx_wide, digits = 1,
+             escape = FALSE,
              caption = paste("Wall time (seconds) of the goodness-of-fit",
                              "evaluation (partition plus three-metric index",
                              "table) by thread count, with the pre-engine R",
@@ -874,11 +930,10 @@ reduction, and peak memory falls from
 `r sprintf("%.1f", idx_ram_cpp / 1024)` GB, since neither the minimum
 matrix nor the dense count and baseline blocks are formed.
 
-On toolchains
-without OpenMP support (notably the default macOS compiler) the cores run
-single-threaded; the thread-independent speedup of the compiled bootstrap
-and of the index engine is retained, while the scaling with `n_threads` is
-not. The internal helper
+On toolchains without OpenMP support (notably the default macOS compiler)
+the parallel loops run single-threaded; the thread-independent speedup of
+the compiled bootstrap and of the index engine is retained, while the
+scaling with `n_threads` is not. The internal helper
 `OpTop:::optop_openmp_available()` reports whether the installed build
 supports OpenMP.
 
@@ -890,9 +945,10 @@ supports OpenMP.
   their replacement.
 - `selection = "legacy"` reproduces the pre-0.9.9 computation exactly for
   back-compatibility and is also deprecated.
-- The chi-square reference for Test 1 is a yardstick, not an exact null law;
-  a calibration layer (parametric-bootstrap null) is on the roadmap — see the
-  package's `AUDIT.md` for the technical background.
+- The chi-square reference for Test 1 is asymptotic rather than exact; the
+  calibrated p-values presented above (`calibrate = "bootstrap"` or
+  `calibrate = "moment"`) address this, and `?optimal_topic` documents the
+  underlying statistical reasoning.
 
 ## References
 
