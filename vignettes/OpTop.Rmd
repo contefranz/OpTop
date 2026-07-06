@@ -1,7 +1,8 @@
 ---
-title: "Selecting K With OpTop"
+title: "Working With OpTop"
 subtitle: "Parametric Tests and Discrepancy Indices for Topic Models"
 author: "Francesco Grossetti"
+date: "July 6, 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -168,13 +169,11 @@ words of document $j$ indexed in decreasing order of $I_{jp}^K$, the fitted
 and observed masses of that bin are
 
 $$
-I^{K}_{j,\min} = \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
-\tag{2a}
-$$
-
-$$
-D_{j,\min} = \sum_{p = P_j + 1}^{P} D_{jp}.
-\tag{2b}
+\begin{align}
+I^{K}_{j,\min} &= \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
+\tag{2a} \\
+D_{j,\min} &= \sum_{p = P_j + 1}^{P} D_{jp}. \tag{2b}
+\end{align}
 $$
 
 Collapsing the relatively unimportant words in this manner preserves the
@@ -420,17 +419,12 @@ same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
 
 $$
-\mathrm{E}\bigl[X^2_j\bigr] = k_j - 1,
-\tag{7a}
-$$
-
-$$
-\begin{split}
-\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1)
-\\
-&\quad + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
-\end{split}
+\begin{align}
+\mathrm{E}\bigl[X^2_j\bigr] &= k_j - 1,
+\tag{7a} \\
+\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1) + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
 \tag{7b}
+\end{align}
 $$
 
 Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
