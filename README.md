@@ -14,7 +14,7 @@ different topic counts directly comparable.
 ### What It Does
 
 - **Optimal K selection**  
-  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with optional bootstrap or moment-matched **calibration of the p-values** under the fitted-model null (v0.10.0). The legacy redundant-topic diagnostics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`) are deprecated as of v0.9.8 and scheduled for removal.
+  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with optional bootstrap or moment-matched calibration of the p-values under the fitted-model null (v0.10.0). The legacy redundant-topic diagnostics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`) are deprecated as of v0.9.8 and scheduled for removal.
 
 - **Model goodness-of-fit**  
   Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 
@@ -63,7 +63,7 @@ different topic counts directly comparable.
   _Madison S. Wigginton Professor of Finance, Emeritus_  
   Owen Graduate School of Management | Vanderbilt University  
   Contact: craig.lewis@vanderbilt.edu  
-
+  
 ### References
 
 1. Lewis, C. M. and Grossetti, F. (2022). 
@@ -75,6 +75,8 @@ Journal of Statistical Software, 40, 1-30.
 3. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). 
 [*Latent Dirichlet Allocation*.](https://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf)
 Journal of Machine Learning Research, 3(Jan):993–1022.
+4. Grossetti F. (2026). [*NLPstudio: Tools for Social Science Text Analysis, Corpus Management, and Topic Modeling*](https://contefranz.github.io/NLPstudio). R package version
+  1.1.1.
   
 
 ### Installation

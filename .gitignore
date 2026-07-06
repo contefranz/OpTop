@@ -12,6 +12,7 @@ data-raw/*.rds
 data-raw/benchmark-runs/
 vignettes/*.html
 vignettes/*.R
+vignettes/*_files/
 
 # pkgdown site
 docs/
