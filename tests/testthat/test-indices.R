@@ -189,3 +189,49 @@ test_that("misaligned inputs raise the documented errors", {
     "Partition vocabulary != model vocabulary"
   )
 })
+
+test_that("the index engine kernels validate their inputs", {
+  J <- 3L; W <- 4L
+  N <- Matrix::Matrix(matrix(1, J, W), sparse = TRUE)
+  N_t <- Matrix::t(N)
+  E <- matrix(1 / W, J, W)
+  L <- rep(4, J)
+  pi_w <- rep(1 / W, W)
+
+  # word-level kernel
+  expect_error(
+    optop_index_word_core(E[-1, ], N, 0L, W, L, pi_w, 1e-8,
+                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "E_block"
+  )
+  expect_error(
+    optop_index_word_core(E, N, 0L, W, L[-1], pi_w, 1e-8,
+                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "L must have one entry per document"
+  )
+  expect_error(
+    optop_index_word_core(E, N, 0L, W, L, pi_w[-1], 1e-8,
+                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "pi_w"
+  )
+
+  # document-level kernel
+  tww <- matrix(1 / W, W, 2L)
+  theta_blk <- matrix(1 / 2, J, 2L)
+  bits <- as.raw(rep(0L, J * W))
+  expect_error(
+    optop_index_doc_core(tww[-1, ], theta_blk, N_t, 0L, bits, L, pi_w, 1e-8,
+                         TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "one row per feature"
+  )
+  expect_error(
+    optop_index_doc_core(tww, theta_blk[-1, ], N_t, 0L, bits, L, pi_w, 1e-8,
+                         TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "theta_blk"
+  )
+  expect_error(
+    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w[-1], 1e-8,
+                         TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "pi_row"
+  )
+})
