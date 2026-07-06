@@ -1,13 +1,13 @@
 ---
-title: "Selecting K with OpTop"
-subtitle: "Parametric tests and discrepancy indices for LDA models"
+title: "Selecting K With OpTop"
+subtitle: "Parametric Tests and Discrepancy Indices for Topic Models"
 author: "Francesco Grossetti"
 output:
   rmarkdown::html_vignette:
     toc: true
     math_method: katex
 vignette: >
-  %\VignetteIndexEntry{Selecting K with OpTop}
+  %\VignetteIndexEntry{Selecting K With OpTop}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -31,6 +31,16 @@ knitr::opts_chunk$set(
 library(OpTop)
 library(data.table)
 library(ggplot2)
+
+# a cli progress bar redraws itself with carriage returns, which knitr
+# flattens into one very long line; the alerts are kept and the bar is
+# disabled for the render
+options(cli.progress_show_after = Inf)
+# the captured console streams of the replay path contain the bar's
+# snapshots; they are filtered so that both paths produce the same output
+show_console <- function(x) {
+  cat(grep("^Processing", x, invert = TRUE, value = TRUE), sep = "\n")
+}
 
 # Precomputed results shipped with the package (a few KB): tables derived from
 # the full fitted grid, plus the captured console output of the optimal_topic()
@@ -158,12 +168,13 @@ words of document $j$ indexed in decreasing order of $I_{jp}^K$, the fitted
 and observed masses of that bin are
 
 $$
-\begin{gathered}
 I^{K}_{j,\min} = \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
-\\
+\tag{2a}
+$$
+
+$$
 D_{j,\min} = \sum_{p = P_j + 1}^{P} D_{jp}.
-\end{gathered}
-\tag{2}
+\tag{2b}
 $$
 
 Collapsing the relatively unimportant words in this manner preserves the
@@ -173,14 +184,11 @@ setting $I^K = 0.05$ corresponds to `q = 0.95`. Test 1 (Equation 8 of the
 paper) then aggregates the Pearson discrepancies over documents:
 
 $$
-\begin{split}
-\mathrm{OpTop}_J^K = \sum_{j=1}^{J} & \left[\, (P_j + 1) \left(
+\mathrm{OpTop}_J^K = \sum_{j=1}^{J} 
+\left[\, (P_j + 1) \left(
 \sum_{p=1}^{P_j} \frac{\bigl(D_{jp} - I_{jp}^K\bigr)^2}{I_{jp}^K}
-\right.\right. \\
-& \left.\left. \quad
 +\; \frac{\bigl(D_{j,\min} - I_{j,\min}^K\bigr)^2}{I_{j,\min}^K}
 \right) \right] \sim \chi^2_{P_J},
-\end{split}
 \tag{3}
 $$
 
@@ -212,7 +220,7 @@ chi_seq <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_seq, sep = "\n")
+show_console(res$inaugural$console_seq)
 ```
 
 ```{r optimal-call-min, eval = have_models}
@@ -226,7 +234,7 @@ chi_min <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_min, sep = "\n")
+show_console(res$inaugural$console_min)
 ```
 
 ## Reading the Result
@@ -383,7 +391,7 @@ chi_cal <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-cal-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_cal, sep = "\n")
+show_console(res$inaugural$console_cal)
 ```
 
 With `calibrate = "bootstrap"`, $B$ = `n_boot` null replicates
@@ -412,14 +420,17 @@ same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
 
 $$
+\mathrm{E}\bigl[X^2_j\bigr] = k_j - 1,
+\tag{7a}
+$$
+
+$$
 \begin{split}
-\mathrm{E}\bigl[X^2_j\bigr] &= k_j - 1,
-\\
 \mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1)
 \\
 &\quad + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
 \end{split}
-\tag{7}
+\tag{7b}
 $$
 
 Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
@@ -454,7 +465,7 @@ chi_cal_mm <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-mm-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_cal_mm, sep = "\n")
+show_console(res$inaugural$console_cal_mm)
 ```
 
 The following figure compares the three reference distributions:
@@ -531,7 +542,7 @@ parameters themselves (see `?optimal_topic`).
 
 ## The Role of `q`
 
-`q` controls the per-document envelope introduced in Equation (2): the
+`q` controls the per-document envelope introduced in Equations (2a) and (2b): the
 fitted word probabilities are sorted in decreasing order and the smallest
 leading set whose cumulative mass exceeds `q` is retained, while the
 relatively unimportant words are collapsed into a single bin whose mass

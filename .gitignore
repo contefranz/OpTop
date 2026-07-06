@@ -15,3 +15,6 @@ vignettes/*.R
 
 # pkgdown site
 docs/
+
+# local Claude Code tooling
+.claude/
