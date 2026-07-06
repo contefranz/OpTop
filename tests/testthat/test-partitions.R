@@ -41,3 +41,44 @@ test_that("larger c marks more words as rare", {
   expect_true(all(fx$partition$rare_mask <= part_loose$rare_mask))
   expect_gt(sum(part_loose$rare_mask), sum(fx$partition$rare_mask))
 })
+
+test_that("the partition kernel validates its inputs and clamps the threads", {
+  J <- 3L; W <- 4L
+  mask <- matrix(FALSE, J, W)
+  theta <- matrix(1 / 2, J, 2L)
+  phi <- matrix(1 / W, 2L, W)
+  tau <- rep(0.1, J)
+
+  expect_error(
+    optop_partition_fill_core(mask, list(theta), list(), tau, 2L, 1L),
+    "one entry per model"
+  )
+  expect_error(
+    optop_partition_fill_core(mask, list(theta), list(phi), tau[-1], 2L, 1L),
+    "tau"
+  )
+  expect_error(
+    optop_partition_fill_core(mask, list(theta), list(phi), tau, 0L, 1L),
+    "block"
+  )
+  expect_error(
+    optop_partition_fill_core(mask, list(theta[-1, ]), list(phi), tau, 2L, 1L),
+    "one row per document"
+  )
+  expect_error(
+    optop_partition_fill_core(mask, list(theta), list(phi[, -1]), tau, 2L, 1L),
+    "one column per feature"
+  )
+  expect_error(
+    optop_partition_fill_core(mask, list(theta), list(rbind(phi, phi[1, ])),
+                              tau, 2L, 1L),
+    "number of topics"
+  )
+
+  # a non-positive thread count is clamped to one thread (in-place fill)
+  mask0 <- matrix(FALSE, J, W)
+  mask1 <- matrix(FALSE, J, W)
+  optop_partition_fill_core(mask0, list(theta), list(phi), tau, 2L, 0L)
+  optop_partition_fill_core(mask1, list(theta), list(phi), tau, 2L, 1L)
+  expect_identical(mask0, mask1)
+})

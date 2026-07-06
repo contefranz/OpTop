@@ -88,3 +88,15 @@ optop_test_fixture <- function() {
   .optop_test_cache$fixture <- fixture
   fixture
 }
+
+# One model's Test 1 statistic and per-document envelope bins, through the
+# compiled core — shared by the calibration and parallelization tests.
+optop_envelope <- function(model, wdfm, q = 0.95) {
+  doc_map <- seq_len(quanteda::ndoc(wdfm)) - 1L
+  tp <- optop_as_theta_phi(model)
+  dfm_t <- Matrix::t(methods::as(wdfm, "dgCMatrix"))
+  out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map,
+                            return_envelope = TRUE, n_threads = 1L)
+  list(stat = out$stat,
+       probs = .optop_split_envelope(out$bin_probs, out$bin_counts))
+}

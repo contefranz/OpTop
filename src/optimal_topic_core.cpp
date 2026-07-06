@@ -1,12 +1,55 @@
 #include <RcppArmadillo.h>
 // [Rcpp::depends(RcppArmadillo)]
 
+#include <algorithm>
+#include <numeric>
+#include <vector>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // Model-agnostic core of the Test 1 statistic (Eq. 8 in Lewis & Grossetti
 // 2022): the caller adapts whatever topic model it holds to a document-topic
 // matrix theta (J_model x K, rows summing to 1) and a topic-word matrix phi
-// (K x W, rows summing to 1) and calls this once per model. Keeping the hot
-// path free of R API objects (no S4 slot access) is also what makes it
-// eligible for OpenMP parallelization over documents later on.
+// (K x W, rows summing to 1) and calls this once per model. The hot path is
+// free of R API objects (no S4 slot access), which is what allows the
+// per-document loop to run under OpenMP.
+//
+// Threading contract: documents are independent, so within each block the
+// per-document envelope/Pearson work runs in parallel, each document writing
+// its own result slot; the slots are then accumulated serially in document
+// order. The floating-point summation order (and the exported envelope
+// layout) therefore never depends on the schedule, and the output is
+// bit-identical for any n_threads. The block densification of the sparse
+// dfm runs under the same contract (one column per document).
+//
+// Tie handling: envelope order is defined by the comparator
+// (probability descending, original index ascending), the semantics of R's
+// stable order(X, decreasing = TRUE). Ties in the fitted probabilities
+// (common for count-based estimators such as collapsed Gibbs) therefore
+// resolve identically on every platform and match the R reference
+// implementation exactly.
+//
+// Envelope selection: the statistic needs the smallest descending-sorted
+// head whose cumulative mass exceeds q, so a full O(W log W) sort is not
+// required. The head is located with std::nth_element on a candidate
+// boundary that doubles until the head mass crosses q; each widening sorts
+// only the new slice (the partition property guarantees slices are already
+// ordered relative to each other), for an overall cost of
+// O(W · widenings + P_j log P_j) instead of O(W log W).
+
+namespace {
+
+struct EnvelopeCmp {
+    const double* x;
+    bool operator()(const arma::uword a, const arma::uword b) const {
+        if (x[a] != x[b]) return x[a] > x[b];
+        return a < b;
+    }
+};
+
+}  // namespace
 
 //' @keywords internal
 // [[Rcpp::export]]
@@ -15,7 +58,8 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                               const arma::sp_mat& dfm_t,
                               double q,
                               const arma::uvec& doc_map,
-                              bool return_envelope)
+                              bool return_envelope,
+                              int n_threads)
 {
     // dfm_t is the weighted dfm transposed once by the caller (W x J): a
     // document is a contiguous CSC column, so densifying a block of
@@ -41,6 +85,9 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
         Rcpp::stop("document mapping points past the rows of theta: "
                    "the dfm and the model are misaligned");
     }
+    if (n_threads < 1) {
+        n_threads = 1;
+    }
 
     // documents are processed in fixed-size blocks: one BLAS product per
     // block replaces a dense W x K temporary per document, while keeping
@@ -64,65 +111,159 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
         bin_counts.reserve(n_docs);
     }
 
+    // per-document slots for one block, written in parallel and reduced
+    // serially in document order
+    std::vector<double> chi_slot(block_size);
+    std::vector<double> df_slot(block_size);
+    std::vector<std::vector<double>> env_slot(return_envelope ? block_size : 0);
+
+    arma::mat dfm_block(n_terms, block_size);
+
     for (arma::uword block_start = 0; block_start < n_docs; block_start += block_size)
     {
         Rcpp::checkUserInterrupt();
 
         const arma::uword block_end = std::min(block_start + block_size, n_docs) - 1;
+        const int block_len = static_cast<int>(block_end - block_start + 1);
 
-        // W x b slabs, one column per document
-        const arma::mat dfm_block(dfm_t.cols(block_start, block_end));
         const arma::uvec theta_rows = doc_map.subvec(block_start, block_end);
         const arma::mat X_block = tww * arma::mat(theta.rows(theta_rows)).t();
 
-        for (arma::uword j_col = 0; j_col < X_block.n_cols; ++j_col)
-        {
-            // get cumulative sum of sorted word probabilities
-            arma::vec X = X_block.col(j_col);
-            arma::vec weighted_dfm_j_doc = dfm_block.col(j_col);
-
-            arma::uvec sort_indices = arma::sort_index(X, "descend");
-            X = X(sort_indices);
-            arma::vec X_cumsum = arma::cumsum(X);
-            weighted_dfm_j_doc = weighted_dfm_j_doc(sort_indices);
-
-            // Eq. (8): the P_j important words are the smallest head whose
-            // cumulative mass strictly exceeds q = 1 - I^K (the crossing
-            // word is kept, so the collapsed tail keeps mass strictly below
-            // I^K, cf. footnote 5), and the document contributes
-            // (bins) * Pearson with df = bins - 1, where bins = P_j + 1
-            // with the collapsed min bin
-            auto first_greater_than_q = std::find_if(X_cumsum.begin(),
-                                                     X_cumsum.end(),
-                                                     [&q](double val) {return val > q;});
-            const std::size_t p_j = (first_greater_than_q == X_cumsum.end())
-                ? X.n_elem
-                : std::distance(X_cumsum.begin(), first_greater_than_q) + 1;
-            const std::size_t n_tail = X.n_elem - p_j;
-
-            const arma::vec head_diff = weighted_dfm_j_doc.head(p_j) - X.head(p_j);
-            double pearson = arma::sum(head_diff % head_diff / X.head(p_j));
-
-            std::size_t n_bins = p_j;
-            double tail_X = 0.0;
-            if (n_tail > 0) {
-                tail_X = arma::sum(X.tail(n_tail));
-                const double tail_diff = arma::sum(weighted_dfm_j_doc.tail(n_tail)) - tail_X;
-                pearson += tail_diff * tail_diff / tail_X;
-                n_bins += 1;
+        // densify the block, one sparse column per document, in parallel
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+#endif
+        for (int j_col = 0; j_col < block_len; ++j_col) {
+            double* col = dfm_block.colptr(j_col);
+            std::fill(col, col + n_terms, 0.0);
+            const arma::uword j_doc = block_start + static_cast<arma::uword>(j_col);
+            for (arma::sp_mat::const_col_iterator it = dfm_t.begin_col(j_doc);
+                 it != dfm_t.end_col(j_doc); ++it) {
+                col[it.row()] = *it;
             }
+        }
 
-            sum_chi += double(n_bins) * pearson;
-            sum_df += double(n_bins - 1);
+#ifdef _OPENMP
+#pragma omp parallel num_threads(n_threads)
+#endif
+        {
+            // per-thread work buffers, reused across the documents a thread
+            // processes
+            std::vector<arma::uword> idx(n_terms);
+            std::vector<double> x_buf(n_terms);
 
-            if (return_envelope) {
-                for (std::size_t p = 0; p < p_j; ++p) {
-                    bin_probs.push_back(X(p));
+#ifdef _OPENMP
+#pragma omp for schedule(dynamic)
+#endif
+            for (int j_col = 0; j_col < block_len; ++j_col)
+            {
+                const double* x_src = X_block.colptr(j_col);
+                std::copy(x_src, x_src + n_terms, x_buf.begin());
+                const double* x = x_buf.data();
+                const double* o = dfm_block.colptr(j_col);
+
+                std::iota(idx.begin(), idx.end(), arma::uword(0));
+                const EnvelopeCmp cmp{x};
+
+                // locate the smallest sorted head whose cumulative mass
+                // strictly exceeds q = 1 - I^K (Eq. 8; the crossing word is
+                // kept, so the collapsed tail keeps mass strictly below I^K,
+                // cf. footnote 5 of the paper): widen a selection boundary
+                // until the head mass crosses q, sorting only new slices
+                arma::uword sorted_upto = 0;
+                arma::uword boundary = std::min<arma::uword>(
+                    n_terms, std::max<arma::uword>(256, n_terms / 4));
+                double cum = 0.0;
+                arma::uword p_j = 0;
+                bool crossed = false;
+
+                while (!crossed) {
+                    if (boundary > sorted_upto) {
+                        if (boundary < n_terms) {
+                            std::nth_element(idx.begin() + sorted_upto,
+                                             idx.begin() + boundary,
+                                             idx.end(), cmp);
+                        }
+                        std::sort(idx.begin() + sorted_upto,
+                                  idx.begin() + boundary, cmp);
+                    }
+                    while (sorted_upto < boundary) {
+                        cum += x[idx[sorted_upto]];
+                        ++sorted_upto;
+                        if (cum > q) {
+                            p_j = sorted_upto;
+                            crossed = true;
+                            break;
+                        }
+                    }
+                    if (!crossed) {
+                        if (boundary >= n_terms) {
+                            // the mass never crosses q: every word is kept
+                            p_j = n_terms;
+                            break;
+                        }
+                        boundary = std::min<arma::uword>(n_terms, boundary * 2);
+                    }
                 }
+
+                const arma::uword n_tail = n_terms - p_j;
+
+                // Pearson over the head, accumulated in envelope order
+                double pearson = 0.0;
+                double head_x = 0.0;
+                double head_o = 0.0;
+                for (arma::uword p = 0; p < p_j; ++p) {
+                    const double xp = x[idx[p]];
+                    const double op = o[idx[p]];
+                    const double diff = op - xp;
+                    pearson += diff * diff / xp;
+                    head_x += xp;
+                    head_o += op;
+                }
+
+                std::size_t n_bins = p_j;
+                double tail_x = 0.0;
                 if (n_tail > 0) {
-                    bin_probs.push_back(tail_X);
+                    // tail sums via the document totals: O(W) once instead
+                    // of a second pass over the unsorted remainder
+                    double total_x = 0.0;
+                    double total_o = 0.0;
+                    for (arma::uword w = 0; w < n_terms; ++w) {
+                        total_x += x[w];
+                        total_o += o[w];
+                    }
+                    tail_x = total_x - head_x;
+                    const double tail_diff = (total_o - head_o) - tail_x;
+                    pearson += tail_diff * tail_diff / tail_x;
+                    n_bins += 1;
                 }
-                bin_counts.push_back(int(n_bins));
+
+                chi_slot[j_col] = double(n_bins) * pearson;
+                df_slot[j_col] = double(n_bins - 1);
+
+                if (return_envelope) {
+                    std::vector<double>& bins = env_slot[j_col];
+                    bins.clear();
+                    bins.reserve(n_bins);
+                    for (arma::uword p = 0; p < p_j; ++p) {
+                        bins.push_back(x[idx[p]]);
+                    }
+                    if (n_tail > 0) {
+                        bins.push_back(tail_x);
+                    }
+                }
+            }
+        }
+
+        // serial reduction in document order: the summation order (and the
+        // envelope layout) is independent of the schedule
+        for (int j_col = 0; j_col < block_len; ++j_col) {
+            sum_chi += chi_slot[j_col];
+            sum_df += df_slot[j_col];
+            if (return_envelope) {
+                const std::vector<double>& bins = env_slot[j_col];
+                bin_probs.insert(bin_probs.end(), bins.begin(), bins.end());
+                bin_counts.push_back(int(bins.size()));
             }
         }
     }

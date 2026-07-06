@@ -9,8 +9,12 @@
 .Rproj.user
 /utils.R
 data-raw/*.rds
+data-raw/benchmark-runs/
 vignettes/*.html
 vignettes/*.R
 
 # pkgdown site
 docs/
+
+# local Claude Code tooling
+.claude/

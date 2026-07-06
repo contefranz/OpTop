@@ -19,6 +19,9 @@
 #' @param block Integer; number of terms to process per block when multiplying
 #'   \eqn{\Theta \Phi} to control memory usage for large vocabularies.
 #'   Default: \code{5000}.
+#' @param n_threads Integer; number of OpenMP threads used by the compiled
+#'   running-minimum kernel (default \code{1L}). Results are identical for
+#'   any value; only wall time changes.
 #'
 #' @return A list with:
 #' \itemize{
@@ -36,10 +39,13 @@
 #' support-driven artifacts in goodness-of-fit curves.
 #'
 #' @section Computational notes:
-#' The function forms \eqn{\min_K (\Theta^{(K)} \Phi^{(K)})} without storing a
-#' full \code{J x W x |K|} tensor by updating a running minimum in vocabulary
-#' blocks of size \code{block}. For large corpora, keep \code{dtm} sparse and
-#' increase \code{block} cautiously.
+#' The function forms \eqn{\min_K (\Theta^{(K)} \Phi^{(K)})} in compiled code,
+#' one vocabulary block at a time: a single BLAS product per model per block
+#' feeds an in-place running minimum, and the rare mask is written directly
+#' from the block buffer. Neither the \code{J x W x |K|} tensor nor the full
+#' \code{J x W} running-minimum matrix is ever materialized, so peak memory is
+#' the mask plus one \code{J x block} buffer. For large corpora, keep
+#' \code{dtm} sparse.
 #'
 #' @seealso
 #' \code{\link{optop_make_baseline}},
@@ -76,29 +82,29 @@
 #' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
 #'
 #' @export
-optop_make_partition <- function(models, dtm, c = 5, block = 5000) {
+optop_make_partition <- function(models, dtm, c = 5, block = 5000,
+                                 n_threads = 1L) {
   stopifnot(length(models) >= 1)
+  if (!is.numeric(n_threads) || length(n_threads) != 1L ||
+      !is.finite(n_threads) || n_threads < 1) {
+    stop("n_threads must be a single integer >= 1")
+  }
   L <- Matrix::rowSums(dtm)                           # L_j
   tau <- c / pmax(L, 1)                               # τ_j
-  # initialize running min of fitted probs i_min(j,w) = min_K i^K_{jw}
   theta_phi <- lapply(models, optop_as_theta_phi)
   J <- nrow(theta_phi[[1]]$theta); W <- ncol(theta_phi[[1]]$phi)
-  i_min <- matrix(Inf, nrow = J, ncol = W)
-  
-  # label i_min so that rare_mask inherits the vocabulary and document names
-  colnames(i_min) <- colnames(theta_phi[[1]]$phi)
-  rownames(i_min) <- rownames(theta_phi[[1]]$theta)
 
-  for (tp in theta_phi) {
-    theta <- tp$theta; phi <- tp$phi
-    for (start in seq(1, W, by = block)) {
-      end <- min(start + block - 1, W)
-      I <- theta %*% phi[, start:end, drop = FALSE]   # J x block
-      i_min[, start:end] <- pmin(i_min[, start:end], I)
-    }
-  }
-  # rare if min_K i^K_{jw} < tau_j
-  rare_mask <- i_min < tau
+  # rare if min_K i^K_{jw} < tau_j: the compiled kernel keeps the running
+  # minimum one vocabulary block at a time and writes the mask in place
+  rare_mask <- matrix(NA, nrow = J, ncol = W,
+                      dimnames = list(rownames(theta_phi[[1]]$theta),
+                                      colnames(theta_phi[[1]]$phi)))
+  optop_partition_fill_core(rare_mask,
+                            lapply(theta_phi, `[[`, "theta"),
+                            lapply(theta_phi, `[[`, "phi"),
+                            as.numeric(tau),
+                            as.integer(block),
+                            as.integer(n_threads))
   list(rare_mask = rare_mask, L = L)
 }
 

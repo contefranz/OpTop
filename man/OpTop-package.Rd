@@ -73,6 +73,7 @@ distribution of chi-square. \emph{Biometrika}, 29, 133--143.
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://contefranz.github.io/OpTop/}
   \item \url{https://github.com/contefranz/OpTop}
   \item Report bugs at \url{https://github.com/contefranz/OpTop/issues}
 }

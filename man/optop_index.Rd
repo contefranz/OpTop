@@ -17,7 +17,8 @@ optop_index_se(
   add_baseline_topic = TRUE,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE
+  ztest = FALSE,
+  n_threads = 1L
 )
 
 optop_index_chisq(
@@ -30,7 +31,8 @@ optop_index_chisq(
   add_baseline_topic = TRUE,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE
+  ztest = FALSE,
+  n_threads = 1L
 )
 
 optop_index_deviance(
@@ -42,7 +44,8 @@ optop_index_deviance(
   reopt = c("none", "deviance"),
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE
+  ztest = FALSE,
+  n_threads = 1L
 )
 }
 \arguments{
@@ -81,6 +84,10 @@ memory usage. Only used when \code{level = "word"}.}
 \item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference.
 Tests whether the topic model provides statistically significant improvement
 over the no-topics baseline. Default: \code{FALSE}. Only applicable when \code{level = "document"}.}
+
+\item{n_threads}{Integer; number of OpenMP threads used by the compiled
+index engine (default \code{1L}). Results are identical for any value; only
+wall time changes.}
 }
 \value{
 When \code{level = "document"}, a list with:

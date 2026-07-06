@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.11.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.11.0)
+[![release](https://img.shields.io/badge/release-v0.12.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.12.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -28,6 +28,17 @@ different topic counts directly comparable.
   Core routines are implemented in C/C++ for large vocabularies and model grids. As of
   v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
   documents with the fitted models by identifier, so the dfm row order no longer matters.
+  As of v0.12.0, both the Test 1 statistic and the bootstrap calibration are parallelized
+  with OpenMP, controlled by the `n_threads` argument of `optimal_topic()`. Results are
+  bit-identical for any thread count and reproducible under a seed; on toolchains without
+  OpenMP support the routines run single-threaded. The bootstrap selects its sampling
+  algorithm per document (alias-table token draws on wide envelopes, conditional-binomial
+  draws otherwise) and envelope ties are resolved deterministically, so results are
+  identical across platforms, including under the tied fitted probabilities that Gibbs
+  estimators produce. On a 4-core machine the bootstrap-calibrated pass runs up to 45
+  times faster than in v0.11.0 (a corpus of 10,000 documents and 20,000 features drops
+  from 1 h 47 m to 142 s); see the vignette section "A Note On Computational Efficiency"
+  for the full simulation study.
 
 - **Current support and extensions**  
   As of v0.11.0, `optimal_topic()` and the discrepancy indices accept — through the 
@@ -70,8 +81,8 @@ Journal of Machine Learning Research, 3(Jan):993–1022.
 
 ```r
 # From GitHub
-# install.packages("remotes")
-remotes::install_github("contefranz/OpTop")
+# install.packages("pak")
+pak::pkg_install("contefranz/OpTop")
 ```
 
 A full walkthrough — optimal-K selection, the role of `q`, the discrepancy indices, and a

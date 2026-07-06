@@ -4,7 +4,7 @@
 \alias{optop_make_partition}
 \title{Harmonized Rare-word Partition for OpTop indices}
 \usage{
-optop_make_partition(models, dtm, c = 5, block = 5000)
+optop_make_partition(models, dtm, c = 5, block = 5000, n_threads = 1L)
 }
 \arguments{
 \item{models}{A list of fitted topic models spanning a grid of \eqn{K}.
@@ -22,6 +22,10 @@ Default: \code{5}.}
 \item{block}{Integer; number of terms to process per block when multiplying
 \eqn{\Theta \Phi} to control memory usage for large vocabularies.
 Default: \code{5000}.}
+
+\item{n_threads}{Integer; number of OpenMP threads used by the compiled
+running-minimum kernel (default \code{1L}). Results are identical for
+any value; only wall time changes.}
 }
 \value{
 A list with:
@@ -49,10 +53,13 @@ support-driven artifacts in goodness-of-fit curves.
 }
 \section{Computational notes}{
 
-The function forms \eqn{\min_K (\Theta^{(K)} \Phi^{(K)})} without storing a
-full \code{J x W x |K|} tensor by updating a running minimum in vocabulary
-blocks of size \code{block}. For large corpora, keep \code{dtm} sparse and
-increase \code{block} cautiously.
+The function forms \eqn{\min_K (\Theta^{(K)} \Phi^{(K)})} in compiled code,
+one vocabulary block at a time: a single BLAS product per model per block
+feeds an in-place running minimum, and the rare mask is written directly
+from the block buffer. Neither the \code{J x W x |K|} tensor nor the full
+\code{J x W} running-minimum matrix is ever materialized, so peak memory is
+the mask plus one \code{J x block} buffer. For large corpora, keep
+\code{dtm} sparse.
 }
 
 \examples{

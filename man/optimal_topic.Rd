@@ -14,6 +14,7 @@ optimal_topic(
   n_boot = 200L,
   doc_lengths = NULL,
   seed = NULL,
+  n_threads = 1L,
   do_plot = TRUE,
   verbose = TRUE,
   lda_models = lifecycle::deprecated()
@@ -65,6 +66,14 @@ unnamed, the vector must follow the row order of \code{weighted_dfm}.}
 
 \item{seed}{Optional integer passed to \code{\link[=set.seed]{set.seed()}} before the bootstrap,
 for reproducible calibrated p-values (default \code{NULL}).}
+
+\item{n_threads}{Integer; number of OpenMP threads used by the compiled
+cores (the per-document statistic loop and the bootstrap), default
+\code{1L}. Results are \strong{bit-identical for any value}: every document owns a
+deterministic RNG stream and all reductions run in a fixed order, so
+\code{n_threads} only affects wall time. On builds without OpenMP (e.g. the
+default macOS toolchain) the value is ignored and the cores run
+single-threaded.}
 
 \item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
 topics with vertical and horizontal guides at the selected optimum and a
@@ -211,10 +220,14 @@ paired with the corresponding row of \eqn{\theta}{theta} \emph{per model}.
 Neither the row order of \code{weighted_dfm} nor the order in which each model
 saw the documents matters — alignment is always by identifier.
 
-\strong{Performance note.} The core computation is delegated to C++ compiled
-code; the bootstrap operates on the collapsed bins through vectorized
-calls (\code{rmultinom}, \code{colSums}), costing about \eqn{B \times
-\mathrm{df}}{B x df} floating-point operations per model.
+\strong{Performance note.} Both hot paths run in C++ compiled code and
+parallelize over documents with OpenMP (see \code{n_threads}): the statistic
+evaluates each block of documents with one BLAS product and sorts the
+fitted probabilities per document, and the bootstrap draws the null
+replicates directly on the collapsed bins, fused with the Pearson
+reduction, at about \eqn{B \times \mathrm{df}}{B x df} floating-point
+operations per model. See the "Computational efficiency" section of the
+vignette for measurements.
 }
 \examples{
 \dontrun{

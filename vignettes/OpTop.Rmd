@@ -1,13 +1,14 @@
 ---
-title: "Selecting K with OpTop"
-subtitle: "Parametric tests and discrepancy indices for LDA models"
+title: "Working With OpTop"
+subtitle: "Parametric Tests and Discrepancy Indices for Topic Models"
 author: "Francesco Grossetti"
+date: "July 6, 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
     math_method: katex
 vignette: >
-  %\VignetteIndexEntry{Selecting K with OpTop}
+  %\VignetteIndexEntry{Selecting K With OpTop}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -31,6 +32,16 @@ knitr::opts_chunk$set(
 library(OpTop)
 library(data.table)
 library(ggplot2)
+
+# a cli progress bar redraws itself with carriage returns, which knitr
+# flattens into one very long line; the alerts are kept and the bar is
+# disabled for the render
+options(cli.progress_show_after = Inf)
+# the captured console streams of the replay path contain the bar's
+# snapshots; they are filtered so that both paths produce the same output
+show_console <- function(x) {
+  cat(grep("^Processing", x, invert = TRUE, value = TRUE), sep = "\n")
+}
 
 # Precomputed results shipped with the package (a few KB): tables derived from
 # the full fitted grid, plus the captured console output of the optimal_topic()
@@ -83,7 +94,7 @@ The only step performed offline is the estimation of the LDA models
 `optimal_topic()` call to each table, figure, and number quoted in the text,
 is computed from those fits.
 
-## Setting up: corpus, grid, models
+## Setting Up: Corpus, Grid, Models
 
 We use the U.S. Presidential Inaugural Address corpus distributed with
 **quanteda**, the same corpus analyzed in the paper's case study, with a
@@ -127,7 +138,7 @@ above are unseeded, so re-running the pipeline may alter individual
 statistics slightly; the numbers quoted in this vignette come from one such
 run.
 
-## The Test 1 statistic
+## The Test 1 Statistic
 
 The test evaluates overall model adequacy: how well a $K$-topic model
 explains the corpus. It relies on the multinomial structure that LDA itself
@@ -158,12 +169,11 @@ words of document $j$ indexed in decreasing order of $I_{jp}^K$, the fitted
 and observed masses of that bin are
 
 $$
-\begin{gathered}
-I^{K}_{j,\min} = \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
-\\
-D_{j,\min} = \sum_{p = P_j + 1}^{P} D_{jp}.
-\end{gathered}
-\tag{2}
+\begin{align}
+I^{K}_{j,\min} &= \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
+\tag{2a} \\
+D_{j,\min} &= \sum_{p = P_j + 1}^{P} D_{jp}. \tag{2b}
+\end{align}
 $$
 
 Collapsing the relatively unimportant words in this manner preserves the
@@ -173,14 +183,11 @@ setting $I^K = 0.05$ corresponds to `q = 0.95`. Test 1 (Equation 8 of the
 paper) then aggregates the Pearson discrepancies over documents:
 
 $$
-\begin{split}
-\mathrm{OpTop}_J^K = \sum_{j=1}^{J} & \left[\, (P_j + 1) \left(
+\mathrm{OpTop}_J^K = \sum_{j=1}^{J} 
+\left[\, (P_j + 1) \left(
 \sum_{p=1}^{P_j} \frac{\bigl(D_{jp} - I_{jp}^K\bigr)^2}{I_{jp}^K}
-\right.\right. \\
-& \left.\left. \quad
 +\; \frac{\bigl(D_{j,\min} - I_{j,\min}^K\bigr)^2}{I_{j,\min}^K}
 \right) \right] \sim \chi^2_{P_J},
-\end{split}
 \tag{3}
 $$
 
@@ -188,15 +195,15 @@ where $\mathrm{OpTop}_J^K$ is distributed chi-square with
 $P_J = \sum_{j=1}^{J} P_j$ degrees of freedom. Misspecification, that is a
 $K$ too coarse to reproduce the word distributions, can only inflate the
 statistic, so evidence against adequacy is found in the upper tail. The
-package reports the **standardized** statistic $\mathrm{OpTop}_J^K / P_J$
+package reports the *standardized* statistic $\mathrm{OpTop}_J^K / P_J$
 (the version plotted in the paper's Figure 2, which fluctuates around 1
 under an adequate model) in the `OpTop` column, the degrees of freedom $P_J$
 in `df`, and the upper-tail p-value in `pval`.
 
-## Running the test
+## Running the Test
 
-`optimal_topic()` consumes **word proportions** (`weighted_dfm` above),
-while the discrepancy indices of the second part consume the raw **counts**;
+`optimal_topic()` consumes *word proportions* (`weighted_dfm` above),
+while the discrepancy indices of the second part consume the raw *counts*;
 both objects are therefore required. With `verbose = TRUE`, the function
 reports its setup, its progress across the grid, the selected model together
 with the rule that chose it, and the elapsed time:
@@ -212,7 +219,7 @@ chi_seq <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_seq, sep = "\n")
+show_console(res$inaugural$console_seq)
 ```
 
 ```{r optimal-call-min, eval = have_models}
@@ -226,10 +233,10 @@ chi_min <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_min, sep = "\n")
+show_console(res$inaugural$console_min)
 ```
 
-## Reading the result
+## Reading the Result
 
 `optimal_topic()` returns a `data.table` with one row per model:
 
@@ -237,7 +244,7 @@ cat(res$inaugural$console_min, sep = "\n")
 head(chi_seq)
 ```
 
-- `OpTop` is the **standardized** Test 1 statistic, the raw chi-square of
+- `OpTop` is the *standardized* Test 1 statistic, the raw chi-square of
   Equation (3) divided by its degrees of freedom, and the quantity plotted
   in the paper's Figure 2. Under an adequate model it fluctuates around 1.
 - `df` is $P_J = \sum_j P_j$, the total number of relatively important words
@@ -254,7 +261,7 @@ tables:
 all.equal(chi_seq, chi_min)
 ```
 
-### The two selection rules
+### The Two Selection Rules
 
 Both rules are direct computations on the returned table and can be stated
 explicitly:
@@ -330,7 +337,7 @@ ggplot(chi_seq, aes(x = topic, y = OpTop)) +
   theme_bw()
 ```
 
-## Calibrated p-values
+## Calibrated p-Values
 
 The saturation above has a precise cause: the $\chi^2_{P_J}$ reference is an
 asymptotic guide rather than the exact null law of the statistic. Write
@@ -383,7 +390,7 @@ chi_cal <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-cal-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_cal, sep = "\n")
+show_console(res$inaugural$console_cal)
 ```
 
 With `calibrate = "bootstrap"`, $B$ = `n_boot` null replicates
@@ -396,9 +403,12 @@ $$
 $$
 
 so `alpha` is a genuine Type-I error rate with respect to the conditional
-null, at resolution $1/(B+1)$. The table now carries two p-value columns:
-`pval` (the calibrated value used by the selection rules) and `pval_chisq`
-(the asymptotic value, kept for comparison):
+null, at resolution $1/(B+1)$. The bootstrap is the most expensive stage of
+the pipeline; its cost, and the effect of the `n_threads` argument, are
+quantified in the section [A Note On Computational Efficiency]. The table
+now carries two p-value columns: `pval` (the calibrated value used by the
+selection rules) and `pval_chisq` (the asymptotic value, kept for
+comparison):
 
 ```{r cal-table}
 head(chi_cal)
@@ -409,14 +419,12 @@ same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
 
 $$
-\begin{split}
+\begin{align}
 \mathrm{E}\bigl[X^2_j\bigr] &= k_j - 1,
-\\
-\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1)
-\\
-&\quad + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
-\end{split}
-\tag{7}
+\tag{7a} \\
+\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1) + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+\tag{7b}
+\end{align}
 $$
 
 Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
@@ -451,7 +459,7 @@ chi_cal_mm <- optimal_topic(topic_models = VEM_models,
 ```
 
 ```{r optimal-call-mm-replay, eval = !have_models, echo = FALSE}
-cat(res$inaugural$console_cal_mm, sep = "\n")
+show_console(res$inaugural$console_cal_mm)
 ```
 
 The following figure compares the three reference distributions:
@@ -526,9 +534,9 @@ One caveat applies to both calibrations: they hold the estimated `theta` and
 `phi` fixed, so they do not account for estimation noise in the LDA
 parameters themselves (see `?optimal_topic`).
 
-## The role of `q`
+## The Role of `q`
 
-`q` controls the per-document envelope introduced in Equation (2): the
+`q` controls the per-document envelope introduced in Equations (2a) and (2b): the
 fitted word probabilities are sorted in decreasing order and the smallest
 leading set whose cumulative mass exceeds `q` is retained, while the
 relatively unimportant words are collapsed into a single bin whose mass
@@ -581,7 +589,7 @@ and the envelope covers more of each document's distribution, while smaller
 pick moves with `q`, whereas the global minimum is unaffected. The default
 `q = 0.95` follows the paper.
 
-## Goodness-of-fit: the discrepancy indices
+## Goodness-of-Fit: The Discrepancy Indices
 
 The second family of tools asks a complementary question: not *which K is
 optimal* but *how much of the word-count structure a given model explains*.
@@ -641,7 +649,7 @@ knitr::kable(
 )
 ```
 
-## A simulation with known truth
+## A Simulation with Known Truth
 
 In empirical corpora the true number of topics is unknown. Following the
 paper, we therefore validate the procedure through a simulation study in
@@ -720,6 +728,219 @@ saturated p-values falls close to the actual null level, which is the
 favorable case discussed in the calibration section. The tools should be
 read as locating the *region* of adequate $K$, with the discrepancy indices
 quantifying the incremental explanatory power of each candidate.
+
+## A Note On Computational Efficiency
+
+```{r bench-load, include = FALSE}
+bench <- readRDS(system.file("extdata", "optop-benchmark-results.rds",
+                             package = "OpTop"))
+bres <- as.data.table(bench$results)
+scale_labels <- c(small = "small", medium1 = "medium-1",
+                  medium2 = "medium-2", large = "large")
+bres[, scale := factor(scale_labels[scale], levels = scale_labels)]
+thread_label <- sprintf("%d thread%s", bres$threads,
+                        ifelse(bres$threads > 1, "s", ""))
+bres[, config := fcase(
+  mode == "boot_r", "R bootstrap (0.11.0)",
+  mode == "indices_r", "R implementation (pre-engine)",
+  mode == "stat", paste0("statistic, ", thread_label),
+  mode == "boot", paste0("C++ bootstrap, ", thread_label),
+  mode == "indices", paste0("engine, ", thread_label)
+)]
+```
+
+Both computational stages of `optimal_topic()` are implemented in compiled
+code and, as of v0.12.0, run in parallel. The same design extends to the
+goodness-of-fit tools presented above, whose partition and index
+computations are evaluated by a fused compiled engine. This section
+describes the implementations and reports a simulation study of their
+speed, thread scaling, and memory use.
+
+**The statistic.** For each model, the fitted word probabilities of a block
+of 256 documents are obtained with a single BLAS matrix product, since the
+per-document algebra of Equation (3) reduces to one row of the matrix
+product $\theta^K \phi^K$. The remaining per-document work (a descending
+sort, a cumulative sum, and a scalar Pearson reduction), which profiling
+identified as the dominant cost once the algebra had been reduced to a
+matrix product, is parallelized over the documents of each block with
+OpenMP.
+
+**The bootstrap.** Calibration is the most expensive stage: it draws $B$
+null replicates of the statistic per model, each requiring one multinomial
+draw per document. Since v0.12.0 the draws are generated in compiled code
+and fused with the Pearson reduction, so that no intermediate count matrices
+are materialized, and the document loop is parallelized. The sampler is
+chosen per document from the data alone: when the envelope holds more bins
+than the document holds tokens, the common regime on large vocabularies,
+the tokens are drawn directly through an alias table at $O(N_j)$ per
+replicate and the untouched bins contribute a closed-form Pearson term;
+otherwise the conditional-binomial method is used. Each document draws
+from a private random-number stream seeded deterministically from the pair
+(`seed`, document index), and all reductions are performed in a fixed order.
+Two properties follow: the output is bit-identical for every value of
+`n_threads`, which therefore affects wall time only, and the calibrated
+p-values are reproducible under `seed`.
+
+The study below evaluates VEM grids of ten models (five on the largest
+corpus) on four synthetic corpus scales, from J = 200 documents with
+W = 2,000 features up to J = 10,000 documents with W = 20,000 features,
+timing the statistic pass, the bootstrap-calibrated pass
+(B = `r bench$meta$n_boot`), and the goodness-of-fit evaluation for one,
+two, and four threads, with the corresponding pure-R implementations as
+baselines. The sweep ends at four threads
+because that is the host's logical core count; thread settings beyond the
+physical cores only measure oversubscription, so the benchmark driver caps
+the sweep at the core count and extends it automatically on machines with
+more cores. Peak memory is the maximum resident set size reported by the
+operating system for a fresh R process per configuration. The study is
+reproducible via `data-raw/benchmark-efficiency.R`; timings are
+machine-dependent (recorded here: `r bench$meta$cpu`,
+`r bench$meta$cores` logical cores, `r bench$meta$r_version`).
+
+```{r bench-speed-table, echo = FALSE}
+boot_wide <- dcast(bres[mode %in% c("boot", "boot_r")],
+                   scale + J + W ~ config, value.var = "elapsed_sec")
+setorder(boot_wide, J)
+setcolorder(boot_wide, c("scale", "J", "W", "R bootstrap (0.11.0)"))
+knitr::kable(boot_wide, digits = 1,
+             caption = paste("Wall time (seconds) of the bootstrap-calibrated",
+                             "pass across the grid, by thread count, with the",
+                             "0.11.0 R implementation as baseline"))
+```
+
+```{r bench-speed-table-stat, echo = FALSE}
+stat_wide <- dcast(bres[mode == "stat"],
+                   scale + J + W ~ sprintf("%d thread%s", threads,
+                                           ifelse(threads > 1, "s", "")),
+                   value.var = "elapsed_sec")
+setorder(stat_wide, J)
+knitr::kable(stat_wide, digits = 2,
+             caption = paste("Wall time (seconds) of the statistic pass",
+                             "across the grid, by thread count"))
+```
+
+```{r bench-scaling-plot, echo = FALSE}
+boot_runs <- bres[mode == "boot"]
+boot_runs[, speedup := elapsed_sec[threads == 1] / elapsed_sec, by = scale]
+baseline_r <- bres[mode == "boot_r", .(scale, base_r = elapsed_sec)]
+boot_runs <- merge(boot_runs, baseline_r, by = "scale")
+boot_runs[, vs_R := base_r / elapsed_sec]
+best_large <- boot_runs[scale == "large"][which.min(elapsed_sec)]
+
+ggplot(boot_runs, aes(x = threads, y = vs_R, color = scale)) +
+  geom_line(linewidth = 0.7) +
+  geom_point() +
+  geom_hline(yintercept = 1, linetype = 3) +
+  scale_x_continuous(breaks = sort(unique(boot_runs$threads))) +
+  labs(x = "Threads", y = "Speedup over the 0.11.0 R bootstrap",
+       color = "Corpus scale",
+       title = "Speedup of the calibrated pass",
+       subtitle = "Total speedup over the pre-0.12.0 R implementation, by thread count") +
+  theme_bw()
+```
+
+```{r bench-ram, echo = FALSE}
+ram <- bres[mode %in% c("boot", "boot_r")]
+ram[, corpus := sprintf("J = %d, W = %d", J, W)]
+ram[, corpus := factor(corpus, levels = unique(corpus[order(J)]))]
+ram[, config := factor(config, levels = c("R bootstrap (0.11.0)",
+                                          grep("C\\+\\+", unique(config),
+                                               value = TRUE)))]
+
+ggplot(ram, aes(x = corpus, y = max_rss_mb, fill = config)) +
+  geom_col(position = "dodge") +
+  labs(x = NULL, y = "Peak resident set size (MB)", fill = NULL,
+       title = "Peak memory of the calibrated pass",
+       subtitle = "Maximum resident set size of a fresh R process per configuration") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+Three regularities hold across the scales. First, the compiled bootstrap is
+`r sprintf("%.1f", min(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`–`r sprintf("%.1f", max(bres[mode == "boot_r", elapsed_sec] / bres[mode == "boot" & threads == 1, elapsed_sec]))`×
+faster than the R implementation before any threading, and the gain grows
+with the vocabulary: the alias-table path costs $O(N_j)$ per replicate
+where the bin-wise method costs $O(k_j)$, and wide corpora have
+$k_j \gg N_j$. Second, the parallel
+document loop scales almost linearly in the number of physical cores: the
+best configuration on the largest corpus (`r best_large$threads` threads)
+runs the calibrated pass `r sprintf("%.1f", best_large$vs_R)`× faster
+than the 0.11.0 baseline, falling from
+`r sprintf("%.1f", bres[scale == "large" & mode == "boot_r", elapsed_sec] / 60)` minutes
+to `r sprintf("%.0f", best_large$elapsed_sec)` seconds.
+The statistic pass shares the document-level parallelism and gains
+`r sprintf("%.1f", bres[scale == "large" & mode == "stat" & threads == 1, elapsed_sec] / min(bres[scale == "large" & mode == "stat", elapsed_sec]))`×
+at its best thread setting on the same corpus; its speedup is sub-linear
+because the BLAS product remains serial. Third, peak
+memory is governed by the objects the evaluation must hold, namely the
+fitted models and, on the largest corpus, the exported envelope bins,
+rather than by the sampling itself: the two implementations stay within
+roughly 15% of one another in either direction, and the per-thread state
+amounts to one result slot per document, so peak memory does not grow with
+`n_threads`.
+
+**The discrepancy indices.** The goodness-of-fit tools presented above
+follow the same design. The harmonized partition of
+`optop_make_partition()` keeps the running minimum across the model grid
+one vocabulary block at a time in compiled code, so the full
+J $\times$ W minimum matrix is never materialized, and the three
+discrepancy indices are evaluated by a fused engine that computes all
+requested metrics, for the model and for the no-topics baseline side, in a
+single traversal of each document block. The evaluation consumes the
+sparse counts directly, forms the baseline on the fly, and parallelizes
+over documents under the contract stated above: results are bit-identical
+for every value of `n_threads`, exposed on the index functions and on
+`optop_make_partition()`. The table reports the wall time of the full
+evaluation, the partition followed by a three-metric document-level
+`optop_index_table()` over the grid, with the vectorized R implementation
+that preceded the engine as baseline. The rare-word threshold is set so
+that the harmonized support remains non-trivial at every scale of these
+synthetic corpora; the computational cost of the evaluation does not
+depend on that choice.
+
+```{r bench-indices-table, echo = FALSE}
+idx_wide <- dcast(bres[mode %in% c("indices", "indices_r")],
+                  scale + J + W ~ config, value.var = "elapsed_sec")
+setorder(idx_wide, J)
+setnames(idx_wide, "R implementation (pre-engine)",
+         "R base<br>(pre-engine)")
+engine_cols <- grep("^engine, ", names(idx_wide), value = TRUE)
+setnames(idx_wide, engine_cols,
+         sub("^engine, ", "C++ base<br>", engine_cols))
+setcolorder(idx_wide, c("scale", "J", "W",
+                        "R base<br>(pre-engine)"))
+knitr::kable(idx_wide, digits = 1,
+             escape = FALSE,
+             caption = paste("Wall time (seconds) of the goodness-of-fit",
+                             "evaluation (partition plus three-metric index",
+                             "table) by thread count, with the pre-engine R",
+                             "implementation as baseline"))
+```
+
+```{r bench-indices-inline, include = FALSE}
+idx_r_large <- bres[scale == "large" & mode == "indices_r", elapsed_sec]
+idx_best_large <- bres[scale == "large" & mode == "indices"][which.min(elapsed_sec)]
+idx_ram_r <- bres[scale == "large" & mode == "indices_r", max_rss_mb]
+idx_ram_cpp <- bres[scale == "large" & mode == "indices" &
+                      threads == idx_best_large$threads, max_rss_mb]
+```
+
+On the largest corpus the evaluation falls from
+`r sprintf("%.1f", idx_r_large / 60)` minutes to
+`r sprintf("%.1f", idx_best_large$elapsed_sec)` seconds at
+`r idx_best_large$threads` threads, a
+`r sprintf("%.1f", idx_r_large / idx_best_large$elapsed_sec)`-fold
+reduction, and peak memory falls from
+`r sprintf("%.1f", idx_ram_r / 1024)` GB to
+`r sprintf("%.1f", idx_ram_cpp / 1024)` GB, since neither the minimum
+matrix nor the dense count and baseline blocks are formed.
+
+On toolchains without OpenMP support (notably the default macOS compiler)
+the parallel loops run single-threaded; the thread-independent speedup of
+the compiled bootstrap and of the index engine is retained, while the
+scaling with `n_threads` is not. The internal helper
+`OpTop:::optop_openmp_available()` reports whether the installed build
+supports OpenMP.
 
 ## Notes
 

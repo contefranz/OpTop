@@ -287,3 +287,19 @@ ref_ztest <- function(r2_doc_valid) {
        ci = m + c(-1, 1) * stats::qnorm(0.975) * se,
        J = J)
 }
+
+# Pure-R oracle for the bootstrap null: the pre-0.12.0 implementation, one
+# rmultinom() call per document under the R session RNG. The compiled core
+# uses its own RNG stream, so the two never match draw by draw — they must
+# match in distribution, which is what the parallel tests assert.
+ref_boot_null <- function(probs, doc_lengths, n_boot) {
+  T_null <- numeric(n_boot)
+  for (j in seq_along(probs)) {
+    p <- probs[[j]]
+    n <- doc_lengths[j]
+    cnt <- stats::rmultinom(n_boot, size = n, prob = p)
+    dev <- (cnt / n - p)^2 / p
+    T_null <- T_null + length(p) * colSums(dev)
+  }
+  T_null
+}

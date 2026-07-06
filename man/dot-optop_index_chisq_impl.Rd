@@ -15,7 +15,8 @@
   level,
   block_size,
   ztest,
-  null_disc = NULL
+  null_disc = NULL,
+  n_threads = 1L
 )
 }
 \arguments{
@@ -61,6 +62,10 @@ SST when \code{level = "word"}), as computed by \code{.optop_index_null()}, so
 that grid evaluations across \eqn{K} reuse it instead of recomputing it
 for every model. Ignored when \code{reopt != "none"} because the SE
 re-optimization needs the full baseline counts per document.}
+
+\item{n_threads}{Integer; number of OpenMP threads used by the compiled
+index engine (default \code{1L}). Results are identical for any value; only
+wall time changes.}
 }
 \value{
 The same list the exported wrapper documents.
