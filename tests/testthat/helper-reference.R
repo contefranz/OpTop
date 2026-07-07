@@ -73,12 +73,19 @@ ref_index_document <- function(model, dtm, partition, baseline,
     } else if (metric == "chisq") {
       E_f <- pmax(E_j, eps)
       B_f <- pmax(B_j, eps)
-      E_min <- max(sum(E_f[rare]), eps)
-      B_min <- max(L[j] * sum(pi_row[rare]), eps)
-      dK <- sum((N_j[!rare] - E_f[!rare])^2 / E_f[!rare]) +
-        (N_min - E_min)^2 / E_min
-      dnull <- sum((N_j[!rare] - B_f[!rare])^2 / B_f[!rare]) +
-        (N_min - B_min)^2 / B_min
+      dK <- sum((N_j[!rare] - E_f[!rare])^2 / E_f[!rare])
+      dnull <- sum((N_j[!rare] - B_f[!rare])^2 / B_f[!rare])
+      # Pearson min-bin inclusion rule: the collapsed bin enters both sides
+      # only when the grid-wide flag of the partition holds (absent flag =
+      # pre-0.13.0 partition = always included)
+      min_ok <- if (is.null(partition$chisq_min_ok)) TRUE else
+        partition$chisq_min_ok[j]
+      if (isTRUE(min_ok)) {
+        E_min <- max(sum(E_f[rare]), eps)
+        B_min <- max(L[j] * sum(pi_row[rare]), eps)
+        dK <- dK + (N_min - E_min)^2 / E_min
+        dnull <- dnull + (N_min - B_min)^2 / B_min
+      }
     } else { # deviance
       E_min <- max(sum(E_j[rare]), eps)
       B_min <- max(L[j] * sum(pi_row[rare]), eps)
@@ -90,11 +97,13 @@ ref_index_document <- function(model, dtm, partition, baseline,
 
     D_K[j] <- dK
     D_null[j] <- dnull
-    r2_doc[j] <- if (dnull > 0) 1 - dK / dnull else 0
+    r2_doc[j] <- if (dnull > 0) 1 - dK / dnull else NA_real_
   }
 
-  list(r2 = 1 - sum(D_K) / sum(D_null),
-       r2_macro = mean(r2_doc[D_null > 0]),
+  # aggregation over the non-degenerate documents J+ only
+  valid <- D_null > 0
+  list(r2 = 1 - sum(D_K[valid]) / sum(D_null[valid]),
+       r2_macro = mean(r2_doc[valid]),
        r2_doc = r2_doc,
        D_K = D_K, D_null = D_null,
        K = tp$K, metric = metric)
@@ -130,20 +139,33 @@ ref_index_word <- function(model, dtm, partition, baseline,
       d_w[w] <- sum((N_w - E_f)^2 / E_f)
       d_w_null[w] <- sum((N_w - B_f)^2 / B_f)
     } else { # deviance
+      # fitted side: Poisson unit deviance 2 * [N log(N/E) - (N - E)], with
+      # the linear correction on the UNfloored expectation; for the null side
+      # the correction vanishes identically (sum_j B_jw = sum_j N_jw)
       idx <- N_w > 0
+      log_term <- if (any(idx)) {
+        2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(E_w, eps)[idx])))
+      } else {
+        0
+      }
+      d_w[w] <- log_term - 2 * sum(N_w - E_w)
       if (any(idx)) {
-        d_w[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(E_w, eps)[idx])))
         d_w_null[w] <- 2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(B_w, eps)[idx])))
       }
     }
   }
 
-  r2_word <- ifelse(d_w_null > 0, 1 - d_w / d_w_null, 0)
+  # aggregation over the non-degenerate words V+ only
+  valid <- d_w_null > 0
+  r2_word <- rep(NA_real_, W)
+  r2_word[valid] <- 1 - d_w[valid] / d_w_null[valid]
   names(r2_word) <- vocab
 
   list(r2_word = r2_word,
-       r2_micro_word = sum((d_w_null / sum(d_w_null)) * r2_word),
-       r2_macro_word = mean(r2_word[d_w_null > 0]),
+       r2_micro_word = sum((d_w_null[valid] / sum(d_w_null[valid])) *
+                             r2_word[valid]),
+       r2_macro_word = mean(r2_word[valid]),
+       d_w = d_w, d_w_null = d_w_null,
        K = tp$K, metric = metric)
 }
 

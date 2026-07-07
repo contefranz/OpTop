@@ -436,3 +436,63 @@ Findings:
 - Peak memory at the large scale drops 2.8× (9.3 → 3.3 GB): no `i_min`
   (1.6 GB), no dense count/baseline/difference blocks; what remains is
   the logical `rare_mask` (800 MB), the sparse counts, and the fits.
+
+# Audit — GoF indices vs the revised theory paper (v0.13.0)
+
+Formula-level audit of `optop_make_partition()`, `optop_make_baseline()`,
+the `optop_index_*` family and `optop_index_table()` against Lewis &
+Grossetti (2026), "Goodness-of-Fit Indices and Diagnostics for Topic
+Models" (working paper, July 2026 revision).
+
+## Verified correct (no change)
+
+- Baseline `pi_glob` and `B_{j,min}` construction.
+- Document-level SE, Pearson and deviance on the harmonized support
+  `{non-rare} U {min}`, including the 0 log 0 convention and the unfloored
+  min-bin expectation for the deviance.
+- Macro = unweighted mean of per-document fits over `J+`.
+- Word level on the unbinned vocabulary; word SE and Pearson; word Macro
+  over `V+`; word Micro weights proportional to the baseline discrepancy.
+- `tau_j = c / L_j`.
+
+## Deviations found and fixed in 0.13.0
+
+1. The harmonized union omitted the no-topics baseline; the running
+   minimum of the partition kernel is now seeded at `pi_glob`.
+2. The word-level fitted deviance lacked the Poisson linear correction
+   `-(N - E)`; without it the word index could exceed one.
+3. The Micro sums were not restricted to `J+`: degenerate documents
+   leaked fitted discrepancy into the numerator. Degenerate units now
+   carry `NA`.
+4. The Pearson min-bin inclusion rule
+   (`min(min_K E_min, B_min) >= c`, decided grid-wide, applied to both
+   sides, reported) was absent; it now lives in the partition
+   (`chisq_min_ok`) and the document kernel.
+5. Features without paper backing deprecated: in-sample `ztest`
+   (inference is reserved for held-out evaluation), `reopt` blending and
+   `add_baseline_topic` (non-negativity enforcement contradicts the
+   interpretation of negative indices as informative).
+6. Default `c` moved from 5 to 1, the paper's adopted default for
+   deviance-primary diagnostics.
+
+Efficiency spot-run (medium-2 scale of the 0.12.0 study: J = 1,000,
+W = 10,000, 10 synthetic models, 1 thread): partition 0.94 s, of which the
+new rare-mass pass for the inclusion rule is 0.67 s; three-metric document
+table 1.43 s; partition + table 2.37 s versus 3.7 s measured for the same
+scale in the 0.12.0 study. The v0.12.0 gains are preserved.
+
+## Roadmap (pure additions, each on its own branch)
+
+- **Held-out machinery (paper §3.6)**: train/eval split, fold-in of the
+  document-topic weights via `topicmodels::posterior(newdata)`,
+  training-based harmonized partition and baseline-support conventions
+  (out-of-support tokens to the min-bin, optional smoothing), per-document
+  held-out fit, Macro confidence intervals, paired adjacent gains, the
+  epsilon-adequacy selection rule, and the stabilized index variant.
+- **Moment-based specification tests (paper §4)**: held-out residual
+  moments against training-built instruments — the frequency-contrast
+  screen (t-test), the frequency-strata Wald test, and the fit-stratified
+  Wald test — with the sample-covariance Wald machinery and optional
+  BH-adjusted marginal t-tests.
+- **Cross-fitting helpers (paper Appendix B)** and standard errors for
+  the Micro index and the Micro-Macro gap (delta method).

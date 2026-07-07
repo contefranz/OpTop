@@ -8,10 +8,10 @@ optop_index_table(
   models,
   dtm,
   metrics = c("se", "chisq", "deviance"),
-  c = 5,
+  c = 1,
   macro = FALSE,
   reopt = "none",
-  add_baseline_topic = TRUE,
+  add_baseline_topic = FALSE,
   partition = NULL,
   baseline = NULL,
   level = c("document", "word"),
@@ -32,23 +32,20 @@ typically a grid over different \eqn{K}.}
 \code{c("se", "chisq", "deviance")}. Default: \code{c("se","chisq","deviance")}.}
 
 \item{c}{Positive scalar used inside \code{\link[=optop_make_partition]{optop_make_partition()}} to set the per-document
-rare threshold \eqn{\tau_j = c / L_j}. Default: \code{5}.}
+rare threshold \eqn{\tau_j = c / L_j}. Default: \code{1}, the value the paper
+adopts and recommends when the deviance index is primary; use \code{c = 5}
+for Pearson-primary work and report sensitivity to \code{c}.}
 
 \item{macro}{Logical; if \code{TRUE}, also compute macro indices (equal-weight averages of
 per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{Re-optimization mode forwarded to the underlying index:
-\itemize{
-\item \code{"none"} (default): no re-optimization;
-\item \code{"se"}: enable SE blending in \code{\link[=optop_index_se]{optop_index_se()}};
-\item \code{"deviance"}: reserved for a deviance-specific re-optimizer (if implemented).
-}
+\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Re-optimization mode
+forwarded to the underlying index; scheduled for removal before v1.0.0.
+Use the default \code{"none"}.}
 
-Values are routed per metric (e.g., \code{"se"} only affects the SE column).}
-
-\item{add_baseline_topic}{Logical; forwarded to SE and chi-square indices to augment
-the topics with a baseline row and guarantee non-negativity of their \eqn{R^2}.
-Ignored by the deviance index. Default: \code{TRUE}.}
+\item{add_baseline_topic}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical;
+forwarded to the SE and chi-square indices to force non-negativity.
+Scheduled for removal before v1.0.0. Default: \code{FALSE}.}
 
 \item{partition}{Optional precomputed result from \code{\link[=optop_make_partition]{optop_make_partition()}}.
 If \code{NULL}, it is computed internally from \code{models} and \code{dtm}.}
@@ -65,8 +62,9 @@ during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
 
-\item{ztest}{Logical; if \code{TRUE}, append Z-test statistics for cross-document inference.
-Only applicable when \code{level = "document"}. Default: \code{FALSE}.}
+\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
+the in-sample Z-test statistics. The methodology reserves inference for
+held-out evaluation; scheduled for removal before v1.0.0. Default: \code{FALSE}.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine and, when \code{partition} is computed internally, by the
@@ -141,12 +139,11 @@ tab <- optop_index_table(
   models   = VEM_models,
   dtm      = mydfm,
   metrics  = c("se","deviance"),
-  macro    = TRUE,
-  reopt    = "se"          # enable SE blending only
+  macro    = TRUE
 )
 
 # 2) Faster repeated runs: precompute and reuse partition/baseline
-part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 5)
+part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
 base <- optop_make_baseline(dtm = mydfm)
 tab2 <- optop_index_table(
   models    = VEM_models,
@@ -160,6 +157,9 @@ tab2 <- optop_index_table(
 
 }
 \references{
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
+
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}

@@ -30,12 +30,12 @@ or a \code{quanteda::dfm} that represents raw counts (not weighted).}
 \item{baseline}{Result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}, computed on the same aligned
 counts DTM used for \code{partition}.}
 
-\item{macro}{Logical; if \code{TRUE}, also compute the macro index (equal-weight average of
+\item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{Character scalar indicating optional re-optimization; routed per metric.
-Allowed values include \code{"none"} (default), \code{"se"}, \code{"pearson"}, and \code{"deviance"}.
-Unsupported values for a given metric are ignored.}
+\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Character scalar indicating
+optional re-optimization. The blending is not part of the methodology
+and is scheduled for removal before v1.0.0; use the default \code{"none"}.}
 
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
 document-level indices aggregated across words. \code{"word"} computes word-level indices
@@ -46,9 +46,10 @@ during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
 
-\item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference.
-Tests whether the topic model provides statistically significant improvement
-over the no-topics baseline. Default: \code{FALSE}. Only applicable when \code{level = "document"}.}
+\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
+the in-sample Z-test. The methodology reserves inference for held-out
+evaluation, so the in-sample test is scheduled for removal before
+v1.0.0; full-corpus indices are descriptive.}
 
 \item{null_disc}{Optional model-independent baseline discrepancy
 (per-document \eqn{D_{null}}{D_null} when \code{level = "document"}, per-word

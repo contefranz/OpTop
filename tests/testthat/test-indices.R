@@ -10,6 +10,7 @@ optop_index_fun <- function(metric) {
 }
 
 test_that("document-level indices match the naive reference", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   for (metric in c("se", "chisq", "deviance")) {
     fun <- optop_index_fun(metric)
@@ -80,6 +81,7 @@ test_that("results are invariant to block_size at both levels", {
 })
 
 test_that("baseline-topic augmentation is inert when reopt = 'none'", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
   for (metric in c("se", "chisq")) {
@@ -95,6 +97,7 @@ test_that("baseline-topic augmentation is inert when reopt = 'none'", {
 })
 
 test_that("SE re-optimization matches the reference and bounds R2 below by 0", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   for (m in fx$models) {
     got <- optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
@@ -111,6 +114,7 @@ test_that("SE re-optimization matches the reference and bounds R2 below by 0", {
 })
 
 test_that("macro and ztest components are only returned when requested", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
   res <- optop_index_se(m, fx$dtm, fx$partition, fx$baseline)
@@ -219,19 +223,25 @@ test_that("the index engine kernels validate their inputs", {
   tww <- matrix(1 / W, W, 2L)
   theta_blk <- matrix(1 / 2, J, 2L)
   bits <- as.raw(rep(0L, J * W))
+  ok <- rep(TRUE, J)
   expect_error(
-    optop_index_doc_core(tww[-1, ], theta_blk, N_t, 0L, bits, L, pi_w, 1e-8,
+    optop_index_doc_core(tww[-1, ], theta_blk, N_t, 0L, bits, L, pi_w, ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
     "one row per feature"
   )
   expect_error(
-    optop_index_doc_core(tww, theta_blk[-1, ], N_t, 0L, bits, L, pi_w, 1e-8,
+    optop_index_doc_core(tww, theta_blk[-1, ], N_t, 0L, bits, L, pi_w, ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
     "theta_blk"
   )
   expect_error(
-    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w[-1], 1e-8,
+    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w[-1], ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
     "pi_row"
+  )
+  expect_error(
+    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w, ok[-1], 1e-8,
+                         TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "chisq_min_ok"
   )
 })

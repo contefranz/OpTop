@@ -1,15 +1,19 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.12.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.12.0)
+[![release](https://img.shields.io/badge/release-v0.13.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.13.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
 
 OpTop provides principled, statistically grounded tools to select the optimal number of topics and 
-to assess goodness-of-fit for Latent Dirichlet Allocation (LDA) models. 
+to assess goodness-of-fit for probabilistic topic models. 
 It implements fast parametric tests and discrepancy indices that make comparisons across 
-different topic counts directly comparable.
+different topic counts directly comparable. The methodology is developed on the multinomial 
+structure of the Latent Dirichlet Allocation (LDA) family and applies to any fitted model 
+that returns document-level word probabilities: supported engines include **topicmodels** 
+(LDA with VEM or Gibbs, and CTM), **seededlda**, and **NLPstudio**, which can also be mixed 
+within one model grid.
 
 ### What It Does
 
@@ -41,13 +45,15 @@ different topic counts directly comparable.
   for the full simulation study.
 
 - **Current support and extensions**  
-  As of v0.11.0, `optimal_topic()` and the discrepancy indices accept — through the 
-  internal adapter family (`optop_as_theta_phi()`) — **topicmodels** fits (LDA with 
+  As of v0.11.0, `optimal_topic()` and the discrepancy indices accept, through the 
+  internal adapter family (`optop_as_theta_phi()`), **topicmodels** fits (LDA with 
   VEM or Gibbs, and `CTM`), all three **seededlda** models (`textmodel_lda()`, 
   `textmodel_seededlda()`, `textmodel_seqlda()`), and **NLPstudio** fits 
   (`nlp_topic_fit`). Engines can be mixed within one grid fitted on the same corpus: 
-  documents and features are aligned by identifier, per model. An adapter for 
-  *WarpLDA* from **text2vec** is planned.
+  documents and features are aligned by identifier, per model. Supporting a new 
+  engine requires a single adapter method that returns the fitted document-topic 
+  and topic-word probabilities; an adapter for *WarpLDA* from **text2vec** is 
+  planned.
   
 ### Authors
 
@@ -87,8 +93,8 @@ Journal of Machine Learning Research, 3(Jan):993–1022.
 pak::pkg_install("contefranz/OpTop")
 ```
 
-A full walkthrough — optimal-K selection, the role of `q`, the discrepancy indices, and a
-simulation with known truth — is in the package vignette: `vignette("OpTop")`.
+The package vignette presents the complete workflow (optimal-K selection, the role of `q`,
+the discrepancy indices, and a simulation with known truth): `vignette("OpTop")`.
 
 ### Quick Start
 
@@ -104,7 +110,8 @@ corpus_texts = data_corpus_inaugural
 dfm_counts   <- dfm(tokens(corpus_texts))                    # counts
 weighted_dfm <- dfm_weight(dfm_counts, scheme = "prop")      # proportions
 
-# 2) Fit a grid of LDA models (e.g., K = 10:50 by 5)
+# 2) Fit a grid of topic models (e.g., K = 10:50 by 5); LDA via VEM is shown,
+#    and any adapter-supported engine works (topicmodels, seededlda, NLPstudio)
 set.seed(123)
 K_grid    <- seq(10, 50, by = 5)
 VEM_models <- lapply(
@@ -115,7 +122,7 @@ VEM_models <- lapply(
 
 # 3) Choose the optimal K (selection: "sequential" adequacy scan by default,
 #    "min" for the paper's global-minimum rule; verbose = TRUE reports progress)
-res_opt   <- optimal_topic(lda_models = VEM_models, 
+res_opt   <- optimal_topic(topic_models = VEM_models, 
                            weighted_dfm = weighted_dfm,
                            q = 0.95, 
                            alpha = 0.05, 
@@ -124,7 +131,7 @@ res_opt   <- optimal_topic(lda_models = VEM_models,
                            verbose = TRUE)
 
 # 4) Goodness-of-fit across K (use counts here)
-part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 5)
+part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 1)
 base      <- optop_make_baseline(dtm = dfm_counts)
 tab       <- optop_index_table(models = VEM_models, 
                                dtm = dfm_counts,

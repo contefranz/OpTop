@@ -4,7 +4,7 @@
 \alias{optop_make_partition}
 \title{Harmonized Rare-word Partition for OpTop indices}
 \usage{
-optop_make_partition(models, dtm, c = 5, block = 5000, n_threads = 1L)
+optop_make_partition(models, dtm, c = 1, block = 5000, n_threads = 1L)
 }
 \arguments{
 \item{models}{A list of fitted topic models spanning a grid of \eqn{K}.
@@ -17,15 +17,18 @@ columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.}
 
 \item{c}{Positive scalar controlling the per-document threshold
 \eqn{\tau_j = c / L_j}. Larger values classify more words as rare.
-Default: \code{5}.}
+Default: \code{1}, the value the paper adopts and recommends when the
+deviance index is the primary measure; \code{c = 5} remains appropriate
+when the Pearson index is of primary interest, and sensitivity to
+\code{c} should be reported.}
 
 \item{block}{Integer; number of terms to process per block when multiplying
 \eqn{\Theta \Phi} to control memory usage for large vocabularies.
 Default: \code{5000}.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
-running-minimum kernel (default \code{1L}). Results are identical for
-any value; only wall time changes.}
+kernels (default \code{1L}). Results are identical for any value; only
+wall time changes.}
 }
 \value{
 A list with:
@@ -34,32 +37,63 @@ A list with:
 word \code{w} is rare in document \code{j} (belongs to \eqn{C_j^*}).
 \item \code{L}: numeric vector of length \code{J} with document lengths
 \eqn{L_j = \sum_w N_{jw}}.
+\item \code{chisq_min_ok}: logical vector of length \code{J};
+\code{TRUE} when the collapsed min-bin of document \eqn{j} satisfies the
+Pearson inclusion rule (see Details).
+\item \code{chisq_min_report}: list with the number and share of
+documents whose min-bin is excluded and the mean observed probability
+mass excluded with it.
+\item \code{c}: the threshold constant used.
 }
 }
 \description{
 Compute the fixed, document-specific rare-word sets \eqn{C_j^*} used to
-evaluate OpTop goodness-of-fit indices on a \strong{common support} across a grid
-of topic models. A word \eqn{w} is marked rare in document \eqn{j} if
-\eqn{\min_K i^{(K)}_{jw} < \tau_j}, where \eqn{i^{(K)}_{jw}} is the fitted
-probability of word \eqn{w} under model \eqn{K} and
-\eqn{\tau_j = c / L_j} with \eqn{L_j} the document length.
+evaluate the OpTop goodness-of-fit indices on a \strong{common support} across a
+grid of topic models. Following Lewis and Grossetti (2026), the union that
+defines the harmonized set includes the no-topics baseline: a word \eqn{w}
+is rare in document \eqn{j} if
+\eqn{\min\bigl(\hat\pi_{\mathrm{glob}}(w),\, \min_K i^{K}_{jw}\bigr) < \tau_j,}{min(pi_glob(w), min_K i^K_jw) < tau_j,}
+where \eqn{i^{K}_{jw}} is the fitted probability of word \eqn{w} under the
+\eqn{K}-topic model, \eqn{\hat\pi_{\mathrm{glob}}}{pi_glob} is the corpus
+word distribution of \code{\link[=optop_make_baseline]{optop_make_baseline()}}, and \eqn{\tau_j = c / L_j}
+with \eqn{L_j} the document length.
 }
 \details{
 OpTop indices (SE, Pearson \eqn{\chi^2}, and Deviance) are computed on the
-fixed support \eqn{\{w \not\in C_j^*\} \cup \{\min\}} for each document, where
-all words in \eqn{C_j^*} are collapsed into a single "\code{min}" bin. Using
-a harmonized partition ensures comparability across \eqn{K} and prevents
-support-driven artifacts in goodness-of-fit curves.
+fixed support \eqn{\{w \not\in C_j^*\} \cup \{\min\}} for each document,
+where all words in \eqn{C_j^*} are collapsed into a single "\code{min}"
+bin. Using a harmonized partition ensures comparability across \eqn{K} and
+prevents support-driven artifacts in goodness-of-fit curves. Because the
+baseline enters the union, every non-min expected count satisfies
+\eqn{E^{K}_{jw} \ge c} and \eqn{B_{jw} \ge c} on the active support, which
+bounds all Pearson denominators away from zero.
+
+\strong{Pearson min-bin inclusion rule.} For Pearson-type summaries the
+collapsed min-bin of document \eqn{j} is included only when
+\eqn{\min\bigl(\min_K E^{K}_{j,\min},\, B_{j,\min}\bigr) \ge c}{min(min_K E^K_j,min, B_j,min) >= c}
+and is excluded otherwise, from both the fitted and the null discrepancy
+and for all models simultaneously. The decision is taken here, once for
+the whole grid, and exposed as \code{chisq_min_ok}; the share of documents
+affected and the excluded observed mass are stored in
+\code{chisq_min_report} and reported by the index functions. The rule does
+not affect the deviance and squared-error families.
+
+\strong{Grid dependence.} \eqn{C_j^*} is a union over the model grid, so the
+indices computed on this support depend on the pair (grid, \code{c}):
+extending the grid weakly enlarges \eqn{C_j^*} and can change every
+reported index. Fix the grid before evaluation and compare indices across
+studies only under a common grid and \code{c}.
 }
 \section{Computational notes}{
 
-The function forms \eqn{\min_K (\Theta^{(K)} \Phi^{(K)})} in compiled code,
-one vocabulary block at a time: a single BLAS product per model per block
-feeds an in-place running minimum, and the rare mask is written directly
-from the block buffer. Neither the \code{J x W x |K|} tensor nor the full
-\code{J x W} running-minimum matrix is ever materialized, so peak memory is
-the mask plus one \code{J x block} buffer. For large corpora, keep
-\code{dtm} sparse.
+The compiled kernel forms
+\eqn{\min\bigl(\hat\pi_{\mathrm{glob}}, \min_K \Theta^{(K)} \Phi^{(K)}\bigr)}{min(pi_glob, min_K Theta Phi)}
+one vocabulary block at a time: the baseline seeds the running minimum and
+a single BLAS product per model per block feeds the in-place update, so
+neither the \code{J x W x |K|} tensor nor the full \code{J x W}
+running-minimum matrix is ever materialized. A second blocked pass of the
+same cost class accumulates the rare-set fitted mass per model for the
+Pearson inclusion rule. For large corpora, keep \code{dtm} sparse.
 }
 
 \examples{
@@ -80,12 +114,15 @@ dtm <- sparseMatrix(i = ij[,1], j = ij[,2], x = x, dims = c(50, 1000))
 m5  <- LDA(dtm, k = 5,  method = "VEM", control = list(seed = 42))
 m10 <- LDA(dtm, k = 10, method = "VEM", control = list(seed = 42))
 
-part <- optop_make_partition(list(m5, m10), dtm, c = 5)
+part <- optop_make_partition(list(m5, m10), dtm, c = 1)
 str(part$rare_mask)
 }
 
 }
 \references{
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
+
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}

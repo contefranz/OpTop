@@ -22,13 +22,17 @@ corpus-level term probabilities.
 Compute the global word distribution \eqn{\pi_{\mathrm{glob}}} from a corpus
 of counts. This baseline defines the "no-topics" model used to normalize
 OpTop indices via \eqn{B_{jw} = L_j \, \pi_{\mathrm{glob}}(w)} and
-\eqn{B_{j,\min} = L_j \sum_{w \in C_j^*} \pi_{\mathrm{glob}}(w)}.
+\eqn{B_{j,\min} = L_j \sum_{w \in C_j^*} \pi_{\mathrm{glob}}(w)}. It is the
+analogue of the intercept-only model in regression: every document follows
+the same corpus-level word distribution, scaled by its length.
 }
 \details{
 The returned \code{pi_glob} is used by the exported index functions to form
 per-document baseline counts on the same evaluation support defined by
 \code{optop_make_partition()}. Keeping this baseline fixed across \eqn{K}
-enables interpretable, regression-style \(R^2\) measures.
+enables interpretable, regression-style \eqn{R^2} measures: the null and
+the saturated models are the two interpretative boundaries between which
+every fitted \eqn{K}-topic model lies.
 }
 \examples{
 \dontrun{
@@ -39,6 +43,10 @@ base <- optop_make_baseline(dtm)
 sum(base$pi_glob)  # ~ 1
 }
 
+}
+\references{
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
 }
 \seealso{
 \code{\link{optop_make_partition}},

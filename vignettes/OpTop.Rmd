@@ -8,7 +8,7 @@ output:
     toc: true
     math_method: katex
 vignette: >
-  %\VignetteIndexEntry{Selecting K With OpTop}
+  %\VignetteIndexEntry{Working With OpTop}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -169,11 +169,13 @@ words of document $j$ indexed in decreasing order of $I_{jp}^K$, the fitted
 and observed masses of that bin are
 
 $$
-\begin{align}
-I^{K}_{j,\min} &= \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
-\tag{2a} \\
-D_{j,\min} &= \sum_{p = P_j + 1}^{P} D_{jp}. \tag{2b}
-\end{align}
+I^{K}_{j,\min} = \sum_{p = P_j + 1}^{P} I^{K}_{jp} \;<\; 1 - q,
+\tag{2a}
+$$
+
+$$
+D_{j,\min} = \sum_{p = P_j + 1}^{P} D_{jp}.
+\tag{2b}
 $$
 
 Collapsing the relatively unimportant words in this manner preserves the
@@ -419,12 +421,17 @@ same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
 
 $$
-\begin{align}
-\mathrm{E}\bigl[X^2_j\bigr] &= k_j - 1,
-\tag{7a} \\
-\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1) + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+\mathrm{E}\bigl[X^2_j\bigr] = k_j - 1,
+\tag{7a}
+$$
+
+$$
+\begin{split}
+\mathrm{Var}\bigl[X^2_j\bigr] &= 2(k_j - 1)
+\\
+&\quad + \frac{\sum_b 1/p_{jb} - k_j^2 - 2k_j + 2}{N_j}.
+\end{split}
 \tag{7b}
-\end{align}
 $$
 
 Since $S_j = (k_j/N_j)\,X^2_j$ and documents are independent, the null mean
@@ -593,14 +600,20 @@ pick moves with `q`, whereas the global minimum is unaffected. The default
 
 The second family of tools asks a complementary question: not *which K is
 optimal* but *how much of the word-count structure a given model explains*.
-The indices compare each model against the no-topics corpus baseline on a
-**harmonized support**: a fixed, document-specific set of rare words
-(computed across the whole grid) is collapsed so that every K is evaluated
-on the same bins. They consume raw counts:
+Following Lewis and Grossetti (2026), each index measures the proportional
+reduction in discrepancy achieved by a $K$-topic model relative to the
+no-topics baseline in which every document follows the corpus word
+distribution. The comparison is carried out on a **harmonized support**: a
+fixed, document-specific set of rare words, computed as a union over the
+whole model grid *and* the baseline, is collapsed so that every $K$ is
+evaluated on the same bins. Because the harmonized set depends on the grid
+and on the threshold constant `c`, indices are comparable across studies
+only under a common pair; the default `c = 1` follows the paper's
+recommendation for deviance-primary work. The indices consume raw counts:
 
 ```{r indices-call, eval = FALSE}
 dtm_counts <- methods::as(mydfm_sub, "CsparseMatrix")
-partition <- optop_make_partition(VEM_models, dtm_counts, c = 5)
+partition <- optop_make_partition(VEM_models, dtm_counts, c = 1)
 baseline <- optop_make_baseline(dtm_counts)
 
 idx_tab <- optop_index_table(VEM_models, dtm_counts,
@@ -624,16 +637,23 @@ ggplot(idx, aes(x = K, y = R2, color = metric)) +
 
 All three indices are regression-style R-squared analogues: 0 indicates that
 the model explains no more than the corpus-wide baseline, and 1 indicates a
-perfect account of the harmonized word counts. They typically rise steeply
-at small $K$ and flatten once additional topics no longer provide
-significant incremental explanatory power; the region where the curves
-flatten corresponds to the neighborhood in which Test 1 locates the optimum.
+perfect account of the harmonized word counts. The deviance index is
+bounded above by one, while the Pearson and squared-error indices are not
+confined to $[0, 1]$; a negative value is informative, since it indicates
+that the fitted model performs worse than the baseline under that
+discrepancy. The indices typically rise steeply at small $K$ and flatten
+once additional topics no longer provide significant incremental
+explanatory power; the region where the curves flatten corresponds to the
+neighborhood in which Test 1 locates the optimum. These full-corpus values
+are descriptive summaries of in-sample fit and should not be the sole basis
+for choosing $K$.
 
-The indices are also available at the **word level**, which serves as a
-diagnostic: it identifies the words the selected model captures well and
-those it misses. For the sequential pick (K = `r word_r2$k`), the micro
-word-level chi-square index is `r round(word_r2$micro, 3)`; the ten highest-
-and lowest-index words are reported below:
+The indices are also available at the **word level**, computed on the
+unbinned vocabulary, which serves as a diagnostic: it identifies the words
+the selected model captures well and those it misses. For the sequential
+pick (K = `r word_r2$k`), the micro word-level chi-square index is
+`r round(word_r2$micro, 3)`; the ten highest- and lowest-index words are
+reported below:
 
 ```{r word-snapshot}
 knitr::kable(
@@ -963,3 +983,6 @@ of chi-square. *Biometrika*, 29, 133–143.
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. *Journal of Machine Learning Research*, 23(58),
 1–20. <https://jmlr.org/papers/v23/19-297.html>
+
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.

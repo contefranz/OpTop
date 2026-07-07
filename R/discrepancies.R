@@ -1,10 +1,14 @@
-#' OpTop goodness-of-fit indices for a single LDA model
+#' OpTop goodness-of-fit indices for a single topic model
 #'
-#' Compute regression-style goodness-of-fit indices based on sum of squared errors (SE),
-#' chi-square, and deviance for one fitted topic model. Each index compares
-#' model-expected counts to a fixed baseline (the corpus word distribution) on a
-#' harmonized support per document, where rare words are collapsed into one bin as
-#' defined by [`optop_make_partition()`].
+#' Compute the goodness-of-fit indices \eqn{R^2_D(K)} of Lewis and Grossetti
+#' (2026) for one fitted topic model: the proportional reduction in
+#' discrepancy achieved by the \eqn{K}-topic model relative to the no-topics
+#' baseline in which every document follows the corpus word distribution,
+#' \deqn{R^2_D(K) = 1 - D(K) / D(\mathrm{null}),}{R2_D(K) = 1 - D(K)/D(null),}
+#' for the squared-error, Pearson chi-square, and deviance discrepancy
+#' families. Document-level indices are evaluated on the harmonized support
+#' of [`optop_make_partition()`]; word-level indices are evaluated on the
+#' unbinned vocabulary.
 #'
 #' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs).
 #' @param dtm A counts document–term matrix (documents × terms). Use `Matrix::dgCMatrix`
@@ -13,11 +17,11 @@
 #'   *aligned* to the model vocabulary (same features and order).
 #' @param baseline Result from [`optop_make_baseline()`], computed on the same aligned
 #'   counts DTM used for `partition`.
-#' @param macro Logical; if `TRUE`, also compute the macro index (equal-weight average of
+#' @param macro Logical; if `TRUE`, also compute the Macro index (equal-weight average of
 #'   the per-document indices). Default: `FALSE`.
-#' @param reopt Character scalar indicating optional re-optimization; routed per metric.
-#'   Allowed values include `"none"` (default), `"se"`, `"pearson"`, and `"deviance"`.
-#'   Unsupported values for a given metric are ignored.
+#' @param reopt `r lifecycle::badge("deprecated")` Character scalar indicating
+#'   optional re-optimization. The blending is not part of the methodology
+#'   and is scheduled for removal before v1.0.0; use the default `"none"`.
 #' @param level Character; aggregation level for the index. `"document"` (default) computes
 #'   document-level indices aggregated across words. `"word"` computes word-level indices
 #'   aggregated across documents.
@@ -25,17 +29,39 @@
 #'   during word-level computation. Smaller values use less memory but may be slower.
 #'   If `NULL` (default), automatically chosen based on corpus size to target ~1.5 GB
 #'   memory usage. Only used when `level = "word"`.
-#' @param ztest Logical; if `TRUE`, append a Z-test for cross-document inference.
-#'   Tests whether the topic model provides statistically significant improvement
-#'   over the no-topics baseline. Default: `FALSE`. Only applicable when `level = "document"`.
+#' @param ztest `r lifecycle::badge("deprecated")` Logical; if `TRUE`, append
+#'   the in-sample Z-test. The methodology reserves inference for held-out
+#'   evaluation, so the in-sample test is scheduled for removal before
+#'   v1.0.0; full-corpus indices are descriptive.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   index engine (default `1L`). Results are identical for any value; only
 #'   wall time changes.
 #'
 #' @details
 #' **Harmonized support.** For each document, rare words (as determined by
-#' [`optop_make_partition()`]) are collapsed into a single "min" bin. Indices are then
-#' evaluated on `{non-rare terms} ∪ {min}` to ensure comparability across \eqn{K}.
+#' [`optop_make_partition()`], whose union includes the no-topics baseline)
+#' are collapsed into a single "min" bin. Document-level indices are then
+#' evaluated on `{non-rare terms} ∪ {min}`, so that changes in the index
+#' across \eqn{K} reflect changes in model fit, not changes in binning.
+#' Because the harmonized set is a union over the whole model grid, the
+#' reported value at any fixed \eqn{K} depends on the pair (grid, `c`):
+#' compare indices across studies only under a common grid and `c`.
+#'
+#' **Interpretation.** The indices are descriptive effect sizes anchored by
+#' the null baseline (lower reference) and the saturated model (upper
+#' reference), not tests of correct specification. The deviance index is
+#' bounded above by one; the Pearson and squared-error indices are not
+#' confined to \eqn{[0, 1]}, and negative values are informative: the fitted
+#' model performs worse than the no-topics baseline under that discrepancy.
+#' In-sample values computed on the estimation corpus summarize descriptive
+#' fit and should not be the sole basis for choosing \eqn{K}.
+#'
+#' **Pearson min-bin rule.** For the chi-square family the collapsed min-bin
+#' of a document enters only when
+#' \eqn{\min(\min_K E^K_{j,\min}, B_{j,\min}) \ge c}{min(min_K E_min, B_min) >= c},
+#' decided once for the whole grid by [`optop_make_partition()`] and applied
+#' to the fitted and the null discrepancy simultaneously; excluded shares
+#' are reported.
 #'
 #' **Alignment requirements.** The following must share the same vocabulary and column
 #' order: the `dtm` passed to the index, the DTM used for `partition` and `baseline`, and the
@@ -46,32 +72,51 @@
 #' Do not pass weighted matrices (e.g., proportions from `quanteda::dfm_weight(scheme = "prop")`
 #' or tf-idf). If your workflow uses proportions elsewhere, reconstruct counts before calling.
 #'
-#' **Document-level aggregation** (`level = "document"`). Returns the micro index
-#' (e.g., \eqn{R^2_{SE}}{R2_SE}) and, if requested, the macro index
-#' (e.g., \eqn{\bar R^2_{SE}}{R2_SE_bar}), plus per-document components
-#' (e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
+#' **Document-level aggregation** (`level = "document"`). The Micro index
+#' pools discrepancies before the ratio and is therefore a
+#' discrepancy-weighted average of the document-level fits, with weights
+#' proportional to the baseline discrepancy \eqn{D_j(\mathrm{null})}{D_j(null)};
+#' the Macro index is their unweighted average. Both aggregate over the
+#' non-degenerate documents \eqn{J_+ = \{j : D_j(\mathrm{null}) > 0\}}{J+ = {j: D_j(null) > 0}}
+#' only, and degenerate documents carry an `NA` document-level index. The
+#' Micro–Macro gap is itself diagnostic: it equals the covariance between
+#' document-level fit and baseline discrepancy (normalized by the mean
+#' baseline discrepancy), so a positive gap indicates that fit concentrates
+#' in high-discrepancy (often long or atypical) documents. The returned
+#' `d_model` and `d_null` vectors support the recommended scatter of
+#' document-level fit against baseline discrepancy or length.
 #'
-#' **Word-level aggregation** (`level = "word"`). Returns per-word indices
-#' \eqn{R^2_{D,w}(K)}, plus Micro-Word (frequency-weighted) and Macro-Word (unweighted)
-#' corpus-level summaries. This perspective reveals which words are well-captured vs.
-#' poorly modeled by the topic structure.
-#'
-#' **Z-test** (`ztest = TRUE`). Implements a hypothesis test for cross-document inference.
-#' Under H0: \eqn{\mu_{R^2} \leq 0} (no improvement), the statistic \eqn{Z = \sqrt{J}\cdot \bar{R}^2_{Macro} / \hat{\sigma}_R}R
-#' is asymptotically \eqn{N(0,1)}. Requires `macro = TRUE` implicitly.
+#' **Word-level aggregation** (`level = "word"`). Word-level indices are
+#' computed on the unbinned vocabulary and are descriptive diagnostics: they
+#' reveal which words the topic structure captures well and which it
+#' mispredicts. The word-level deviance is the Poisson unit deviance
+#' \eqn{2\sum_j [N_{jw}\log(N_{jw}/E_{jw}) - (N_{jw}-E_{jw})]}{2 sum_j [N log(N/E) - (N - E)]},
+#' which is nonnegative term by term, so the word deviance index never
+#' exceeds one; for the corpus baseline the linear correction vanishes
+#' identically. Micro-Word weights words by their baseline discrepancy;
+#' Macro-Word averages the word-level indices over the words with positive
+#' baseline discrepancy (degenerate words carry `NA`). Restrict attention to
+#' words with adequate support when interpreting single-word values.
 #'
 #' @return When `level = "document"`, a list with:
-#' - `r2`: scalar micro index (e.g., \eqn{R^2_{SE}}{R2_SE}).
-#' - `r2_macro`: scalar macro index if `macro = TRUE`, otherwise `NULL`.
-#' - `r2_doc`: numeric vector (length J) with per-document contributions.
+#' - `r2`: scalar Micro index over \eqn{J_+}{J+}.
+#' - `r2_macro`: scalar Macro index if `macro = TRUE`, otherwise `NULL`.
+#' - `r2_doc`: numeric vector (length J) with per-document indices; `NA` for
+#'   documents with zero baseline discrepancy.
+#' - `d_model`, `d_null`: numeric vectors (length J) with the per-document
+#'   fitted and baseline discrepancies.
 #' - `K`: number of topics in `model`.
 #' - `metric`: one of `"se"`, `"chisq"`, `"deviance"`.
-#' - `ztest`: (if `ztest = TRUE`) list with `z`, `pval`, `se`, `ci`, `J`.
+#' - `ztest`: (if `ztest = TRUE`; deprecated) list with `z`, `pval`, `se`, `ci`, `J`.
 #'
 #' When `level = "word"`, a list with:
-#' - `r2_word`: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)}.
-#' - `r2_micro_word`: scalar Micro-Word index (frequency-weighted average).
-#' - `r2_macro_word`: scalar Macro-Word index (unweighted average).
+#' - `r2_word`: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)};
+#'   `NA` for words with zero baseline discrepancy.
+#' - `r2_micro_word`: scalar Micro-Word index (discrepancy-weighted average).
+#' - `r2_macro_word`: scalar Macro-Word index (unweighted average over words
+#'   with positive baseline discrepancy).
+#' - `d_model`, `d_null`: numeric vectors (length W) with the per-word fitted
+#'   and baseline discrepancies.
 #' - `K`: number of topics in `model`.
 #' - `metric`: one of `"se"`, `"chisq"`, `"deviance"`.
 #'
@@ -102,7 +147,7 @@
 #' )
 #'
 #' # Same DTM used at fit and evaluation --> no separate alignment here
-#' partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 5)
+#' partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
 #' baseline  <- optop_make_baseline(dtm = mydfm)
 #'
 #' # Choose model with k = 10
@@ -127,6 +172,9 @@
 #' internal helper: `optop_align_dtm_to_models()`.
 #'
 #' @references
+#' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+#' diagnostics for topic models. Working paper.
+#'
 #' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 #' topic model identification. *Journal of Machine Learning Research*,
 #' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
@@ -138,14 +186,16 @@
 #' @aliases optop_index_se optop_index_chisq optop_index_deviance
 NULL
 #' @describeIn optop_index Squared-error index \eqn{R^2_{SE}}{R2_SE}.
-#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row.
-#'   Combined with `reopt = "se"`, this guarantees non-negativity of \eqn{R^2}.
-#'   With `reopt = "none"` (default), the augmentation has no effect on results.
+#' @param add_baseline_topic `r lifecycle::badge("deprecated")` Logical; if
+#'   `TRUE`, augment topics with a baseline row to force non-negativity when
+#'   combined with `reopt = "se"`. The methodology treats negative indices as
+#'   informative, so the augmentation is scheduled for removal before v1.0.0.
+#'   Default: `FALSE` (no effect under `reopt = "none"`).
 #'   (Only for `optop_index_se()` and `optop_index_chisq()`).
 #' @export
 optop_index_se <- function(model, dtm, partition, baseline,
                            macro = FALSE, reopt = c("none", "se"),
-                           add_baseline_topic = TRUE,
+                           add_baseline_topic = FALSE,
                            level = c("document", "word"),
                            block_size = NULL,
                            ztest = FALSE,
@@ -153,6 +203,8 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  .optop_deprecate_index_args("optop_index_se", reopt, add_baseline_topic,
+                              ztest)
   .optop_index_se_impl(model, dtm, partition, baseline, macro, reopt,
                        add_baseline_topic, level, block_size, ztest,
                        n_threads = n_threads)
@@ -229,7 +281,6 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
   D_K <- numeric(J)
   D_null <- numeric(J)
-  r2_doc <- numeric(J)
   rare_mask <- partition$rare_mask
 
   for (start in seq(1L, J, by = block_size_doc)) {
@@ -272,30 +323,19 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
       D_K[j] <- sse_k
       D_null[j] <- sst_se
-      r2_doc[j] <- if (sst_se > 0) 1 - sse_k / sst_se else 0
     }
   }
 
-  r2_micro <- 1 - sum(D_K) / sum(D_null)
-  r2_macro <- mean(r2_doc[D_null > 0])
-  result <- list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
-                 r2_doc = r2_doc, K = K, metric = "se")
-  if (ztest) {
-    result$ztest <- .optop_ztest(r2_doc[D_null > 0], r2_macro)
-  }
-  result
+  .optop_index_result_doc(D_K, D_null, K, "se", macro, ztest)
 }
 
-#' @describeIn optop_index Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq}.
-#' @param add_baseline_topic Logical; if `TRUE`, augment topics with a baseline row.
-#'   Combined with `reopt = "se"`, this guarantees non-negativity of \eqn{R^2}.
-#'   With `reopt = "none"` (default), the augmentation has no effect on results.
-#' (Only for `optop_index_se()` and `optop_index_chisq()`).
+#' @describeIn optop_index Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq},
+#'   subject to the min-bin inclusion rule of [`optop_make_partition()`].
 #'
 #' @export
 optop_index_chisq <- function(model, dtm, partition, baseline,
                               macro = FALSE, reopt = c("none", "pearson"),
-                              add_baseline_topic = TRUE,
+                              add_baseline_topic = FALSE,
                               level = c("document", "word"),
                               block_size = NULL,
                               ztest = FALSE,
@@ -303,6 +343,9 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  .optop_deprecate_index_args("optop_index_chisq", reopt, add_baseline_topic,
+                              ztest)
+  if (level == "document") .optop_report_chisq_min(partition)
   .optop_index_chisq_impl(model, dtm, partition, baseline, macro, reopt,
                           add_baseline_topic, level, block_size, ztest,
                           n_threads = n_threads)
@@ -348,9 +391,12 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
   .optop_index_result_doc(eng$chisq$model, D_null, tp$K, "chisq", macro, ztest)
 }
 
-#' @describeIn optop_index Deviance index \eqn{R^2_{dev}}{R2_dev}.
-#'
-#' Based on the multinomial deviance; monotone in \eqn{K} under (approximate) ML fits.
+#' @describeIn optop_index Deviance index \eqn{R^2_{dev}}{R2_dev}, the
+#'   default likelihood-based summary: the grouped multinomial deviance at
+#'   document level and the Poisson unit deviance at word level. Bounded
+#'   above by one; under exact maximum likelihood and nesting the in-sample
+#'   document-level index is also nonnegative up to binning effects, a
+#'   guarantee that does not extend to approximate inference.
 #' @export
 optop_index_deviance <- function(model, dtm, partition, baseline,
                                  macro = FALSE, reopt = c("none", "deviance"),
@@ -361,6 +407,8 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  .optop_deprecate_index_args("optop_index_deviance", reopt,
+                              add_baseline_topic = FALSE, ztest)
   .optop_index_deviance_impl(model, dtm, partition, baseline, macro, reopt,
                              level, block_size, ztest,
                              n_threads = n_threads)
@@ -414,18 +462,17 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param metrics Character vector selecting which indices to compute. Any subset of
 #'   `c("se", "chisq", "deviance")`. Default: `c("se","chisq","deviance")`.
 #' @param c Positive scalar used inside [`optop_make_partition()`] to set the per-document
-#'   rare threshold \eqn{\tau_j = c / L_j}. Default: `5`.
+#'   rare threshold \eqn{\tau_j = c / L_j}. Default: `1`, the value the paper
+#'   adopts and recommends when the deviance index is primary; use `c = 5`
+#'   for Pearson-primary work and report sensitivity to `c`.
 #' @param macro Logical; if `TRUE`, also compute macro indices (equal-weight averages of
 #'   per-document indices). Default: `FALSE`.
-#' @param reopt Re-optimization mode forwarded to the underlying index:
-#'   - `"none"` (default): no re-optimization;
-#'   - `"se"`: enable SE blending in [`optop_index_se()`];
-#'   - `"deviance"`: reserved for a deviance-specific re-optimizer (if implemented).
-#'
-#'   Values are routed per metric (e.g., `"se"` only affects the SE column).
-#' @param add_baseline_topic Logical; forwarded to SE and chi-square indices to augment
-#'   the topics with a baseline row and guarantee non-negativity of their \eqn{R^2}.
-#'   Ignored by the deviance index. Default: `TRUE`.
+#' @param reopt `r lifecycle::badge("deprecated")` Re-optimization mode
+#'   forwarded to the underlying index; scheduled for removal before v1.0.0.
+#'   Use the default `"none"`.
+#' @param add_baseline_topic `r lifecycle::badge("deprecated")` Logical;
+#'   forwarded to the SE and chi-square indices to force non-negativity.
+#'   Scheduled for removal before v1.0.0. Default: `FALSE`.
 #' @param partition Optional precomputed result from [`optop_make_partition()`].
 #'   If `NULL`, it is computed internally from `models` and `dtm`.
 #' @param baseline Optional precomputed result from [`optop_make_baseline()`]. If `NULL`,
@@ -437,8 +484,9 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #'   during word-level computation. Smaller values use less memory but may be slower.
 #'   If `NULL` (default), automatically chosen based on corpus size to target ~1.5 GB
 #'   memory usage. Only used when `level = "word"`.
-#' @param ztest Logical; if `TRUE`, append Z-test statistics for cross-document inference.
-#'   Only applicable when `level = "document"`. Default: `FALSE`.
+#' @param ztest `r lifecycle::badge("deprecated")` Logical; if `TRUE`, append
+#'   the in-sample Z-test statistics. The methodology reserves inference for
+#'   held-out evaluation; scheduled for removal before v1.0.0. Default: `FALSE`.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   index engine and, when `partition` is computed internally, by the
 #'   partition kernel (default `1L`). Results are identical for any value.
@@ -499,12 +547,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #'   models   = VEM_models,
 #'   dtm      = mydfm,
 #'   metrics  = c("se","deviance"),
-#'   macro    = TRUE,
-#'   reopt    = "se"          # enable SE blending only
+#'   macro    = TRUE
 #' )
 #'
 #' # 2) Faster repeated runs: precompute and reuse partition/baseline
-#' part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 5)
+#' part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
 #' base <- optop_make_baseline(dtm = mydfm)
 #' tab2 <- optop_index_table(
 #'   models    = VEM_models,
@@ -520,14 +567,17 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' [`optop_index()`], [`optop_make_partition()`], [`optop_make_baseline()`]
 #'
 #' @references
+#' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+#' diagnostics for topic models. Working paper.
+#'
 #' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 #' topic model identification. *Journal of Machine Learning Research*,
 #' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
 #'
 #' @export
 optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
-                              c = 5, macro = FALSE, reopt = "none",
-                              add_baseline_topic = TRUE,
+                              c = 1, macro = FALSE, reopt = "none",
+                              add_baseline_topic = FALSE,
                               partition = NULL, baseline = NULL,
                               level = c("document", "word"),
                               block_size = NULL,
@@ -536,6 +586,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 
   level <- match.arg(level)
   stopifnot(length(models) >= 1)
+  .optop_deprecate_index_args("optop_index_table", reopt, add_baseline_topic,
+                              ztest)
   if (is.null(partition)) {
     partition <- optop_make_partition(models, dtm, c = c,
                                       n_threads = n_threads)
@@ -543,6 +595,9 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   if (is.null(baseline))  baseline  <- optop_make_baseline(dtm)
 
   metrics <- intersect(c("se", "chisq", "deviance"), metrics)
+  if ("chisq" %in% metrics && level == "document") {
+    .optop_report_chisq_min(partition)
+  }
   reopt_se <- if (reopt == "se") "se" else "none"
   # metrics evaluated by the fused engine in one sweep per model; the SE
   # re-optimization path needs the full baseline counts per document and
@@ -729,6 +784,19 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     N_t <- Matrix::t(N)
     mask_bits <- optop_pack_mask_core(partition$rare_mask)
     tww <- if (do_model) t(phi) else matrix(0, 0, 0)
+    # Pearson min-bin inclusion flags: partitions from OpTop < 0.13.0 lack
+    # the field and keep the pre-rule behavior (every min bin included)
+    min_ok <- partition$chisq_min_ok
+    if (is.null(min_ok)) {
+      if (do_chisq) {
+        cli::cli_warn(paste(
+          "the partition has no {.field chisq_min_ok} field (created by",
+          "OpTop < 0.13.0); the Pearson min bin is kept for every document.",
+          "Recompute {.fun optop_make_partition} to apply the inclusion rule."
+        ))
+      }
+      min_ok <- rep(TRUE, J)
+    }
     acc <- matrix(0, J, 6)
     for (start in seq(1L, J, by = block_size_doc)) {
       end <- min(start + block_size_doc - 1L, J)
@@ -739,7 +807,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
         matrix(0, 0, 0)
       }
       acc[j_idx, ] <- optop_index_doc_core(tww, theta_blk, N_t, start - 1L,
-                                           mask_bits, L[j_idx], pi_num, eps,
+                                           mask_bits, L[j_idx], pi_num,
+                                           min_ok[j_idx], eps,
                                            do_model, do_null,
                                            do_se, do_chisq, do_dev,
                                            n_threads)
@@ -751,26 +820,37 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 }
 
 # Assemble the document-level result list from the per-document
-# discrepancies, exactly as the pre-engine implementations did.
+# discrepancies. Aggregation is restricted to the non-degenerate documents
+# J+ = {j : D_null(j) > 0}: the Micro sums run over J+ only and degenerate
+# documents carry an undefined (NA) document-level index.
 .optop_index_result_doc <- function(D_K, D_null, K, metric, macro, ztest) {
-  r2_doc <- ifelse(D_null > 0, 1 - D_K / D_null, 0)
-  r2_micro <- 1 - sum(D_K) / sum(D_null)
-  r2_macro <- mean(r2_doc[D_null > 0])
+  valid <- D_null > 0
+  r2_doc <- rep(NA_real_, length(D_K))
+  r2_doc[valid] <- 1 - D_K[valid] / D_null[valid]
+  r2_micro <- 1 - sum(D_K[valid]) / sum(D_null[valid])
+  r2_macro <- mean(r2_doc[valid])
   result <- list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
-                 r2_doc = r2_doc, K = K, metric = metric)
+                 r2_doc = r2_doc, d_model = D_K, d_null = D_null,
+                 K = K, metric = metric)
   if (ztest) {
-    result$ztest <- .optop_ztest(r2_doc[D_null > 0], r2_macro)
+    result$ztest <- .optop_ztest(r2_doc[valid], r2_macro)
   }
   result
 }
 
-# Assemble the word-level result list from the per-word discrepancies.
+# Assemble the word-level result list from the per-word discrepancies. Words
+# with zero baseline discrepancy have no defined index (NA); both summaries
+# aggregate over V+ = {w : d_null(w) > 0} only.
 .optop_index_result_word <- function(d_w, d_null, vocab, K, metric) {
-  r2_word <- ifelse(d_null > 0, 1 - d_w / d_null, 0)
+  valid <- d_null > 0
+  r2_word <- rep(NA_real_, length(d_w))
+  r2_word[valid] <- 1 - d_w[valid] / d_null[valid]
   names(r2_word) <- vocab
+  omega <- d_null[valid] / sum(d_null[valid])
   list(r2_word = r2_word,
-       r2_micro_word = sum((d_null / sum(d_null)) * r2_word),
-       r2_macro_word = mean(r2_word[d_null > 0]),
+       r2_micro_word = sum(omega * r2_word[valid]),
+       r2_macro_word = mean(r2_word[valid]),
+       d_model = d_w, d_null = d_null,
        K = K, metric = metric)
 }
 
@@ -844,6 +924,77 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                              pi_row, metric, level, block_size, n_threads,
                              do_model = FALSE, do_null = TRUE)
   eng[[metric]]$null
+}
+
+#' Deprecation gate for the non-paper index arguments
+#'
+#' Emits the lifecycle warnings for the three features that Lewis and
+#' Grossetti (2026) does not support: the re-optimization blending, the
+#' baseline-topic augmentation (both enforce non-negativity, whereas the
+#' methodology treats negative indices as informative), and the in-sample
+#' Z-test (the methodology reserves inference for held-out evaluation).
+#' Behavior is unchanged until removal before v1.0.0.
+#'
+#' @param fn Name of the calling exported function, for the warning text.
+#' @param reopt,add_baseline_topic,ztest The argument values to inspect.
+#'
+#' @return Invisibly `NULL`; called for its side effects.
+#'
+#' @keywords internal
+.optop_deprecate_index_args <- function(fn, reopt, add_baseline_topic,
+                                        ztest) {
+  if (!identical(reopt, "none")) {
+    lifecycle::deprecate_warn(
+      when = "0.13.0",
+      what = paste0(fn, "(reopt)"),
+      details = paste("The re-optimization blending is not part of the",
+                      "methodology of Lewis and Grossetti (2026) and will be",
+                      "removed before v1.0.0.")
+    )
+  }
+  if (isTRUE(add_baseline_topic)) {
+    lifecycle::deprecate_warn(
+      when = "0.13.0",
+      what = paste0(fn, "(add_baseline_topic)"),
+      details = paste("The augmentation enforces non-negativity, while the",
+                      "methodology treats negative indices as informative;",
+                      "it will be removed before v1.0.0.")
+    )
+  }
+  if (isTRUE(ztest)) {
+    lifecycle::deprecate_warn(
+      when = "0.13.0",
+      what = paste0(fn, "(ztest)"),
+      details = paste("The methodology reserves inference for held-out",
+                      "evaluation; the in-sample Z-test will be removed",
+                      "before v1.0.0.")
+    )
+  }
+  invisible(NULL)
+}
+
+#' Report the Pearson min-bin exclusions of a partition
+#'
+#' Implements the reporting side of the inclusion rule: when any document's
+#' collapsed min-bin fails
+#' \eqn{\min(\min_K E^K_{j,\min}, B_{j,\min}) \ge c}{min(min_K E_min, B_min) >= c},
+#' the share of documents affected and the mean excluded observed mass are
+#' signalled once per call.
+#'
+#' @param partition A partition from [optop_make_partition()].
+#'
+#' @return Invisibly `NULL`; called for its side effect.
+#'
+#' @keywords internal
+.optop_report_chisq_min <- function(partition) {
+  rep <- partition$chisq_min_report
+  if (is.null(rep) || !isTRUE(rep$n_excluded > 0)) return(invisible(NULL))
+  cli::cli_alert_info(paste(
+    "Pearson min bin excluded for {rep$n_excluded} document{?s}",
+    "({sprintf('%.1f%%', 100 * rep$share)} of the corpus; mean excluded",
+    "observed mass {sprintf('%.4f', rep$excluded_mass)})"
+  ))
+  invisible(NULL)
 }
 
 #' Z-test for cross-document inference on the Macro R-squared index
