@@ -22,8 +22,8 @@ optop_index_word_core <- function(E_block, N, w_start, w_len, L, pi_w, eps, do_m
 }
 
 #' @keywords internal
-optop_index_doc_core <- function(tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
-    .Call(`_OpTop_optop_index_doc_core`, tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
+optop_index_doc_core <- function(tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
+    .Call(`_OpTop_optop_index_doc_core`, tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
 }
 
 #' @keywords internal
@@ -37,8 +37,13 @@ optimal_topic_core_legacy <- function(lda_models, weighted_dfm, q, doc_map) {
 }
 
 #' @keywords internal
-optop_partition_fill_core <- function(rare_mask, theta_list, phi_list, tau, block, n_threads) {
-    invisible(.Call(`_OpTop_optop_partition_fill_core`, rare_mask, theta_list, phi_list, tau, block, n_threads))
+optop_partition_fill_core <- function(rare_mask, theta_list, phi_list, pi_glob, tau, block, n_threads) {
+    invisible(.Call(`_OpTop_optop_partition_fill_core`, rare_mask, theta_list, phi_list, pi_glob, tau, block, n_threads))
+}
+
+#' @keywords internal
+optop_partition_minmass_core <- function(rare_mask, theta_list, phi_list, block, n_threads) {
+    .Call(`_OpTop_optop_partition_minmass_core`, rare_mask, theta_list, phi_list, block, n_threads)
 }
 
 #' @keywords internal

@@ -43,17 +43,19 @@ genuine Type-I error rate (document lengths are supplied via
 \code{doc_lengths}).
 \item \strong{How much does a model explain?}
 \code{\link[=optop_index_se]{optop_index_se()}}, \code{\link[=optop_index_chisq]{optop_index_chisq()}} and \code{\link[=optop_index_deviance]{optop_index_deviance()}}
-compute regression-style \eqn{R^2} indices against the no-topics corpus
-baseline, at the document or word level, with micro and macro
-aggregations and an optional cross-document Z-test;
+compute the goodness-of-fit indices of Lewis and Grossetti (2026): the
+proportional reduction in discrepancy relative to the no-topics corpus
+baseline, at the document or word level, with Micro
+(discrepancy-weighted) and Macro (unweighted) aggregations;
 \code{\link[=optop_index_table]{optop_index_table()}} sweeps them across a whole grid of models.
 \item \strong{Are comparisons across K fair?}
 \code{\link[=optop_make_partition]{optop_make_partition()}} fixes a document-specific rare-word partition
-across the grid and \code{\link[=optop_make_baseline]{optop_make_baseline()}} fixes the corpus baseline,
-so every model is evaluated on a common support.
+across the grid, with the baseline included in the harmonized union,
+and \code{\link[=optop_make_baseline]{optop_make_baseline()}} fixes the corpus baseline, so every model
+is evaluated on a common support.
 }
 
-The vignette walks through the full workflow on the U.S. Presidential
+The vignette presents the full workflow on the U.S. Presidential
 Inaugural Address corpus, including the role of the envelope parameter \code{q}
 and the calibrated p-values: \code{vignette("OpTop")}.
 
@@ -66,6 +68,9 @@ v1.0.0, together with \code{selection = "legacy"}.
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
+
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
 
 Haldane, J. B. S. (1937). The exact value of the moments of the
 distribution of chi-square. \emph{Biometrika}, 29, 133--143.

@@ -25,7 +25,13 @@
 //   then floored;
 // * deviance: contributions 2 * n * log(n / max(e, eps)) with the
 //   0 * log(0) = 0 convention; the min bin uses the sum of the unfloored
-//   expected counts, floored at eps.
+//   expected counts, floored at eps. At word level the FITTED deviance is
+//   the Poisson unit deviance 2 * [n log(n/e) - (n - e)]: the linear
+//   correction (unfloored e) makes every summand nonnegative, so the
+//   word-level index never exceeds one. The correction is identically zero
+//   on the null side because sum_j B_jw = sum_j N_jw for the in-sample
+//   corpus baseline, and at document level because the binned fitted and
+//   empirical vectors are both probability vectors on the support.
 //
 // Threading contract (as everywhere in the package): each document (or word)
 // is owned by exactly one thread and writes its own output slot; there are
@@ -134,6 +140,7 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
             double se = 0.0, se_n = 0.0;
             double x2 = 0.0, x2_n = 0.0;
             double dv = 0.0, dv_n = 0.0;
+            double dv_lin = 0.0;
 
             for (std::size_t j = 0; j < J; ++j) {
                 const double n = n_dense[j];
@@ -148,9 +155,14 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
                         const double d = n - ef;
                         x2 += d * d / ef;
                     }
-                    if (do_dev && n > 0.0) {
-                        const double ef = e < eps ? eps : e;
-                        dv += n * (std::log(n) - std::log(ef));
+                    if (do_dev) {
+                        // Poisson unit deviance: the linear term uses the
+                        // unfloored expectation and runs over every document
+                        dv_lin += n - e;
+                        if (n > 0.0) {
+                            const double ef = e < eps ? eps : e;
+                            dv += n * (std::log(n) - std::log(ef));
+                        }
                     }
                 }
                 if (do_null) {
@@ -175,7 +187,7 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
             o[c + static_cast<std::size_t>(w_len)] = se_n;
             o[c + 2 * static_cast<std::size_t>(w_len)] = x2;
             o[c + 3 * static_cast<std::size_t>(w_len)] = x2_n;
-            o[c + 4 * static_cast<std::size_t>(w_len)] = 2.0 * dv;
+            o[c + 4 * static_cast<std::size_t>(w_len)] = 2.0 * (dv - dv_lin);
             o[c + 5 * static_cast<std::size_t>(w_len)] = 2.0 * dv_n;
 
             for (const arma::uword j : touched) {
@@ -204,6 +216,7 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                                          const Rcpp::RawVector& mask_bits,
                                          const Rcpp::NumericVector& L_blk,
                                          const Rcpp::NumericVector& pi_row,
+                                         const Rcpp::LogicalVector& chisq_min_ok,
                                          double eps,
                                          bool do_model,
                                          bool do_null,
@@ -214,6 +227,9 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
 {
     const std::size_t W = N_t.n_rows;
     const int b = L_blk.size();
+    if (chisq_min_ok.size() != b) {
+        Rcpp::stop("chisq_min_ok must have one entry per document of the block");
+    }
     if (do_model) {
         if (tww.n_rows != W) {
             Rcpp::stop("tww must have one row per feature");
@@ -238,6 +254,7 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
     double* o = REAL(out);
     const double* Lp = &L_blk[0];
     const double* pip = &pi_row[0];
+    const int* min_ok = LOGICAL(chisq_min_ok);
     const unsigned char* bits = RAW(mask_bits);
 
 #ifdef _OPENMP
@@ -361,10 +378,17 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                 o[jj] = se_full - se_rare + d * d;
             }
             if (do_chisq) {
-                const double em = E_min_f < eps ? eps : E_min_f;
-                const double d = N_min - em;
-                o[jj + 2 * static_cast<std::size_t>(b)] =
-                    x2_full - x2_rare + d * d / em;
+                // Pearson inclusion rule: the min bin enters only when the
+                // grid-wide flag holds; excluded bins drop from BOTH sides
+                if (min_ok[jj] == 1) {
+                    const double em = E_min_f < eps ? eps : E_min_f;
+                    const double d = N_min - em;
+                    o[jj + 2 * static_cast<std::size_t>(b)] =
+                        x2_full - x2_rare + d * d / em;
+                } else {
+                    o[jj + 2 * static_cast<std::size_t>(b)] =
+                        x2_full - x2_rare;
+                }
             }
             if (do_dev) {
                 const double em = E_min < eps ? eps : E_min;
@@ -382,10 +406,15 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                     seN_full - seN_rare + d * d;
             }
             if (do_chisq) {
-                const double bm = B_min_raw < eps ? eps : B_min_raw;
-                const double d = N_min - bm;
-                o[jj + 3 * static_cast<std::size_t>(b)] =
-                    x2N_full - x2N_rare + d * d / bm;
+                if (min_ok[jj] == 1) {
+                    const double bm = B_min_raw < eps ? eps : B_min_raw;
+                    const double d = N_min - bm;
+                    o[jj + 3 * static_cast<std::size_t>(b)] =
+                        x2N_full - x2N_rare + d * d / bm;
+                } else {
+                    o[jj + 3 * static_cast<std::size_t>(b)] =
+                        x2N_full - x2N_rare;
+                }
             }
             if (do_dev) {
                 const double bm = B_min_raw < eps ? eps : B_min_raw;

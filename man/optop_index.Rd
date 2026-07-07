@@ -5,7 +5,7 @@
 \alias{optop_index_se}
 \alias{optop_index_chisq}
 \alias{optop_index_deviance}
-\title{OpTop goodness-of-fit indices for a single LDA model}
+\title{OpTop goodness-of-fit indices for a single topic model}
 \usage{
 optop_index_se(
   model,
@@ -14,7 +14,7 @@ optop_index_se(
   baseline,
   macro = FALSE,
   reopt = c("none", "se"),
-  add_baseline_topic = TRUE,
+  add_baseline_topic = FALSE,
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
@@ -28,7 +28,7 @@ optop_index_chisq(
   baseline,
   macro = FALSE,
   reopt = c("none", "pearson"),
-  add_baseline_topic = TRUE,
+  add_baseline_topic = FALSE,
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
@@ -60,16 +60,18 @@ or a \code{quanteda::dfm} that represents raw counts (not weighted).}
 \item{baseline}{Result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}, computed on the same aligned
 counts DTM used for \code{partition}.}
 
-\item{macro}{Logical; if \code{TRUE}, also compute the macro index (equal-weight average of
+\item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{Character scalar indicating optional re-optimization; routed per metric.
-Allowed values include \code{"none"} (default), \code{"se"}, \code{"pearson"}, and \code{"deviance"}.
-Unsupported values for a given metric are ignored.}
+\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Character scalar indicating
+optional re-optimization. The blending is not part of the methodology
+and is scheduled for removal before v1.0.0; use the default \code{"none"}.}
 
-\item{add_baseline_topic}{Logical; if \code{TRUE}, augment topics with a baseline row.
-Combined with \code{reopt = "se"}, this guarantees non-negativity of \eqn{R^2}.
-With \code{reopt = "none"} (default), the augmentation has no effect on results.
+\item{add_baseline_topic}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if
+\code{TRUE}, augment topics with a baseline row to force non-negativity when
+combined with \code{reopt = "se"}. The methodology treats negative indices as
+informative, so the augmentation is scheduled for removal before v1.0.0.
+Default: \code{FALSE} (no effect under \code{reopt = "none"}).
 (Only for \code{optop_index_se()} and \code{optop_index_chisq()}).}
 
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
@@ -81,9 +83,10 @@ during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
 
-\item{ztest}{Logical; if \code{TRUE}, append a Z-test for cross-document inference.
-Tests whether the topic model provides statistically significant improvement
-over the no-topics baseline. Default: \code{FALSE}. Only applicable when \code{level = "document"}.}
+\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
+the in-sample Z-test. The methodology reserves inference for held-out
+evaluation, so the in-sample test is scheduled for removal before
+v1.0.0; full-corpus indices are descriptive.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only
@@ -92,34 +95,66 @@ wall time changes.}
 \value{
 When \code{level = "document"}, a list with:
 \itemize{
-\item \code{r2}: scalar micro index (e.g., \eqn{R^2_{SE}}{R2_SE}).
-\item \code{r2_macro}: scalar macro index if \code{macro = TRUE}, otherwise \code{NULL}.
-\item \code{r2_doc}: numeric vector (length J) with per-document contributions.
+\item \code{r2}: scalar Micro index over \eqn{J_+}{J+}.
+\item \code{r2_macro}: scalar Macro index if \code{macro = TRUE}, otherwise \code{NULL}.
+\item \code{r2_doc}: numeric vector (length J) with per-document indices; \code{NA} for
+documents with zero baseline discrepancy.
+\item \code{d_model}, \code{d_null}: numeric vectors (length J) with the per-document
+fitted and baseline discrepancies.
 \item \code{K}: number of topics in \code{model}.
 \item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
-\item \code{ztest}: (if \code{ztest = TRUE}) list with \code{z}, \code{pval}, \code{se}, \code{ci}, \code{J}.
+\item \code{ztest}: (if \code{ztest = TRUE}; deprecated) list with \code{z}, \code{pval}, \code{se}, \code{ci}, \code{J}.
 }
 
 When \code{level = "word"}, a list with:
 \itemize{
-\item \code{r2_word}: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)}.
-\item \code{r2_micro_word}: scalar Micro-Word index (frequency-weighted average).
-\item \code{r2_macro_word}: scalar Macro-Word index (unweighted average).
+\item \code{r2_word}: named numeric vector (length W) of per-word \eqn{R^2_{D,w}(K)};
+\code{NA} for words with zero baseline discrepancy.
+\item \code{r2_micro_word}: scalar Micro-Word index (discrepancy-weighted average).
+\item \code{r2_macro_word}: scalar Macro-Word index (unweighted average over words
+with positive baseline discrepancy).
+\item \code{d_model}, \code{d_null}: numeric vectors (length W) with the per-word fitted
+and baseline discrepancies.
 \item \code{K}: number of topics in \code{model}.
 \item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
 }
 }
 \description{
-Compute regression-style goodness-of-fit indices based on sum of squared errors (SE),
-chi-square, and deviance for one fitted topic model. Each index compares
-model-expected counts to a fixed baseline (the corpus word distribution) on a
-harmonized support per document, where rare words are collapsed into one bin as
-defined by \code{\link[=optop_make_partition]{optop_make_partition()}}.
+Compute the goodness-of-fit indices \eqn{R^2_D(K)} of Lewis and Grossetti
+(2026) for one fitted topic model: the proportional reduction in
+discrepancy achieved by the \eqn{K}-topic model relative to the no-topics
+baseline in which every document follows the corpus word distribution,
+\deqn{R^2_D(K) = 1 - D(K) / D(\mathrm{null}),}{R2_D(K) = 1 - D(K)/D(null),}
+for the squared-error, Pearson chi-square, and deviance discrepancy
+families. Document-level indices are evaluated on the harmonized support
+of \code{\link[=optop_make_partition]{optop_make_partition()}}; word-level indices are evaluated on the
+unbinned vocabulary.
 }
 \details{
 \strong{Harmonized support.} For each document, rare words (as determined by
-\code{\link[=optop_make_partition]{optop_make_partition()}}) are collapsed into a single "min" bin. Indices are then
-evaluated on \verb{\{non-rare terms\} ∪ \{min\}} to ensure comparability across \eqn{K}.
+\code{\link[=optop_make_partition]{optop_make_partition()}}, whose union includes the no-topics baseline)
+are collapsed into a single "min" bin. Document-level indices are then
+evaluated on \verb{\{non-rare terms\} ∪ \{min\}}, so that changes in the index
+across \eqn{K} reflect changes in model fit, not changes in binning.
+Because the harmonized set is a union over the whole model grid, the
+reported value at any fixed \eqn{K} depends on the pair (grid, \code{c}):
+compare indices across studies only under a common grid and \code{c}.
+
+\strong{Interpretation.} The indices are descriptive effect sizes anchored by
+the null baseline (lower reference) and the saturated model (upper
+reference), not tests of correct specification. The deviance index is
+bounded above by one; the Pearson and squared-error indices are not
+confined to \eqn{[0, 1]}, and negative values are informative: the fitted
+model performs worse than the no-topics baseline under that discrepancy.
+In-sample values computed on the estimation corpus summarize descriptive
+fit and should not be the sole basis for choosing \eqn{K}.
+
+\strong{Pearson min-bin rule.} For the chi-square family the collapsed min-bin
+of a document enters only when
+\eqn{\min(\min_K E^K_{j,\min}, B_{j,\min}) \ge c}{min(min_K E_min, B_min) >= c},
+decided once for the whole grid by \code{\link[=optop_make_partition]{optop_make_partition()}} and applied
+to the fitted and the null discrepancy simultaneously; excluded shares
+are reported.
 
 \strong{Alignment requirements.} The following must share the same vocabulary and column
 order: the \code{dtm} passed to the index, the DTM used for \code{partition} and \code{baseline}, and the
@@ -130,29 +165,45 @@ recompute \code{partition} and \code{baseline}.
 Do not pass weighted matrices (e.g., proportions from \code{quanteda::dfm_weight(scheme = "prop")}
 or tf-idf). If your workflow uses proportions elsewhere, reconstruct counts before calling.
 
-\strong{Document-level aggregation} (\code{level = "document"}). Returns the micro index
-(e.g., \eqn{R^2_{SE}}{R2_SE}) and, if requested, the macro index
-(e.g., \eqn{\bar R^2_{SE}}{R2_SE_bar}), plus per-document components
-(e.g., \eqn{R^2_{SE,j}}{R2_SE,j}).
+\strong{Document-level aggregation} (\code{level = "document"}). The Micro index
+pools discrepancies before the ratio and is therefore a
+discrepancy-weighted average of the document-level fits, with weights
+proportional to the baseline discrepancy \eqn{D_j(\mathrm{null})}{D_j(null)};
+the Macro index is their unweighted average. Both aggregate over the
+non-degenerate documents \eqn{J_+ = \{j : D_j(\mathrm{null}) > 0\}}{J+ = {j: D_j(null) > 0}}
+only, and degenerate documents carry an \code{NA} document-level index. The
+Micro–Macro gap is itself diagnostic: it equals the covariance between
+document-level fit and baseline discrepancy (normalized by the mean
+baseline discrepancy), so a positive gap indicates that fit concentrates
+in high-discrepancy (often long or atypical) documents. The returned
+\code{d_model} and \code{d_null} vectors support the recommended scatter of
+document-level fit against baseline discrepancy or length.
 
-\strong{Word-level aggregation} (\code{level = "word"}). Returns per-word indices
-\eqn{R^2_{D,w}(K)}, plus Micro-Word (frequency-weighted) and Macro-Word (unweighted)
-corpus-level summaries. This perspective reveals which words are well-captured vs.
-poorly modeled by the topic structure.
-
-\strong{Z-test} (\code{ztest = TRUE}). Implements a hypothesis test for cross-document inference.
-Under H0: \eqn{\mu_{R^2} \leq 0} (no improvement), the statistic \eqn{Z = \sqrt{J}\cdot \bar{R}^2_{Macro} / \hat{\sigma}_R}R
-is asymptotically \eqn{N(0,1)}. Requires \code{macro = TRUE} implicitly.
+\strong{Word-level aggregation} (\code{level = "word"}). Word-level indices are
+computed on the unbinned vocabulary and are descriptive diagnostics: they
+reveal which words the topic structure captures well and which it
+mispredicts. The word-level deviance is the Poisson unit deviance
+\eqn{2\sum_j [N_{jw}\log(N_{jw}/E_{jw}) - (N_{jw}-E_{jw})]}{2 sum_j [N log(N/E) - (N - E)]},
+which is nonnegative term by term, so the word deviance index never
+exceeds one; for the corpus baseline the linear correction vanishes
+identically. Micro-Word weights words by their baseline discrepancy;
+Macro-Word averages the word-level indices over the words with positive
+baseline discrepancy (degenerate words carry \code{NA}). Restrict attention to
+words with adequate support when interpreting single-word values.
 }
 \section{Functions}{
 \itemize{
 \item \code{optop_index_se()}: Squared-error index \eqn{R^2_{SE}}{R2_SE}.
 
-\item \code{optop_index_chisq()}: Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq}.
+\item \code{optop_index_chisq()}: Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq},
+subject to the min-bin inclusion rule of \code{\link[=optop_make_partition]{optop_make_partition()}}.
 
-\item \code{optop_index_deviance()}: Deviance index \eqn{R^2_{dev}}{R2_dev}.
-
-Based on the multinomial deviance; monotone in \eqn{K} under (approximate) ML fits.
+\item \code{optop_index_deviance()}: Deviance index \eqn{R^2_{dev}}{R2_dev}, the
+default likelihood-based summary: the grouped multinomial deviance at
+document level and the Poisson unit deviance at word level. Bounded
+above by one; under exact maximum likelihood and nesting the in-sample
+document-level index is also nonnegative up to binning effects, a
+guarantee that does not extend to approximate inference.
 
 }}
 \examples{
@@ -182,7 +233,7 @@ VEM_models <- lapply(
 )
 
 # Same DTM used at fit and evaluation --> no separate alignment here
-partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 5)
+partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
 baseline  <- optop_make_baseline(dtm = mydfm)
 
 # Choose model with k = 10
@@ -204,6 +255,9 @@ res_dev <- optop_index_deviance(VEM_models[[9]], mydfm, partition, baseline)
 
 }
 \references{
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
+
 Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
 topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}

@@ -1,4 +1,5 @@
 test_that("optop_index_table reproduces the single-model document indices", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   tab <- optop_index_table(fx$models, fx$dtm,
                            metrics = c("se", "chisq", "deviance"),
@@ -90,6 +91,7 @@ test_that("internally computed partition/baseline match precomputed ones", {
 })
 
 test_that("reopt = 'se' is routed to the SE metric only", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   tab_none <- optop_index_table(fx$models, fx$dtm,
                                 metrics = c("se", "chisq"), reopt = "none",
