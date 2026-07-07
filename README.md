@@ -124,7 +124,7 @@ res_opt   <- optimal_topic(lda_models = VEM_models,
                            verbose = TRUE)
 
 # 4) Goodness-of-fit across K (use counts here)
-part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 5)
+part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 1)
 base      <- optop_make_baseline(dtm = dfm_counts)
 tab       <- optop_index_table(models = VEM_models, 
                                dtm = dfm_counts,

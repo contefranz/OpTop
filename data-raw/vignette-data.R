@@ -145,7 +145,7 @@ picks <- data.frame(
 ## Part 1b -- discrepancy indices on the inaugural corpus ---------------------
 
 dtm_counts <- methods::as(mydfm_sub, "CsparseMatrix")
-partition <- optop_make_partition(VEM_models, dtm_counts, c = 5)
+partition <- optop_make_partition(VEM_models, dtm_counts, c = 1)
 baseline <- optop_make_baseline(dtm_counts)
 index_tab <- optop_index_table(VEM_models, dtm_counts,
                                metrics = c("se", "chisq", "deviance"),
@@ -204,7 +204,7 @@ sim_picks <- data.frame(
 )
 
 sim_dtm <- methods::as(sim_corpus, "CsparseMatrix")
-sim_partition <- optop_make_partition(sim_models, sim_dtm, c = 5)
+sim_partition <- optop_make_partition(sim_models, sim_dtm, c = 1)
 sim_baseline <- optop_make_baseline(sim_dtm)
 sim_index_tab <- optop_index_table(sim_models, sim_dtm,
                                    metrics = c("se", "chisq", "deviance"),
