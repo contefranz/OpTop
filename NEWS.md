@@ -1,3 +1,60 @@
+# OpTop 0.13.0
+
+The alignment release: the goodness-of-fit indices, the harmonized partition, and
+the baseline now follow Lewis and Grossetti (2026), "Goodness-of-Fit Indices and
+Diagnostics for Topic Models" (working paper), exactly.
+
+### Breaking Changes
+
+* **The harmonized rare-word set includes the no-topics baseline**: a word is now
+  rare in document `j` when `min(pi_glob(w), min_K i_jw) < tau_j`, as the paper
+  defines `C*_j`. All non-min expected counts are therefore bounded below by `c` on
+  the active support, for the fitted models and the baseline alike. Masks, and hence
+  all index values, change relative to 0.12.0.
+
+* **Pearson min-bin inclusion rule**: the collapsed min-bin enters the chi-square
+  discrepancy only when `min(min_K E_min, B_min) >= c`, decided once for the whole
+  grid by `optop_make_partition()` (new `chisq_min_ok` field) and applied to the
+  fitted and the null side simultaneously. The share of documents affected and the
+  excluded observed mass are reported. Partitions computed by earlier versions keep
+  the old always-include behavior with a warning.
+
+* **Word-level deviance is the Poisson unit deviance**: the fitted side gains the
+  linear correction `-(N - E)`, making every summand nonnegative and bounding the
+  word-level index by one. The null side is unchanged, since the correction vanishes
+  identically for the corpus baseline.
+
+* **Aggregation restricts to non-degenerate units**: the Micro index sums over the
+  documents (words) with positive baseline discrepancy only, and degenerate units
+  now carry `NA` instead of `0` in `r2_doc` and `r2_word`.
+
+* **Default `c` is now 1** in `optop_make_partition()` and `optop_index_table()`,
+  the value the paper adopts and recommends when the deviance index is primary;
+  `c = 5` remains appropriate for Pearson-primary work and explicit calls are
+  unaffected.
+
+### Deprecations (removal before v1.0.0)
+
+* `ztest`: the methodology reserves inference for held-out evaluation; the
+  in-sample Z-test is deprecated and full-corpus indices are documented as
+  descriptive.
+* `reopt` and `add_baseline_topic`: both enforce non-negativity, while the
+  methodology treats negative indices as informative. `add_baseline_topic`
+  defaults to `FALSE` (numerically a no-op under `reopt = "none"`).
+
+### Minor Changes
+
+* Document- and word-level results gain `d_model` and `d_null`, the per-unit fitted
+  and baseline discrepancies, supporting the paper's recommended fit-versus-baseline
+  scatter diagnostics.
+* The index documentation is rewritten in the paper's terms: grid dependence of the
+  harmonized support, per-family interpretation bounds, Micro as the
+  discrepancy-weighted average, and the Micro-Macro gap as a covariance diagnostic.
+* The efficiency contract of 0.12.0 is preserved: the baseline enters the partition
+  kernel as the seed of the running minimum (no extra cost), the inclusion rule adds
+  one blocked gemm sweep per model at partition time only, and all kernels remain
+  bit-identical for any `n_threads`.
+
 # OpTop 0.12.0
 
 The C++ performance release: both hot paths of `optimal_topic()` now run in
