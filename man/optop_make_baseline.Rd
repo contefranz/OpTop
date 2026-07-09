@@ -4,18 +4,26 @@
 \alias{optop_make_baseline}
 \title{Global Corpus Baseline for OpTop Indices}
 \usage{
-optop_make_baseline(dtm)
+optop_make_baseline(dtm, smooth_lambda = 0)
 }
 \arguments{
 \item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
 columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.}
+
+\item{smooth_lambda}{Nonnegative additive smoothing constant:
+\eqn{\hat\pi^{\lambda}_{\mathrm{glob}}(w) \propto N_{\cdot w} + \lambda}{pi^lambda_glob(w) proportional to N_.w + lambda}.
+Default \code{0} (no smoothing, the in-sample construction). A positive
+value keeps every baseline probability strictly positive, the smoothing
+option of the paper's held-out support convention; sensitivity to
+\eqn{\lambda}{lambda} should be reported.}
 }
 \value{
 A list with:
 \itemize{
 \item \code{pi_glob}: numeric vector of length \code{W} with
 \eqn{\pi_{\mathrm{glob}}(w) = N_{\cdot w} / N_{\cdot \cdot}}, i.e., the
-corpus-level term probabilities.
+corpus-level term probabilities (smoothed when
+\code{smooth_lambda > 0}).
 }
 }
 \description{
@@ -32,7 +40,10 @@ per-document baseline counts on the same evaluation support defined by
 \code{optop_make_partition()}. Keeping this baseline fixed across \eqn{K}
 enables interpretable, regression-style \eqn{R^2} measures: the null and
 the saturated models are the two interpretative boundaries between which
-every fitted \eqn{K}-topic model lies.
+every fitted \eqn{K}-topic model lies. For held-out evaluation, compute
+the baseline on the \emph{training} corpus and pass it to
+\code{\link[=optop_index_holdout]{optop_index_holdout()}}; words absent from the training sample have zero
+baseline probability unless \code{smooth_lambda > 0}.
 }
 \examples{
 \dontrun{
