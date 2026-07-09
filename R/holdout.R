@@ -239,8 +239,9 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 #' @return A list with the augmented dtm (`dtm_aug`), augmented baseline
 #'   probabilities and vocabulary (`pi_aug`, `vocab_aug`), the per-model
 #'   evaluation containers (`tp_eval`, theta folded in and phi augmented),
-#'   the aligned unaugmented counts (`dtm_aligned`), the topic grid (`K`)
-#'   and the training vocabulary (`vocab_tr`).
+#'   the aligned unaugmented counts (`dtm_aligned`), the models reordered to
+#'   the ascending topic grid (`models`), the topic grid (`K`) and the
+#'   training vocabulary (`vocab_tr`).
 #'
 #' @keywords internal
 .optop_holdout_prepare <- function(models, dtm_eval, baseline, ...) {
@@ -338,7 +339,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 
   list(dtm_aug = dtm_aug, dtm_aligned = dtm_aligned,
        pi_aug = pi_aug, vocab_aug = vocab_aug, vocab_tr = vocab_tr,
-       tp_eval = tp_eval, K = K)
+       models = models, tp_eval = tp_eval, K = K)
 }
 
 #' Held-out score statistics for one (metric, K) cell

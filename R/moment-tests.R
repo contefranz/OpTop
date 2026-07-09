@@ -178,19 +178,20 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
   )
 
   K <- prep$K
-  rows <- vector("list", length(models))
-  moments <- stats::setNames(vector("list", length(models)),
+  n_models <- length(prep$models)
+  rows <- vector("list", n_models)
+  moments <- stats::setNames(vector("list", n_models),
                              as.character(K))
   instruments <- if (type == "fit") {
-    stats::setNames(vector("list", length(models)), as.character(K))
+    stats::setNames(vector("list", n_models), as.character(K))
   } else {
     Z_fixed
   }
 
-  for (i_mod in seq_along(models)) {
+  for (i_mod in seq_along(prep$models)) {
     Zi <- if (type == "fit") {
-      .optop_z_fit(models[[i_mod]], dtm_train, baseline, vocab, strata,
-                   min_doc_freq, n_threads)
+      .optop_z_fit(prep$models[[i_mod]], dtm_train, baseline, vocab,
+                   strata, min_doc_freq, n_threads)
     } else {
       Z_fixed
     }

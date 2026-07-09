@@ -104,6 +104,33 @@ test_that("multiple-testing adjustments are applied to the marginal tests", {
   expect_equal(m_bon$pval_adj, pmin(1, m_bon$pval * 3), tolerance = 1e-12)
 })
 
+test_that("fit-stratified moments are invariant to model-grid order", {
+  hx <- optop_holdout_fixture()
+  args <- list(dtm_eval = hx$ev, dtm_train = hx$tr, type = "fit",
+               strata = 3, min_doc_freq = 1)
+  ordered <- do.call(optop_moment_test, c(list(models = hx$models), args))
+  reversed <- do.call(optop_moment_test,
+                      c(list(models = rev(hx$models)), args))
+
+  expect_identical(reversed$K, ordered$K)
+  expect_equal(reversed$summary, ordered$summary, tolerance = 1e-12)
+  expect_identical(names(reversed$moments), names(ordered$moments))
+  expect_identical(names(reversed$instruments), names(ordered$instruments))
+
+  for (k in as.character(ordered$K)) {
+    expect_equal(reversed$moments[[k]]$g_bar, ordered$moments[[k]]$g_bar,
+                 tolerance = 1e-12)
+    expect_equal(reversed$moments[[k]]$sigma, ordered$moments[[k]]$sigma,
+                 tolerance = 1e-12)
+    expect_equal(reversed$moments[[k]]$marginal,
+                 ordered$moments[[k]]$marginal, tolerance = 1e-12)
+    expect_equal(as.matrix(reversed$instruments[[k]]$Z),
+                 as.matrix(ordered$instruments[[k]]$Z), tolerance = 1e-12)
+    expect_identical(reversed$instruments[[k]]$assignment,
+                     ordered$instruments[[k]]$assignment)
+  }
+})
+
 test_that("planted contamination is detected with a sane direction", {
   hx <- optop_holdout_fixture()
   # inflate the observed mass of the lowest-frequency stratum on the

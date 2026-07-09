@@ -15,8 +15,9 @@
 A list with the augmented dtm (\code{dtm_aug}), augmented baseline
 probabilities and vocabulary (\code{pi_aug}, \code{vocab_aug}), the per-model
 evaluation containers (\code{tp_eval}, theta folded in and phi augmented),
-the aligned unaugmented counts (\code{dtm_aligned}), the topic grid (\code{K})
-and the training vocabulary (\code{vocab_tr}).
+the aligned unaugmented counts (\code{dtm_aligned}), the models reordered to
+the ascending topic grid (\code{models}), the topic grid (\code{K}) and the
+training vocabulary (\code{vocab_tr}).
 }
 \description{
 Validates the training objects, aligns the evaluation counts to the
