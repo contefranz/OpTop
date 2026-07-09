@@ -1,3 +1,62 @@
+# OpTop 0.14.0
+
+The inference release: the held-out layer (Section 3.7 of Lewis and Grossetti 2026)
+and the moment-based specification tests (Section 4) join the package, completing the
+theory of the revised paper. A formula-level audit confirmed that the in-sample
+surface of 0.13.0 conforms to the paper's July revision exactly.
+
+### New Features
+
+* **Held-out indices with conditional inference** (`optop_index_holdout()`): topic
+  weights are folded in for independent evaluation documents, the harmonized support
+  is rebuilt on the evaluation corpus over the augmented grid (grid plus the training
+  baseline), and each index is reported with per-document scores, the Macro mean with
+  its confidence interval, the Micro index and the Micro-Macro gap with delta-method
+  standard errors, an optional stabilized score, and the paper's out-of-support
+  convention (evaluation-only tokens enter the observed min-bin; document lengths
+  keep every token). Zero-token evaluation documents are dropped with a warning.
+
+* **Epsilon-adequacy selection** (`optop_gain_table()`): paired adjacent held-out
+  gains on the actual grid with one-sided upper confidence bounds and the selection
+  of the smallest K whose gain bound falls below the tolerance, with the documented
+  post-selection caveats.
+
+* **Moment-based specification tests** (`optop_moment_test()`): held-out residual
+  probability vectors projected onto training-built, exactly mean-zero vocabulary
+  instruments; three families (frequency contrast, frequency strata against the
+  highest-frequency reference, fit-stratified via the training word-level deviance
+  index) with Wald chi-square statistics, the scalar t equivalent, and marginal
+  per-stratum t tests with optional Bonferroni or Benjamini-Hochberg adjustment.
+  The moments are computed without forming any documents-by-vocabulary temporary.
+
+* **text2vec WarpLDA support**: `optop_warplda()` wraps a WarpLDA fit with the
+  document-topic matrix the sampler returns from `fit_transform()`, making the
+  paper's estimator a first-class engine across the package; raw R6 objects fail
+  with a pointer to the wrapper instead of falling through to the topicmodels
+  adapter. The obsolete `LDA_t2v` stub is gone.
+
+* **Fold-in adapters** (`optop_fold_in()`, internal): topicmodels via
+  `posterior(newdata)`, seededlda via refitting with the trained model, WarpLDA via
+  `$transform()`, NLPstudio via the stored backend fit.
+
+* `optop_make_baseline()` gains additive smoothing (`smooth_lambda`) for the
+  held-out support convention; `optop_make_partition()` accepts an external
+  `pi_glob`, so held-out partitions use the training baseline as the null member.
+
+### Fixes
+
+* The document kernel accumulates non-rare cells directly instead of as full minus
+  rare sums: a rare cell with a large count on an eps-floored expectation (the
+  held-out out-of-support column is exactly that case) made the subtraction cancel
+  catastrophically in the Pearson family. In-sample results change at most in the
+  last floating-point digits.
+
+### Documentation
+
+* Fitted probabilities follow the paper's notation (`p^K_jw`); the partition page
+  states the augmented-grid union explicitly. The audit trail and the shrunken
+  roadmap (cross-fitting helpers) are recorded in the development audit file.
+
 # OpTop 0.13.0
 
 The alignment release: the goodness-of-fit indices, the harmonized partition, and

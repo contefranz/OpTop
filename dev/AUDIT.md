@@ -496,3 +496,46 @@ scale in the 0.12.0 study. The v0.12.0 gains are preserved.
   BH-adjusted marginal t-tests.
 - **Cross-fitting helpers (paper Appendix B)** and standard errors for
   the Micro index and the Micro-Macro gap (delta method).
+
+# Audit — WP4 revision (v0.14.0)
+
+Formula-level audit of the GoF surface against the July 2026 revision of
+Lewis & Grossetti, "Goodness-of-Fit Indices and Diagnostics for Topic
+Models" (WP4).
+
+## Verdict on the in-sample surface (0.13.0): conforms exactly
+
+- Harmonized partition: WP4 restates C*_j as a union over the augmented
+  grid K0 = K U {null}; identical to the baseline-seeded running minimum
+  implemented in 0.13.0.
+- WP4 now states explicitly that the min-bin exclusion rule is restricted
+  to Pearson-type summaries because exhaustiveness is essential for the
+  deviance KL bound: the kernel's chisq-only exclusion is confirmed.
+- Deviance/Pearson/SE discrepancies, J+/V+ aggregation, Poisson word
+  deviance, Micro weights, c = 1 default: all match.
+- Notation only: fitted probabilities renamed i -> p across the docs and
+  kernel comments.
+
+## Implemented in 0.14.0 (the remaining theory)
+
+- Held-out inference (paper 3.7): fold-in adapters, evaluation-side
+  harmonized partition with the training baseline, out-of-support and
+  smoothing conventions, per-document scores with the stabilized variant,
+  Macro CI (Prop 2 i-iii), Micro and Micro-Macro gap delta-method SEs,
+  paired adjacent gains and the epsilon-adequacy rule (Prop 2 iv, Def 1).
+- Moment tests (paper 4): mean-zero training instruments (contrast,
+  frequency strata, fit strata), Wald/t statistics with sample covariance
+  (Prop 3), marginal t tests with adjustment.
+- text2vec WarpLDA adapter via the optop_warplda() wrapper.
+
+Defect found by the held-out tests and fixed: the doc kernel's
+full-minus-rare accumulation cancelled catastrophically when a rare cell
+carried a large count on an eps-floored expectation; non-rare cells now
+accumulate directly (same cost, no cancellation).
+
+## Roadmap
+
+- Cross-fitting helpers (paper Appendix B): V-fold pooling with fold-aware
+  variance estimators.
+- The simulation harness of paper Section 5 lives outside the package by
+  design (robustness testing of the theory, not package functionality).

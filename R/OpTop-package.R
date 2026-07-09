@@ -51,6 +51,19 @@
 #'   and [optop_make_baseline()] fixes the corpus baseline, so every model
 #'   is evaluated on a common support.
 #'
+#' - **Does the improvement generalize?**
+#'   [optop_index_holdout()] evaluates the indices on an independent
+#'   evaluation sample after folding in the document-topic weights, with
+#'   confidence intervals for the average held-out fit, and
+#'   [optop_gain_table()] turns the paired adjacent gains into the
+#'   epsilon-adequacy selection of the smallest sufficient \eqn{K}.
+#'
+#' - **Where does the model still fail?**
+#'   [optop_moment_test()] projects held-out residuals onto training-built
+#'   vocabulary instruments (frequency contrast, frequency strata,
+#'   fit-stratified) and tests for structured residual bias beyond what the
+#'   scalar indices reveal.
+#'
 #' The vignette presents the full workflow on the U.S. Presidential
 #' Inaugural Address corpus, including the role of the envelope parameter `q`
 #' and the calibrated p-values: `vignette("OpTop")`.
