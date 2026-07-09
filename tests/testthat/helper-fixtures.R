@@ -100,3 +100,21 @@ optop_envelope <- function(model, wdfm, q = 0.95) {
   list(stat = out$stat,
        probs = .optop_split_envelope(out$bin_probs, out$bin_counts))
 }
+
+# Train/eval split fixture for the held-out and moment-test suites: models
+# fitted on the first 20 documents of the shared corpus, evaluated on the
+# remaining 10, with the TRAINING baseline.
+optop_holdout_fixture <- function() {
+  if (is.null(.optop_test_cache$holdout)) {
+    fx <- optop_test_fixture()
+    tr <- fx$dtm[1:20, ]
+    ev <- fx$dtm[21:30, ]
+    models <- lapply(2:4, function(k) {
+      topicmodels::LDA(as.matrix(tr), k = k, method = "VEM",
+                       control = list(seed = 100 + k))
+    })
+    .optop_test_cache$holdout <- list(tr = tr, ev = ev, models = models,
+                                      baseline = optop_make_baseline(tr))
+  }
+  .optop_test_cache$holdout
+}
