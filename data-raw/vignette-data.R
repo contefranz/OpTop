@@ -1,8 +1,9 @@
 # Generates the data behind vignettes/OpTop.Rmd.
 #
 # The fitted LDA grid is heavy (~170 MB) and stays in data-raw/ (git-ignored;
-# re-running this script regenerates it, but note the fits are unseeded, so
-# exact numbers can shift). Only the small derived tables — plus the captured
+# re-running this script regenerates it, but the full-corpus fits are unseeded,
+# so their exact numbers can shift). The held-out training grid below is seeded.
+# Only the small derived tables — plus the captured
 # console output of the optimal_topic() calls, used by the vignette as a
 # fallback when the model cache is absent — ship with the package in
 # inst/extdata/optop-vignette-results.rds.
@@ -164,6 +165,76 @@ word_snapshot <- list(k = k_star,
                       micro = word_idx$r2_micro_word,
                       macro = word_idx$r2_macro_word)
 
+## Part 1c -- held-out validation on the inaugural corpus ----------------------
+
+# Seeded split: about 25% of the speeches are held out for evaluation and the
+# grid is refitted on the training split alone, so the evaluation documents
+# play no role in estimation.
+split_seed <- 20260709
+set.seed(split_seed)
+n_docs <- quanteda::ndoc(mydfm_sub)
+eval_idx <- sort(sample(n_docs, round(0.25 * n_docs)))
+
+dfm_eval <- mydfm_sub[eval_idx, ]
+# drop the features that never occur in the training split; words that occur
+# only in held-out speeches are routed to the synthetic out-of-vocabulary bin
+# by the holdout layer
+dfm_train <- quanteda::dfm_trim(mydfm_sub[-eval_idx, ], min_termfreq = 1)
+
+K_grid_train <- seq(2, 60, by = 2)
+train_path <- file.path("data-raw", "VEM_models_inaugural_train.rds")
+if (file.exists(train_path)) {
+  message("Reusing cached ", train_path)
+  VEM_models_train <- readRDS(train_path)
+} else {
+  VEM_models_train <- parallel::mclapply(
+    K_grid_train,
+    function(k) {
+      message("Estimating training-split LDA with K = ", k)
+      topicmodels::LDA(x = dfm_train, k = k, control = list(seed = 500 + k))
+    },
+    mc.cores = ncores
+  )
+  saveRDS(VEM_models_train, train_path)
+}
+
+dtm_train <- methods::as(dfm_train, "CsparseMatrix")
+dtm_eval <- methods::as(dfm_eval, "CsparseMatrix")
+
+train_K_actual <- vapply(VEM_models_train, function(model) {
+  OpTop:::optop_as_theta_phi(model)$K
+}, numeric(1))
+if (!identical(train_K_actual, as.numeric(K_grid_train))) {
+  stop("cached training-split models do not match K_grid_train; remove and rebuild the cache")
+}
+if (!identical(OpTop:::optop_as_theta_phi(VEM_models_train[[1L]])$terms,
+               colnames(dtm_train))) {
+  stop("cached training-split models do not match the current training vocabulary")
+}
+
+# out-of-vocabulary share of the evaluation sample, quoted in the vignette
+ev_counts <- Matrix::colSums(dtm_eval)
+oov_feats <- names(ev_counts)[ev_counts > 0 &
+                                !(names(ev_counts) %in% colnames(dtm_train))]
+oov_share <- sum(ev_counts[oov_feats]) / sum(ev_counts)
+
+base_train <- optop_make_baseline(dtm_train)
+ho <- optop_index_holdout(VEM_models_train, dtm_eval, base_train)
+gt <- optop_gain_table(ho, metric = "deviance", epsilon = 0.01)
+
+k_hat_ho <- gt$k_hat
+selection_status <- if (is.na(k_hat_ho)) "no_adequate_step" else "selected"
+k_diagnostic <- k_hat_ho
+if (is.na(k_diagnostic)) {
+  # This fallback is solely a topic count at which to illustrate the moment
+  # diagnostic. It is not an epsilon-adequacy selection.
+  summ_dev <- ho$summary[ho$summary$metric == "deviance", ]
+  k_diagnostic <- summ_dev$K[which.max(summ_dev$macro)]
+}
+m_star_train <- VEM_models_train[[which(K_grid_train == k_diagnostic)]]
+mt <- optop_moment_test(list(m_star_train), dtm_eval, dtm_train,
+                        type = "strata", bins = 5)
+
 ## Part 2 -- simulation with known true K -------------------------------------
 
 set.seed(20260703)
@@ -240,7 +311,25 @@ bundle <- list(
     chi_cal_mm = mm_run$value,
     console_cal_mm = mm_run$console,
     index_table = index_tab,
-    word_snapshot = word_snapshot
+    word_snapshot = word_snapshot,
+    holdout = list(
+      summary = ho$summary,
+      gains = gt$gains,
+      k_hat = k_hat_ho,
+      selection_status = selection_status,
+      k_diagnostic = k_diagnostic,
+      epsilon = gt$epsilon,
+      alpha_gain = gt$alpha,
+      moment_summary = mt$summary,
+      moment_marginal = mt$moments[[1L]]$marginal,
+      split = list(seed = split_seed,
+                   n_train = n_docs - length(eval_idx),
+                   n_eval = length(eval_idx),
+                   K_grid = K_grid_train,
+                   nfeat_train = ncol(dtm_train),
+                   n_oov = length(oov_feats),
+                   oov_share = oov_share)
+    )
   ),
   sim = list(
     chi = sim_chi,

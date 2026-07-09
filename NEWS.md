@@ -57,6 +57,18 @@ surface of 0.13.0 conforms to the paper's July revision exactly.
   states the augmented-grid union explicitly. The audit trail and the shrunken
   roadmap (cross-fitting helpers) are recorded in the development audit file.
 
+* The man pages of the held-out family (`optop_index_holdout()`,
+  `optop_gain_table()`, `optop_moment_test()`, `optop_warplda()`, and the internal
+  `optop_fold_in()`) are written for a broad audience: each opens with the question
+  the tool answers, walks through the pipeline step by step, maps every returned
+  element to one sentence, and ships a complete runnable example.
+
+* The vignette gains the section "Held-Out Validation and Topic-Number Choice": a
+  seeded training and evaluation split of the inaugural corpus, a fresh
+  training-split grid, the Macro held-out index with its confidence band, the
+  epsilon-adequacy selection, and a frequency-strata moment test with a guided
+  reading of the output.
+
 # OpTop 0.13.0
 
 The alignment release: the goodness-of-fit indices, the harmonized partition, and

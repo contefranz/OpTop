@@ -51,6 +51,7 @@ res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
 meta <- res$meta
 idx_tab <- res$inaugural$index_table
 word_r2 <- res$inaugural$word_snapshot
+ho_res <- res$inaugural$holdout
 sim_chi <- res$sim$chi
 sim_picks <- res$sim$picks
 sim_idx_tab <- res$sim$index_table
@@ -89,10 +90,11 @@ goodness-of-fit (GoF) indices. This vignette illustrates both on the corpus
 of the paper's case study and concludes with a simulation study in which the
 true number of topics is known.
 
-The only step performed offline is the estimation of the LDA models
-(`r length(meta$K_grid)` fits). Everything downstream, from every
-`optimal_topic()` call to each table, figure, and number quoted in the text,
-is computed from those fits.
+The only step performed offline is the estimation of the LDA models:
+`r length(meta$K_grid)` fits on the full corpus and
+`r length(ho_res$split$K_grid)` fits on the training split of the held-out
+analysis. Everything downstream, from every `optimal_topic()` call to each
+table, figure, and number quoted in the text, is computed from those fits.
 
 ## Setting Up: Corpus, Grid, Models
 
@@ -668,6 +670,171 @@ knitr::kable(
                     word_r2$k)
 )
 ```
+
+## Held-Out Validation and Topic-Number Choice
+
+The indices above are computed on the same documents used to estimate the
+models, so they describe in-sample fit and are optimistic by construction:
+every additional topic gives the model more freedom to adapt to the
+estimation sample, whether or not the gain reflects structure that
+generalizes. Formal inference on fit, and a topic-number choice that can be
+defended statistically, require documents the models have never seen
+(Lewis and Grossetti, 2026).
+
+We therefore hold out `r ho_res$split$n_eval` of the `r meta$ndoc` speeches,
+chosen at random under a fixed seed, and refit the grid on the remaining
+`r ho_res$split$n_train` alone, for K = `r min(ho_res$split$K_grid)` to
+`r max(ho_res$split$K_grid)` in steps of 2. The vocabulary is fixed by the
+training split; the `r ho_res$split$n_oov` word types that occur only in
+held-out speeches (about `r round(100 * ho_res$split$oov_share, 1)`% of the
+evaluation tokens) are collapsed into a synthetic out-of-vocabulary bin that
+every model treats as rare. The corpus baseline is likewise estimated on the
+training split, so nothing in the evaluation documents influences the fitted
+models or the targets they are compared against.
+
+```{r holdout-call, eval = FALSE}
+set.seed(20260709)
+n_docs <- quanteda::ndoc(mydfm_sub)
+eval_idx <- sort(sample(n_docs, round(0.25 * n_docs)))
+dfm_eval <- mydfm_sub[eval_idx, ]
+dfm_train <- quanteda::dfm_trim(mydfm_sub[-eval_idx, ], min_termfreq = 1)
+
+VEM_train <- lapply(seq(2, 60, by = 2), function(k) {
+  topicmodels::LDA(x = dfm_train, k = k, control = list(seed = 500 + k))
+})
+
+base_train <- optop_make_baseline(dfm_train)
+ho <- optop_index_holdout(VEM_train, dfm_eval, base_train)
+```
+
+`optop_index_holdout()` gives each evaluation document its topic weights
+under the trained topics held fixed, the fold-in step, reconstructs its word
+distribution, and scores the reconstruction with the same discrepancy
+indices as above, on a rare-word partition built from the training baseline.
+Because the evaluation documents are independent of the fitted models, the
+per-document indices support genuine confidence statements. The figure
+reports the Macro deviance index, the unweighted average of the per-document
+indices, with its 95% confidence band across the grid:
+
+```{r holdout-plot}
+ho_dev <- ho_res$summary[ho_res$summary$metric == "deviance", ]
+
+ggplot(ho_dev, aes(x = K, y = macro)) +
+  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), fill = "grey80") +
+  geom_line(linewidth = 0.7) +
+  labs(x = "Topics", y = expression(R^2),
+       title = "Held-out Macro deviance index with 95% confidence band") +
+  theme_bw()
+```
+
+The band quantifies the uncertainty in the average held-out fit across
+evaluation documents, conditional on the trained models. The summary table
+also reports the Micro index, which weights each document by its baseline
+discrepancy, and the Micro-Macro gap with its standard error; a gap far from
+zero indicates that fit quality varies systematically with document weight.
+
+The curve flattens quickly, and reading a single best K off it would ignore
+the sampling noise. `optop_gain_table()` makes the choice formal: for each
+adjacent pair of topic counts it computes the paired per-document
+improvement in the held-out index, its one-sided upper confidence bound, and
+a test of the hypothesis that the improvement is zero.
+
+```{r gain-call, eval = FALSE}
+gt <- optop_gain_table(ho, metric = "deviance", epsilon = 0.01)
+```
+
+```{r gain-table}
+show_upto <- if (identical(ho_res$selection_status, "selected")) {
+  selected_gain <- match(ho_res$k_hat, ho_res$gains$K)
+  min(nrow(ho_res$gains), selected_gain + 2L)
+} else {
+  min(nrow(ho_res$gains), 6L)
+}
+knitr::kable(
+  ho_res$gains[seq_len(show_upto), ],
+  digits = 4,
+  caption = sprintf("Paired adjacent gains in the held-out deviance index (first %d of %d rows)",
+                    show_upto, nrow(ho_res$gains))
+)
+```
+
+Each row compares K with its successor on the same evaluation documents:
+`gain` is the average paired improvement, `upper` its one-sided
+`r sprintf("%d", round(100 * (1 - ho_res$alpha_gain)))`% upper confidence
+bound, and `pval` tests whether the improvement exceeds zero. The selection
+rule fixes a tolerance epsilon, the improvement judged too small to matter,
+before looking at the results, and picks the smallest K at which even the
+optimistic end of the next gain falls below it.
+
+```{r gain-decision, echo = FALSE, results = "asis"}
+if (identical(ho_res$selection_status, "selected")) {
+  cat(sprintf(
+    "With epsilon = %s, the rule selects **K = %d**: the step out of %d is the first whose upper bound falls below the tolerance, so no gain of practical size is compatible with the data at that step.\n\n",
+    ho_res$epsilon, ho_res$k_hat, ho_res$k_hat
+  ))
+} else {
+  cat(sprintf(
+    "With epsilon = %s, no step in this grid has an upper bound below the tolerance. The moment diagnostic below therefore uses K = %d, the grid point with the largest held-out Macro index, only as an illustration and not as an adequacy selection.\n\n",
+    ho_res$epsilon, ho_res$k_diagnostic
+  ))
+}
+```
+
+A scalar index says how much error remains, not where. The moment tests of
+Lewis and Grossetti (2026) complement it by grouping the vocabulary into
+labeled word sets built from the training sample, the instruments, and
+testing whether the model consistently over- or under-predicts any group on
+the evaluation documents. Here we stratify the vocabulary by training
+frequency and compare each stratum against the highest-frequency reference:
+
+```{r moment-call, eval = FALSE}
+k_diagnostic <- gt$k_hat
+if (is.na(k_diagnostic)) {
+  dev <- ho$summary[ho$summary$metric == "deviance", ]
+  k_diagnostic <- dev$K[which.max(dev$macro)]
+}
+m_star <- VEM_train[[which(seq(2, 60, by = 2) == k_diagnostic)]]
+mt <- optop_moment_test(list(m_star), dfm_eval, dfm_train,
+                        type = "strata", bins = 5)
+```
+
+```{r moment-table}
+knitr::kable(
+  ho_res$moment_marginal,
+  digits = c(0, 5, 5, 2, 4, 4),
+  format.args = list(scientific = FALSE),
+  caption = sprintf("Marginal frequency-strata moments at K = %d",
+                    ho_res$k_diagnostic)
+)
+```
+
+The joint Wald statistic at K = `r ho_res$k_diagnostic` is
+`r round(ho_res$moment_summary$wald, 2)` on `r ho_res$moment_summary$df`
+degrees of freedom
+(p `r if (ho_res$moment_summary$pval < 1e-15) "< 1e-15" else sprintf("= %.3g", ho_res$moment_summary$pval)`);
+with `r ho_res$split$n_eval` evaluation documents the chi-square reference
+is an asymptotic yardstick, and the marginal t statistics are the more
+stable guide. In the marginal table, `estimate` is an effect size in
+probability-mass units: a positive value means the held-out documents place
+more mass on that frequency stratum than the model predicts, relative to
+the reference stratum, and a negative value the reverse. Here the largest
+imbalance sits in the lowest-frequency stratum, with an estimate of about
+`r sprintf("%.5f", ho_res$moment_marginal$estimate[which.max(abs(ho_res$moment_marginal$t))])`
+in probability mass: statistically unambiguous, yet small in practical
+terms. Reading the estimates alongside the p-values in this way separates
+detectable imbalances from practically negligible ones.
+
+Three caveats close the section. First, all confidence statements are
+conditional on the trained models: they quantify variability across
+evaluation documents, not across refits of the grid. Second, selecting K on
+this same evaluation sample, or choosing a diagnostic K from it when the
+adequacy rule does not select one, makes the reported diagnostic descriptive
+and subject to post-selection bias. A study that needs both a data-driven
+choice and clean inference at that choice should select on one evaluation
+sample and report on another, or rotate the roles of the splits. Third, a
+moment test that fails to reject does not certify the model class; it states
+that no systematic residual imbalance is detectable along the chosen
+instruments at the available sample size.
 
 ## A Simulation with Known Truth
 
