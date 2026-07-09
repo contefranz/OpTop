@@ -53,65 +53,123 @@ iterations).}
 \value{
 An object of class \code{optop_holdout}: a list with
 \itemize{
-\item \code{summary}: \code{data.table} with one row per (metric, K): \code{macro},
-\code{macro_se}, \code{ci_lo}, \code{ci_hi}, \code{micro}, \code{micro_se}, \code{gap}, \code{gap_se}
-(gap = micro − macro), and \code{n_docs} (the size of \eqn{J_+}{J+}).
+\item \code{summary}: \code{data.table} with one row per (metric, K). Reading the
+columns: \code{macro} is the average document's held-out fit; \code{macro_se}
+its standard error; \code{ci_lo}, \code{ci_hi} the bounds of the \code{conf}-level
+interval for the average fit; \code{micro} the pooled index, in which
+documents with a large baseline discrepancy weigh more; \code{micro_se} its
+delta-method standard error; \code{gap} equals \code{micro - macro}, positive
+when fit concentrates in high-discrepancy (often long or atypical)
+documents; \code{gap_se} its standard error; \code{n_docs} the number of
+non-degenerate evaluation documents behind every estimate.
 \item \code{scores}: named list (one element per metric) of numeric matrices,
 evaluation documents by \eqn{K}, holding the per-document held-out
-indices (\code{NA} on degenerate documents when \code{stabilize = 0}).
-\item \code{d_model}, \code{d_null}: same shape, the per-document discrepancies.
+indices (\code{NA} on degenerate documents when \code{stabilize = 0}). These are
+the scores \code{\link[=optop_gain_table]{optop_gain_table()}} pairs across topic counts.
+\item \code{d_model}, \code{d_null}: same shape, the per-document fitted and baseline
+discrepancies, for fit-versus-baseline diagnostics.
 \item \code{K}, \code{metrics}, \code{conf}, \code{stabilize}, \code{c}: the evaluation design.
 }
 }
 \description{
-Evaluate the OpTop goodness-of-fit indices on an independent evaluation
-sample, following Section 3.7 of Lewis and Grossetti (2026). The topic
-models and the global baseline are estimated on the training sample; for
-each evaluation document the topic weights are folded in from that
-document and the trained topics, the harmonized support is rebuilt on the
-evaluation corpus with the training baseline as the null member, and the
-discrepancies are evaluated on the evaluation documents. The document
-scores are conditionally i.i.d. given the training sample, which yields
-confidence intervals for the average held-out fit and paired comparisons
-across topic counts (\code{\link[=optop_gain_table]{optop_gain_table()}}).
+Answer the question: does the chosen topic model also describe documents
+it has never seen? Indices computed on the estimation corpus are
+descriptive and optimistic, because the same documents shaped the topics
+being evaluated. This function evaluates the same goodness-of-fit
+indices on an independent \emph{evaluation} sample instead, following
+Section 3.7 of Lewis and Grossetti (2026), and attaches the uncertainty
+measures that make held-out fit values comparable across topic counts:
+a confidence interval for the average document's fit and standard errors
+for the pooled index and the Micro-Macro gap.
 }
 \details{
+\strong{How it works.} The workflow has five steps, all handled internally:
+\enumerate{
+\item \emph{Split upstream.} You fit the model grid on a training corpus and keep
+a separate set of evaluation documents that played no role in the
+fitting; the training baseline comes from
+\code{optop_make_baseline(dtm_train)}.
+\item \emph{Fold in.} For every model and every evaluation document, the
+document's topic weights are estimated while the trained topics stay
+fixed (the fold-in step; see the engine notes below). Combined with
+the trained topics, the weights give the fitted word probabilities of
+each evaluation document.
+\item \emph{Rebuild the common support.} The harmonized rare-word partition is
+reconstructed on the evaluation corpus, with the union running over
+the whole model grid plus the training baseline, exactly as in the
+in-sample analysis, so every topic count is scored on the same bins.
+\item \emph{Score.} Each evaluation document contributes one fitted and one
+baseline discrepancy per metric, and its document-level index
+\eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)}: the share
+of the no-topics discrepancy that the model removes on that document.
+\item \emph{Aggregate.} The Macro index averages the document scores; the Micro
+index pools the discrepancies first. Because the evaluation documents
+are independent of one another once the training fits are fixed,
+both come with valid standard errors.
+}
+
 \strong{Held-out target.} The scores implement held-out-document
 reconstruction: the same evaluation document is used to infer its topic
-mixture and to score its fit. For held-out-token completion, split each
-evaluation document upstream and pass the fold-in tokens through the
-engine directly.
+mixture and to score its fit, so the model is judged on how well it can
+rebuild a document after reading it once. For the stricter
+held-out-token completion target, split each evaluation document upstream
+and pass the fold-in tokens through the engine directly.
 
-\strong{Out-of-support convention.} The evaluation vocabulary is the training
-support. Tokens of words absent from the training vocabulary are assigned
-to the observed min-bin of their document (through a synthetic always-rare
-column with zero fitted and baseline probability), and document lengths
-\eqn{L_j} keep every token. Alternatively, smooth the training baseline
-(\code{optop_make_baseline(dtm_train, smooth_lambda)}) and report sensitivity.
+\strong{Out-of-support convention.} Evaluation documents may contain words the
+models were never trained on. Those tokens cannot be scored word by word:
+they are assigned to the observed min-bin of their document (through a
+synthetic always-rare column with zero fitted and baseline probability),
+and document lengths \eqn{L_j} keep every token. Alternatively, smooth
+the training baseline (\code{optop_make_baseline(dtm_train, smooth_lambda)})
+and report sensitivity.
 
 \strong{Inference.} For each \eqn{K}, the Macro index is the mean of the
 document scores over the non-degenerate evaluation documents
 \eqn{J_+}{J+}; its standard error uses the \eqn{1/(J_+ - 1)}{1/(J+ - 1)}
 sample variance and the interval is
 \eqn{\mathrm{Macro} \pm z_{1-\alpha/2}\, \hat\sigma / \sqrt{J_+}}{Macro +/- z * sigma_hat / sqrt(J+)}
-(Proposition 2 of the paper). The Micro index and the Micro-Macro gap are
-smooth functions of conditional means, and their standard errors follow
-by the delta method. All inference is conditional on the training sample:
-the target is the expected per-document fit under the training-fitted
-global objects, not an unconditional population quantity.
+(Proposition 2 of the paper). Read the interval as the range of average
+held-out fits compatible with the evaluation sample, for this training
+fit: with a different evaluation sample from the same population, the
+interval would cover the true average about \code{conf} of the time. The
+Micro index and the Micro-Macro gap are smooth functions of conditional
+means, and their standard errors follow by the delta method. All
+inference is conditional on the training sample: the target is the
+expected per-document fit under the training-fitted global objects, not
+an unconditional population quantity.
 
 \strong{Documents dropped.} Evaluation documents with zero aligned tokens
 cannot be folded in and are dropped with a warning.
 }
 \examples{
-\dontrun{
-train <- dfm_counts[1:40, ]
-eval <- dfm_counts[41:59, ]
-models <- lapply(seq(2, 20, 2), function(k) topicmodels::LDA(train, k = k))
-base_tr <- optop_make_baseline(train)
-ho <- optop_index_holdout(models, eval, base_tr)
+\donttest{
+# a small synthetic corpus with 6 known topics
+rdir <- function(n, k, a) {
+  g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+  g / rowSums(g)
+}
+set.seed(42)
+corpus <- sim_dfm(DTW = rdir(120, 6, 0.4), TWW = rdir(6, 300, 0.1),
+                  doc_length = rep(400, 120), seed = 1)
+
+# split: 90 training documents, 30 evaluation documents
+dtm_train <- corpus[1:90, ]
+dtm_eval <- corpus[91:120, ]
+
+# fit a small grid on the TRAINING split only
+models <- lapply(c(4, 6, 8), function(k) {
+  topicmodels::LDA(dtm_train, k = k, control = list(seed = 100 + k))
+})
+
+# held-out evaluation with the TRAINING baseline
+base_tr <- optop_make_baseline(dtm_train)
+ho <- optop_index_holdout(models, dtm_eval, base_tr)
 ho$summary
-optop_gain_table(ho, epsilon = 0.01)
+
+# when do extra topics stop paying for themselves?
+gt <- optop_gain_table(ho, epsilon = 0.01)
+gt$gains
+gt$k_hat
 }
 
 }

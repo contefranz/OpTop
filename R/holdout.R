@@ -1,15 +1,14 @@
 #' Held-out goodness-of-fit indices with conditional inference
 #'
-#' Evaluate the OpTop goodness-of-fit indices on an independent evaluation
-#' sample, following Section 3.7 of Lewis and Grossetti (2026). The topic
-#' models and the global baseline are estimated on the training sample; for
-#' each evaluation document the topic weights are folded in from that
-#' document and the trained topics, the harmonized support is rebuilt on the
-#' evaluation corpus with the training baseline as the null member, and the
-#' discrepancies are evaluated on the evaluation documents. The document
-#' scores are conditionally i.i.d. given the training sample, which yields
-#' confidence intervals for the average held-out fit and paired comparisons
-#' across topic counts ([optop_gain_table()]).
+#' Answer the question: does the chosen topic model also describe documents
+#' it has never seen? Indices computed on the estimation corpus are
+#' descriptive and optimistic, because the same documents shaped the topics
+#' being evaluated. This function evaluates the same goodness-of-fit
+#' indices on an independent *evaluation* sample instead, following
+#' Section 3.7 of Lewis and Grossetti (2026), and attaches the uncertainty
+#' measures that make held-out fit values comparable across topic counts:
+#' a confidence interval for the average document's fit and standard errors
+#' for the pooled index and the Micro-Macro gap.
 #'
 #' @param models A list of topic models fitted on the \emph{training}
 #'   corpus, spanning a grid of \eqn{K}; every class supported by the
@@ -37,52 +36,109 @@
 #'   iterations).
 #'
 #' @details
+#' **How it works.** The workflow has five steps, all handled internally:
+#' 1. *Split upstream.* You fit the model grid on a training corpus and keep
+#'    a separate set of evaluation documents that played no role in the
+#'    fitting; the training baseline comes from
+#'    `optop_make_baseline(dtm_train)`.
+#' 2. *Fold in.* For every model and every evaluation document, the
+#'    document's topic weights are estimated while the trained topics stay
+#'    fixed (the fold-in step; see the engine notes below). Combined with
+#'    the trained topics, the weights give the fitted word probabilities of
+#'    each evaluation document.
+#' 3. *Rebuild the common support.* The harmonized rare-word partition is
+#'    reconstructed on the evaluation corpus, with the union running over
+#'    the whole model grid plus the training baseline, exactly as in the
+#'    in-sample analysis, so every topic count is scored on the same bins.
+#' 4. *Score.* Each evaluation document contributes one fitted and one
+#'    baseline discrepancy per metric, and its document-level index
+#'    \eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)}: the share
+#'    of the no-topics discrepancy that the model removes on that document.
+#' 5. *Aggregate.* The Macro index averages the document scores; the Micro
+#'    index pools the discrepancies first. Because the evaluation documents
+#'    are independent of one another once the training fits are fixed,
+#'    both come with valid standard errors.
+#'
 #' **Held-out target.** The scores implement held-out-document
 #' reconstruction: the same evaluation document is used to infer its topic
-#' mixture and to score its fit. For held-out-token completion, split each
-#' evaluation document upstream and pass the fold-in tokens through the
-#' engine directly.
+#' mixture and to score its fit, so the model is judged on how well it can
+#' rebuild a document after reading it once. For the stricter
+#' held-out-token completion target, split each evaluation document upstream
+#' and pass the fold-in tokens through the engine directly.
 #'
-#' **Out-of-support convention.** The evaluation vocabulary is the training
-#' support. Tokens of words absent from the training vocabulary are assigned
-#' to the observed min-bin of their document (through a synthetic always-rare
-#' column with zero fitted and baseline probability), and document lengths
-#' \eqn{L_j} keep every token. Alternatively, smooth the training baseline
-#' (`optop_make_baseline(dtm_train, smooth_lambda)`) and report sensitivity.
+#' **Out-of-support convention.** Evaluation documents may contain words the
+#' models were never trained on. Those tokens cannot be scored word by word:
+#' they are assigned to the observed min-bin of their document (through a
+#' synthetic always-rare column with zero fitted and baseline probability),
+#' and document lengths \eqn{L_j} keep every token. Alternatively, smooth
+#' the training baseline (`optop_make_baseline(dtm_train, smooth_lambda)`)
+#' and report sensitivity.
 #'
 #' **Inference.** For each \eqn{K}, the Macro index is the mean of the
 #' document scores over the non-degenerate evaluation documents
 #' \eqn{J_+}{J+}; its standard error uses the \eqn{1/(J_+ - 1)}{1/(J+ - 1)}
 #' sample variance and the interval is
 #' \eqn{\mathrm{Macro} \pm z_{1-\alpha/2}\, \hat\sigma / \sqrt{J_+}}{Macro +/- z * sigma_hat / sqrt(J+)}
-#' (Proposition 2 of the paper). The Micro index and the Micro-Macro gap are
-#' smooth functions of conditional means, and their standard errors follow
-#' by the delta method. All inference is conditional on the training sample:
-#' the target is the expected per-document fit under the training-fitted
-#' global objects, not an unconditional population quantity.
+#' (Proposition 2 of the paper). Read the interval as the range of average
+#' held-out fits compatible with the evaluation sample, for this training
+#' fit: with a different evaluation sample from the same population, the
+#' interval would cover the true average about `conf` of the time. The
+#' Micro index and the Micro-Macro gap are smooth functions of conditional
+#' means, and their standard errors follow by the delta method. All
+#' inference is conditional on the training sample: the target is the
+#' expected per-document fit under the training-fitted global objects, not
+#' an unconditional population quantity.
 #'
 #' **Documents dropped.** Evaluation documents with zero aligned tokens
 #' cannot be folded in and are dropped with a warning.
 #'
 #' @return An object of class `optop_holdout`: a list with
-#' - `summary`: `data.table` with one row per (metric, K): `macro`,
-#'   `macro_se`, `ci_lo`, `ci_hi`, `micro`, `micro_se`, `gap`, `gap_se`
-#'   (gap = micro − macro), and `n_docs` (the size of \eqn{J_+}{J+}).
+#' - `summary`: `data.table` with one row per (metric, K). Reading the
+#'   columns: `macro` is the average document's held-out fit; `macro_se`
+#'   its standard error; `ci_lo`, `ci_hi` the bounds of the `conf`-level
+#'   interval for the average fit; `micro` the pooled index, in which
+#'   documents with a large baseline discrepancy weigh more; `micro_se` its
+#'   delta-method standard error; `gap` equals `micro - macro`, positive
+#'   when fit concentrates in high-discrepancy (often long or atypical)
+#'   documents; `gap_se` its standard error; `n_docs` the number of
+#'   non-degenerate evaluation documents behind every estimate.
 #' - `scores`: named list (one element per metric) of numeric matrices,
 #'   evaluation documents by \eqn{K}, holding the per-document held-out
-#'   indices (`NA` on degenerate documents when `stabilize = 0`).
-#' - `d_model`, `d_null`: same shape, the per-document discrepancies.
+#'   indices (`NA` on degenerate documents when `stabilize = 0`). These are
+#'   the scores [optop_gain_table()] pairs across topic counts.
+#' - `d_model`, `d_null`: same shape, the per-document fitted and baseline
+#'   discrepancies, for fit-versus-baseline diagnostics.
 #' - `K`, `metrics`, `conf`, `stabilize`, `c`: the evaluation design.
 #'
 #' @examples
-#' \dontrun{
-#' train <- dfm_counts[1:40, ]
-#' eval <- dfm_counts[41:59, ]
-#' models <- lapply(seq(2, 20, 2), function(k) topicmodels::LDA(train, k = k))
-#' base_tr <- optop_make_baseline(train)
-#' ho <- optop_index_holdout(models, eval, base_tr)
+#' \donttest{
+#' # a small synthetic corpus with 6 known topics
+#' rdir <- function(n, k, a) {
+#'   g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+#'   g / rowSums(g)
+#' }
+#' set.seed(42)
+#' corpus <- sim_dfm(DTW = rdir(120, 6, 0.4), TWW = rdir(6, 300, 0.1),
+#'                   doc_length = rep(400, 120), seed = 1)
+#'
+#' # split: 90 training documents, 30 evaluation documents
+#' dtm_train <- corpus[1:90, ]
+#' dtm_eval <- corpus[91:120, ]
+#'
+#' # fit a small grid on the TRAINING split only
+#' models <- lapply(c(4, 6, 8), function(k) {
+#'   topicmodels::LDA(dtm_train, k = k, control = list(seed = 100 + k))
+#' })
+#'
+#' # held-out evaluation with the TRAINING baseline
+#' base_tr <- optop_make_baseline(dtm_train)
+#' ho <- optop_index_holdout(models, dtm_eval, base_tr)
 #' ho$summary
-#' optop_gain_table(ho, epsilon = 0.01)
+#'
+#' # when do extra topics stop paying for themselves?
+#' gt <- optop_gain_table(ho, epsilon = 0.01)
+#' gt$gains
+#' gt$k_hat
 #' }
 #'
 #' @references
@@ -339,26 +395,44 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 
 #' Adjacent held-out gains and the epsilon-adequacy selection
 #'
-#' Paired comparison of held-out fit across adjacent topic counts, following
-#' Proposition 2 (iv) and Definition 1 of Lewis and Grossetti (2026). For
-#' each grid point \eqn{K} with successor \eqn{succ(K)} (the next point of
-#' the actual grid), the per-document gain is
-#' \eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
-#' computed on the same evaluation documents. The table reports the mean
-#' gain, its standard deviation, the one-sided upper confidence bound
-#' \eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)},
-#' and the paired test of no improvement. The selection
-#' \eqn{\hat K_{D,\varepsilon,\alpha}}{K_hat} is the smallest \eqn{K} whose
-#' upper bound is at most \eqn{\varepsilon}{epsilon}.
+#' Answer the question: when do additional topics stop paying for
+#' themselves? Comparing two topic counts on held-out fit is a paired
+#' problem: the same evaluation documents are scored under both models, so
+#' the informative quantity is the per-document *gain*, the difference of
+#' the two held-out scores on the same document. This function computes the
+#' paired gains between adjacent points of the topic grid, attaches their
+#' uncertainty, and applies the paper's selection rule: stop at the
+#' smallest \eqn{K} beyond which the certified improvement falls below a
+#' tolerance you chose in advance (Proposition 2 (iv) and Definition 1 of
+#' Lewis and Grossetti 2026).
 #'
 #' @param ho An [optop_index_holdout()] result.
 #' @param metric One of the metrics evaluated in `ho` (default
-#'   `"deviance"`).
-#' @param epsilon Positive tolerance of the adequacy rule (default `0.01`).
+#'   `"deviance"`, the paper's primary index).
+#' @param epsilon Positive tolerance of the adequacy rule: the held-out
+#'   improvement you consider too small to justify an extra topic, on the
+#'   proportional scale of the index (default `0.01`, one percentage point
+#'   of discrepancy reduction). Fix it before looking at the results.
 #' @param alpha One-sided level of the upper bound and the improvement test
 #'   (default `0.05`).
 #'
 #' @details
+#' **How it works.**
+#' 1. For each grid point \eqn{K} with successor \eqn{succ(K)} (the next
+#'    point of the actual grid, not mechanically \eqn{K + 1}), the
+#'    per-document gain is
+#'    \eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
+#'    computed on the same evaluation documents.
+#' 2. The mean gain estimates how much held-out fit the extra topics buy;
+#'    its one-sided upper confidence bound
+#'    \eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)}
+#'    says: with confidence \eqn{1-\alpha}{1 - alpha}, the true gain is no
+#'    larger than this.
+#' 3. The selection \eqn{\hat K_{D,\varepsilon,\alpha}}{k_hat} is the
+#'    smallest \eqn{K} whose upper bound is at most
+#'    \eqn{\varepsilon}{epsilon}: even in the optimistic reading of the
+#'    data, moving past that \eqn{K} buys less than the tolerance.
+#'
 #' The rule is a stopping rule over dependent one-sided tests: adjacent
 #' gains share evaluation documents and overlapping models, so `alpha`
 #' applies to each comparison separately, not to the selection event.
@@ -369,17 +443,46 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 #' criterion, not an estimator of a latent true number of topics.
 #'
 #' @return A list with
-#' - `gains`: `data.table` with one row per adjacent pair: `K`, `succ_K`,
-#'   `n` (paired documents), `gain` (mean), `sd`, `upper` (one-sided bound),
-#'   `z`, and `pval` (one-sided, improvement).
-#' - `k_hat`: the selected topic count (`NA` when no grid point qualifies).
-#' - `metric`, `epsilon`, `alpha`.
+#' - `gains`: `data.table` with one row per adjacent pair. Reading the
+#'   columns: `K` and `succ_K` are the pair compared; `n` the number of
+#'   paired documents; `gain` the mean per-document improvement from `K` to
+#'   `succ_K`; `sd` its standard deviation across documents; `upper` the
+#'   one-sided upper confidence bound of the mean gain (the quantity the
+#'   selection rule thresholds); `z` and `pval` the paired test of no
+#'   improvement (small `pval` = the extra topics helped on average).
+#' - `k_hat`: the selected topic count, the smallest `K` with
+#'   `upper <= epsilon` (`NA` when no grid point qualifies, meaning the
+#'   grid ended before the gains died out).
+#' - `metric`, `epsilon`, `alpha`: the design.
+#'
+#' @examples
+#' \donttest{
+#' # continue from the optop_index_holdout() example
+#' rdir <- function(n, k, a) {
+#'   g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+#'   g / rowSums(g)
+#' }
+#' set.seed(42)
+#' corpus <- sim_dfm(DTW = rdir(120, 6, 0.4), TWW = rdir(6, 300, 0.1),
+#'                   doc_length = rep(400, 120), seed = 1)
+#' dtm_train <- corpus[1:90, ]
+#' dtm_eval <- corpus[91:120, ]
+#' models <- lapply(c(4, 6, 8), function(k) {
+#'   topicmodels::LDA(dtm_train, k = k, control = list(seed = 100 + k))
+#' })
+#' ho <- optop_index_holdout(models, dtm_eval,
+#'                           optop_make_baseline(dtm_train))
+#'
+#' gt <- optop_gain_table(ho, epsilon = 0.01, alpha = 0.05)
+#' gt$gains   # certified improvement per grid step
+#' gt$k_hat   # smallest K after which gains fall below epsilon
+#' }
 #'
 #' @references
 #' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
 #' diagnostics for topic models. Working paper.
 #'
-#' @seealso [optop_index_holdout()]
+#' @seealso [optop_index_holdout()], [optop_moment_test()]
 #'
 #' @export
 optop_gain_table <- function(ho, metric = "deviance", epsilon = 0.01,

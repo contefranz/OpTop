@@ -197,34 +197,65 @@ optop_as_theta_phi.optop_theta_phi <- function(model) {
 
 #' Wrap a text2vec WarpLDA fit for OpTop
 #'
-#' text2vec's WarpLDA sampler returns the document-topic matrix from
-#' `fit_transform()` without retaining it in the model object, while the
-#' topic-word distribution stays available as an active binding. This helper
-#' bundles the two into a light object accepted by every OpTop tool that
-#' takes fitted topic models ([optimal_topic()], [optop_make_partition()],
-#' the index family, [optop_index_holdout()] and [optop_moment_test()]).
+#' Make a WarpLDA topic model usable with every OpTop tool. text2vec's
+#' WarpLDA sampler splits its output in two: `fit_transform()` *returns*
+#' the document-topic matrix to you, while the model object retains only
+#' the topic-word distribution. OpTop needs both halves together, so this
+#' helper bundles the model object and the matrix you kept into one light
+#' object accepted everywhere a fitted topic model is
+#' ([optimal_topic()], [optop_make_partition()], the index family,
+#' [optop_index_holdout()] and [optop_moment_test()]).
+#'
+#' In practice the workflow is: fit with text2vec as usual, keep the matrix
+#' that `fit_transform()` returns, and wrap the two before handing them to
+#' OpTop:
+#' ```
+#' lda <- text2vec::LDA$new(n_topics = 10)
+#' theta <- lda$fit_transform(dtm, n_iter = 1000)
+#' fit <- optop_warplda(lda, theta)
+#' ```
+#' Passing the raw R6 object to an OpTop function fails with a pointer to
+#' this helper, because the document-topic matrix is not stored inside it.
 #'
 #' @param model A fitted `text2vec::LDA` (WarpLDA) R6 object.
 #' @param doc_topic_distr The document-topic probability matrix returned by
 #'   `model$fit_transform()` on the corpus under evaluation (rows are
 #'   documents and carry the document identifiers, columns are topics, rows
-#'   sum to 1).
+#'   sum to 1). Keep it when fitting; it cannot be recovered from the model
+#'   object alone.
 #'
 #' @return An object of class `optop_warplda` holding the pair; its
 #'   `optop_as_theta_phi()` method exposes theta and phi with the usual
-#'   contract.
+#'   contract, and the held-out tools fold in new documents through
+#'   `model$transform()`.
 #'
 #' @examples
-#' \dontrun{
-#' lda <- text2vec::LDA$new(n_topics = 10)
-#' theta <- lda$fit_transform(dtm, n_iter = 1000)
-#' fit <- optop_warplda(lda, theta)
-#' part <- optop_make_partition(list(fit), dtm)
+#' \donttest{
+#' if (requireNamespace("text2vec", quietly = TRUE)) {
+#'   rdir <- function(n, k, a) {
+#'     g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+#'     g / rowSums(g)
+#'   }
+#'   set.seed(42)
+#'   corpus <- sim_dfm(DTW = rdir(60, 4, 0.4), TWW = rdir(4, 200, 0.1),
+#'                     doc_length = rep(300, 60), seed = 1)
+#'   dtm <- quanteda::as.dfm(corpus)
+#'
+#'   lda <- text2vec::LDA$new(n_topics = 4)
+#'   theta <- lda$fit_transform(dtm, n_iter = 200, progressbar = FALSE)
+#'   fit <- optop_warplda(lda, theta)
+#'
+#'   part <- optop_make_partition(list(fit), dtm)
+#'   base <- optop_make_baseline(dtm)
+#'   optop_index_deviance(fit, dtm, part, base)$r2
+#' }
 #' }
 #'
 #' @references
 #' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
 #' diagnostics for topic models. Working paper.
+#'
+#' @seealso [optop_as_theta_phi()], [optop_index_holdout()]
 #'
 #' @export
 optop_warplda <- function(model, doc_topic_distr) {
@@ -242,20 +273,60 @@ optop_warplda <- function(model, doc_topic_distr) {
 
 #' Fold document-topic weights in for new documents
 #'
-#' Adapter generic behind the held-out tools: given a topic model fitted on
-#' the training sample and the counts of new documents on the same
-#' vocabulary, return the folded-in document-topic weights
-#' \eqn{\hat\theta_j}{theta_j} (rows summing to 1, aligned with the rows of
-#' `newdata`), holding the trained topic-word distributions fixed. Every
-#' method infers the weights from the new document and the trained global
-#' objects only, the held-out-document reconstruction target of the paper.
+#' Answer the question: what would the fitted model say about a document it
+#' has never seen? A trained topic model consists of global objects (the
+#' topic-word distributions) and document-specific topic weights, but the
+#' weights exist only for the documents used in training. "Folding in" fills
+#' that gap: given the word counts of a new document, the engine estimates
+#' the document's topic weights \eqn{\hat\theta_j}{theta_j} while holding
+#' the trained topics fixed, so nothing about the model itself changes. The
+#' combination of the folded-in weights and the trained topics yields the
+#' fitted word probabilities of the new document, which is all the OpTop
+#' diagnostics need.
 #'
-#' @param model A fitted topic model supported by [optop_as_theta_phi()].
-#' @param newdata A counts document-term matrix on the training vocabulary.
-#' @param ... Passed to the engine's fold-in routine.
+#' This internal generic is the engine behind [optop_index_holdout()] and
+#' [optop_moment_test()]: both call it once per model to score evaluation
+#' documents. It has one method per supported engine, each delegating to
+#' that engine's own prediction routine:
+#' - **topicmodels** fits run the variational E step of
+#'   `topicmodels::posterior(model, newdata)` on the new documents;
+#' - **seededlda** fits are re-estimated on the new documents with the
+#'   trained model held fixed (`textmodel_lda(newdata, model = .)`), the
+#'   package's supported prediction path;
+#' - **text2vec WarpLDA** wrappers call `model$transform()`;
+#' - **NLPstudio** `nlp_topic_fit` objects delegate to the raw backend fit
+#'   they store.
 #'
-#' @return A numeric matrix of document-topic weights, one row per document
-#'   of `newdata`.
+#' @param model A fitted topic model supported by [optop_as_theta_phi()],
+#'   trained on the training corpus.
+#' @param newdata A counts document-term matrix of the new documents. Its
+#'   columns must be the training vocabulary, in the same order and with the
+#'   same names: the model can only interpret words it was trained on
+#'   (the held-out tools handle the alignment and the out-of-support words
+#'   before calling this generic).
+#' @param ... Passed to the engine's fold-in routine, for example sampler
+#'   iterations.
+#'
+#' @return A numeric matrix of document-topic weights with one row per
+#'   document of `newdata` and one column per topic; every row sums to 1.
+#'
+#' @details
+#' Fold-in reuses the new document's counts to estimate its own topic
+#' weights, which is why the paper calls the resulting scores a
+#' *reconstruction* target: the model is judged on how well it can rebuild a
+#' document after being allowed to read it once. This is less optimistic
+#' than in-sample evaluation, where the same documents also shaped the
+#' topics themselves, but stricter targets exist (splitting each document
+#' into fold-in and scoring tokens). Documents with no tokens on the
+#' training vocabulary cannot be folded in; the held-out tools drop them
+#' with a warning before reaching this point.
+#'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+#' diagnostics for topic models. Working paper.
+#'
+#' @seealso [optop_index_holdout()], [optop_moment_test()],
+#'   [optop_as_theta_phi()]
 #'
 #' @keywords internal
 optop_fold_in <- function(model, newdata, ...) UseMethod("optop_fold_in")

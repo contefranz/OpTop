@@ -1,8 +1,14 @@
 #' Held-out moment-based specification tests
 #'
-#' Test whether held-out residuals are balanced along researcher-specified
-#' vocabulary directions, following Section 4 of Lewis and Grossetti (2026).
-#' For each evaluation document the residual probability vector is
+#' Answer the question: which parts of the vocabulary does the model still
+#' get systematically wrong? A fit index says how much error remains, not
+#' where. This function groups the vocabulary into researcher-specified,
+#' labeled word sets (the *instruments*: for example frequency strata, or
+#' strata of a training fit score) and tests whether the model consistently
+#' over- or under-predicts any group on documents it has never seen,
+#' following Section 4 of Lewis and Grossetti (2026).
+#'
+#' Formally, for each evaluation document the residual probability vector is
 #' \eqn{\varepsilon_j = \mathbf d_j - \hat{\mathbf p}^{K,tr}_j}{e_j = d_j - p_j},
 #' observed minus fitted word probability under the training-fitted model;
 #' the moment vector projects it onto a training-built instrument matrix,
@@ -41,6 +47,23 @@
 #' @param ... Passed to the engine's fold-in routine.
 #'
 #' @details
+#' **How it works.**
+#' 1. *Split upstream.* Models are fitted on the training corpus;
+#'    the evaluation documents stay out of the fitting entirely.
+#' 2. *Build the instruments from training data only.* Each instrument row
+#'    contrasts one word group against a reference group, so its moment
+#'    reads as "average residual mass in this group minus the reference".
+#'    Because the groups are fixed before any evaluation residual is seen,
+#'    the test is not fishing in its own evaluation data.
+#' 3. *Score every evaluation document.* Topic weights are folded in
+#'    (holding the trained topics fixed), the residual vector is formed,
+#'    and its projection on the instruments gives one small moment vector
+#'    per document.
+#' 4. *Test.* If the model has no systematic bias along the chosen
+#'    directions, the moments should average to zero; the Wald statistic
+#'    measures how far from zero the averages are relative to their
+#'    sampling noise.
+#'
 #' **Construction.** All instruments are built from the training sample
 #' only, before any evaluation residual is examined, and every row is
 #' exactly mean-zero with \eqn{\|z\|_1 = 2}{||z||_1 = 2}. The residuals use
@@ -71,19 +94,42 @@
 #' as exploratory or adjust for multiple testing.
 #'
 #' @return An object of class `optop_moment_test`: a list with
-#' - `summary`: `data.table` with one row per \eqn{K}: `q`, `wald`, `df`,
-#'   `pval`, and (scalar case) `t` and `pval_t`.
-#' - `moments`: per-\eqn{K} list with `g_bar`, `sigma`, `n`, and `marginal`
-#'   (`data.table`: stratum, estimate, se, t, pval, pval_adj).
-#' - `instruments`: the instrument matrix (per \eqn{K} for `type = "fit"`)
-#'   and the stratum assignment of every vocabulary word.
+#' - `summary`: `data.table` with one row per \eqn{K}. Reading the columns:
+#'   `q` is the number of instrument rows (word-group contrasts); `wald`
+#'   the joint test statistic with `df = q` and `pval` its p-value, where a
+#'   small value indicates systematic residual bias along at least one
+#'   contrast; `t` and `pval_t` are the equivalent scalar test when
+#'   `q = 1` (`NA` otherwise).
+#' - `moments`: per-\eqn{K} list with `g_bar` (the mean moments, effect
+#'   sizes in probability-mass units: how much observed mass exceeds
+#'   fitted mass along each contrast), `sigma` (their covariance), `n`, and
+#'   `marginal` (`data.table` localizing a rejection: one row per stratum
+#'   with `estimate`, `se`, `t`, `pval`, and the adjusted `pval_adj`).
+#' - `instruments`: the instrument matrix and the stratum assignment of
+#'   every vocabulary word (per \eqn{K} for `type = "fit"`).
 #' - `type`, `adjust`, `K`: the design.
 #'
 #' @examples
-#' \dontrun{
-#' mt <- optop_moment_test(models, dfm_eval, dfm_train, type = "strata")
-#' mt$summary
-#' mt$moments[["10"]]$marginal
+#' \donttest{
+#' # a small synthetic corpus, split into training and evaluation
+#' rdir <- function(n, k, a) {
+#'   g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+#'   g / rowSums(g)
+#' }
+#' set.seed(42)
+#' corpus <- sim_dfm(DTW = rdir(120, 6, 0.4), TWW = rdir(6, 300, 0.1),
+#'                   doc_length = rep(400, 120), seed = 1)
+#' dtm_train <- corpus[1:90, ]
+#' dtm_eval <- corpus[91:120, ]
+#' models <- lapply(c(4, 6, 8), function(k) {
+#'   topicmodels::LDA(dtm_train, k = k, control = list(seed = 100 + k))
+#' })
+#'
+#' # does residual bias vary across frequency strata?
+#' mt <- optop_moment_test(models, dtm_eval, dtm_train, type = "strata",
+#'                         bins = 4)
+#' mt$summary                  # one Wald test per K
+#' mt$moments[["6"]]$marginal  # which stratum drives it, at K = 6
 #' }
 #'
 #' @references

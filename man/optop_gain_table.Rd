@@ -10,9 +10,12 @@ optop_gain_table(ho, metric = "deviance", epsilon = 0.01, alpha = 0.05)
 \item{ho}{An \code{\link[=optop_index_holdout]{optop_index_holdout()}} result.}
 
 \item{metric}{One of the metrics evaluated in \code{ho} (default
-\code{"deviance"}).}
+\code{"deviance"}, the paper's primary index).}
 
-\item{epsilon}{Positive tolerance of the adequacy rule (default \code{0.01}).}
+\item{epsilon}{Positive tolerance of the adequacy rule: the held-out
+improvement you consider too small to justify an extra topic, on the
+proportional scale of the index (default \code{0.01}, one percentage point
+of discrepancy reduction). Fix it before looking at the results.}
 
 \item{alpha}{One-sided level of the upper bound and the improvement test
 (default \code{0.05}).}
@@ -20,27 +23,50 @@ optop_gain_table(ho, metric = "deviance", epsilon = 0.01, alpha = 0.05)
 \value{
 A list with
 \itemize{
-\item \code{gains}: \code{data.table} with one row per adjacent pair: \code{K}, \code{succ_K},
-\code{n} (paired documents), \code{gain} (mean), \code{sd}, \code{upper} (one-sided bound),
-\code{z}, and \code{pval} (one-sided, improvement).
-\item \code{k_hat}: the selected topic count (\code{NA} when no grid point qualifies).
-\item \code{metric}, \code{epsilon}, \code{alpha}.
+\item \code{gains}: \code{data.table} with one row per adjacent pair. Reading the
+columns: \code{K} and \code{succ_K} are the pair compared; \code{n} the number of
+paired documents; \code{gain} the mean per-document improvement from \code{K} to
+\code{succ_K}; \code{sd} its standard deviation across documents; \code{upper} the
+one-sided upper confidence bound of the mean gain (the quantity the
+selection rule thresholds); \code{z} and \code{pval} the paired test of no
+improvement (small \code{pval} = the extra topics helped on average).
+\item \code{k_hat}: the selected topic count, the smallest \code{K} with
+\code{upper <= epsilon} (\code{NA} when no grid point qualifies, meaning the
+grid ended before the gains died out).
+\item \code{metric}, \code{epsilon}, \code{alpha}: the design.
 }
 }
 \description{
-Paired comparison of held-out fit across adjacent topic counts, following
-Proposition 2 (iv) and Definition 1 of Lewis and Grossetti (2026). For
-each grid point \eqn{K} with successor \eqn{succ(K)} (the next point of
-the actual grid), the per-document gain is
-\eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
-computed on the same evaluation documents. The table reports the mean
-gain, its standard deviation, the one-sided upper confidence bound
-\eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)},
-and the paired test of no improvement. The selection
-\eqn{\hat K_{D,\varepsilon,\alpha}}{K_hat} is the smallest \eqn{K} whose
-upper bound is at most \eqn{\varepsilon}{epsilon}.
+Answer the question: when do additional topics stop paying for
+themselves? Comparing two topic counts on held-out fit is a paired
+problem: the same evaluation documents are scored under both models, so
+the informative quantity is the per-document \emph{gain}, the difference of
+the two held-out scores on the same document. This function computes the
+paired gains between adjacent points of the topic grid, attaches their
+uncertainty, and applies the paper's selection rule: stop at the
+smallest \eqn{K} beyond which the certified improvement falls below a
+tolerance you chose in advance (Proposition 2 (iv) and Definition 1 of
+Lewis and Grossetti 2026).
 }
 \details{
+\strong{How it works.}
+\enumerate{
+\item For each grid point \eqn{K} with successor \eqn{succ(K)} (the next
+point of the actual grid, not mechanically \eqn{K + 1}), the
+per-document gain is
+\eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
+computed on the same evaluation documents.
+\item The mean gain estimates how much held-out fit the extra topics buy;
+its one-sided upper confidence bound
+\eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)}
+says: with confidence \eqn{1-\alpha}{1 - alpha}, the true gain is no
+larger than this.
+\item The selection \eqn{\hat K_{D,\varepsilon,\alpha}}{k_hat} is the
+smallest \eqn{K} whose upper bound is at most
+\eqn{\varepsilon}{epsilon}: even in the optimistic reading of the
+data, moving past that \eqn{K} buys less than the tolerance.
+}
+
 The rule is a stopping rule over dependent one-sided tests: adjacent
 gains share evaluation documents and overlapping models, so \code{alpha}
 applies to each comparison separately, not to the selection event.
@@ -50,10 +76,34 @@ sample and report fit indices and moment diagnostics on a second,
 disjoint evaluation sample. The rule is a practical sufficiency
 criterion, not an estimator of a latent true number of topics.
 }
+\examples{
+\donttest{
+# continue from the optop_index_holdout() example
+rdir <- function(n, k, a) {
+  g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+  g / rowSums(g)
+}
+set.seed(42)
+corpus <- sim_dfm(DTW = rdir(120, 6, 0.4), TWW = rdir(6, 300, 0.1),
+                  doc_length = rep(400, 120), seed = 1)
+dtm_train <- corpus[1:90, ]
+dtm_eval <- corpus[91:120, ]
+models <- lapply(c(4, 6, 8), function(k) {
+  topicmodels::LDA(dtm_train, k = k, control = list(seed = 100 + k))
+})
+ho <- optop_index_holdout(models, dtm_eval,
+                          optop_make_baseline(dtm_train))
+
+gt <- optop_gain_table(ho, epsilon = 0.01, alpha = 0.05)
+gt$gains   # certified improvement per grid step
+gt$k_hat   # smallest K after which gains fall below epsilon
+}
+
+}
 \references{
 Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
 diagnostics for topic models. Working paper.
 }
 \seealso{
-\code{\link[=optop_index_holdout]{optop_index_holdout()}}
+\code{\link[=optop_index_holdout]{optop_index_holdout()}}, \code{\link[=optop_moment_test]{optop_moment_test()}}
 }

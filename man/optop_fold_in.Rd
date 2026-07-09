@@ -22,24 +22,59 @@ optop_fold_in(model, newdata, ...)
 \method{optop_fold_in}{default}(model, newdata, ...)
 }
 \arguments{
-\item{model}{A fitted topic model supported by \code{\link[=optop_as_theta_phi]{optop_as_theta_phi()}}.}
+\item{model}{A fitted topic model supported by \code{\link[=optop_as_theta_phi]{optop_as_theta_phi()}},
+trained on the training corpus.}
 
-\item{newdata}{A counts document-term matrix on the training vocabulary.}
+\item{newdata}{A counts document-term matrix of the new documents. Its
+columns must be the training vocabulary, in the same order and with the
+same names: the model can only interpret words it was trained on
+(the held-out tools handle the alignment and the out-of-support words
+before calling this generic).}
 
-\item{...}{Passed to the engine's fold-in routine.}
+\item{...}{Passed to the engine's fold-in routine, for example sampler
+iterations.}
 }
 \value{
-A numeric matrix of document-topic weights, one row per document
-of \code{newdata}.
+A numeric matrix of document-topic weights with one row per
+document of \code{newdata} and one column per topic; every row sums to 1.
 }
 \description{
-Adapter generic behind the held-out tools: given a topic model fitted on
-the training sample and the counts of new documents on the same
-vocabulary, return the folded-in document-topic weights
-\eqn{\hat\theta_j}{theta_j} (rows summing to 1, aligned with the rows of
-\code{newdata}), holding the trained topic-word distributions fixed. Every
-method infers the weights from the new document and the trained global
-objects only, the held-out-document reconstruction target of the paper.
+Answer the question: what would the fitted model say about a document it
+has never seen? A trained topic model consists of global objects (the
+topic-word distributions) and document-specific topic weights, but the
+weights exist only for the documents used in training. "Folding in" fills
+that gap: given the word counts of a new document, the engine estimates
+the document's topic weights \eqn{\hat\theta_j}{theta_j} while holding
+the trained topics fixed, so nothing about the model itself changes. The
+combination of the folded-in weights and the trained topics yields the
+fitted word probabilities of the new document, which is all the OpTop
+diagnostics need.
+}
+\details{
+This internal generic is the engine behind \code{\link[=optop_index_holdout]{optop_index_holdout()}} and
+\code{\link[=optop_moment_test]{optop_moment_test()}}: both call it once per model to score evaluation
+documents. It has one method per supported engine, each delegating to
+that engine's own prediction routine:
+\itemize{
+\item \strong{topicmodels} fits run the variational E step of
+\code{topicmodels::posterior(model, newdata)} on the new documents;
+\item \strong{seededlda} fits are re-estimated on the new documents with the
+trained model held fixed (\code{textmodel_lda(newdata, model = .)}), the
+package's supported prediction path;
+\item \strong{text2vec WarpLDA} wrappers call \code{model$transform()};
+\item \strong{NLPstudio} \code{nlp_topic_fit} objects delegate to the raw backend fit
+they store.
+}
+
+Fold-in reuses the new document's counts to estimate its own topic
+weights, which is why the paper calls the resulting scores a
+\emph{reconstruction} target: the model is judged on how well it can rebuild a
+document after being allowed to read it once. This is less optimistic
+than in-sample evaluation, where the same documents also shaped the
+topics themselves, but stricter targets exist (splitting each document
+into fold-in and scoring tokens). Documents with no tokens on the
+training vocabulary cannot be folded in; the held-out tools drop them
+with a warning before reaching this point.
 }
 \section{Methods (by class)}{
 \itemize{
@@ -60,4 +95,12 @@ fit stored in \code{model_object}.
 engines that support fold-in.
 
 }}
+\references{
+Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+diagnostics for topic models. Working paper.
+}
+\seealso{
+\code{\link[=optop_index_holdout]{optop_index_holdout()}}, \code{\link[=optop_moment_test]{optop_moment_test()}},
+\code{\link[=optop_as_theta_phi]{optop_as_theta_phi()}}
+}
 \keyword{internal}
