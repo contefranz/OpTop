@@ -101,7 +101,7 @@ Useful links:
 Authors:
 \itemize{
   \item Francesco Grossetti \email{francesco.grossetti@unibocconi.it} (\href{https://orcid.org/0000-0002-5130-7745}{ORCID}) [copyright holder]
-  \item Craig Lewis \email{craig.lewis@owen.vanderbilt.edu} [copyright holder]
+  \item Craig Lewis \email{craig.lewis@owen.vanderbilt.edu} (\href{https://orcid.org/0000-0001-8734-1702}{ORCID}) [copyright holder]
 }
 
 Other contributors:
