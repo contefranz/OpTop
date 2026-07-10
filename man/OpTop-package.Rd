@@ -53,6 +53,17 @@ baseline, at the document or word level, with Micro
 across the grid, with the baseline included in the harmonized union,
 and \code{\link[=optop_make_baseline]{optop_make_baseline()}} fixes the corpus baseline, so every model
 is evaluated on a common support.
+\item \strong{Does the improvement generalize?}
+\code{\link[=optop_index_holdout]{optop_index_holdout()}} evaluates the indices on an independent
+evaluation sample after folding in the document-topic weights, with
+confidence intervals for the average held-out fit, and
+\code{\link[=optop_gain_table]{optop_gain_table()}} turns the paired adjacent gains into the
+epsilon-adequacy selection of the smallest sufficient \eqn{K}.
+\item \strong{Where does the model still fail?}
+\code{\link[=optop_moment_test]{optop_moment_test()}} projects held-out residuals onto training-built
+vocabulary instruments (frequency contrast, frequency strata,
+fit-stratified) and tests for structured residual bias beyond what the
+scalar indices reveal.
 }
 
 The vignette presents the full workflow on the U.S. Presidential
@@ -90,7 +101,7 @@ Useful links:
 Authors:
 \itemize{
   \item Francesco Grossetti \email{francesco.grossetti@unibocconi.it} (\href{https://orcid.org/0000-0002-5130-7745}{ORCID}) [copyright holder]
-  \item Craig Lewis \email{craig.lewis@owen.vanderbilt.edu} [copyright holder]
+  \item Craig Lewis \email{craig.lewis@owen.vanderbilt.edu} (\href{https://orcid.org/0000-0001-8734-1702}{ORCID}) [copyright holder]
 }
 
 Other contributors:

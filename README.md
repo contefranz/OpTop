@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.13.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.13.0)
+[![release](https://img.shields.io/badge/release-v0.14.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.14.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -24,6 +24,13 @@ within one model grid.
   Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 
   as micro/macro $R^2$ analogues (`optop_index_se()`, `optop_index_chisq()`, `optop_index_deviance()`), 
   plus a convenience table across a grid (`optop_index_table()`).
+
+- **Held-out validation and residual diagnostics**  
+  As of v0.14.0, `optop_index_holdout()` scores independent evaluation documents with 
+  confidence intervals for the average held-out fit, `optop_gain_table()` selects the 
+  smallest sufficient K from paired adjacent gains, and `optop_moment_test()` tests 
+  held-out residuals for structured bias along frequency or fit-based vocabulary 
+  strata.
 
 - **Harmonized comparisons across K**  
   Rare words are collapsed via a fixed, document-specific partition so all indices are evaluated on a common support (`optop_make_partition()`), with a fixed corpus baseline for fair normalization (`optop_make_baseline()`).
@@ -52,8 +59,8 @@ within one model grid.
   (`nlp_topic_fit`). Engines can be mixed within one grid fitted on the same corpus: 
   documents and features are aligned by identifier, per model. Supporting a new 
   engine requires a single adapter method that returns the fitted document-topic 
-  and topic-word probabilities; an adapter for *WarpLDA* from **text2vec** is 
-  planned.
+  and topic-word probabilities; *WarpLDA* fits from **text2vec** are supported 
+  through the `optop_warplda()` wrapper.
   
 ### Authors
 

@@ -10,8 +10,10 @@
 \alias{optop_as_theta_phi.CTM_VEM}
 \alias{optop_as_theta_phi.textmodel_lda}
 \alias{optop_as_theta_phi.nlp_topic_fit}
-\alias{optop_as_theta_phi.LDA_t2v}
+\alias{optop_as_theta_phi.optop_warplda}
+\alias{optop_as_theta_phi.WarpLDA}
 \alias{optop_as_theta_phi.default}
+\alias{optop_as_theta_phi.optop_theta_phi}
 \title{Extract document-topic and topic-word weights from a fitted model}
 \usage{
 optop_as_theta_phi(model)
@@ -32,9 +34,13 @@ optop_as_theta_phi(model)
 
 \method{optop_as_theta_phi}{nlp_topic_fit}(model)
 
-\method{optop_as_theta_phi}{LDA_t2v}(model)
+\method{optop_as_theta_phi}{optop_warplda}(model)
+
+\method{optop_as_theta_phi}{WarpLDA}(model)
 
 \method{optop_as_theta_phi}{default}(model)
+
+\method{optop_as_theta_phi}{optop_theta_phi}(model)
 }
 \arguments{
 \item{model}{A fitted topic model.}
@@ -88,12 +94,21 @@ stored \code{dtw} (document-topic) and \code{tww} (topic-word) weight matrices,
 identifiers from \code{doc_ids} and \code{vocab}. When the weights are not stored,
 the adapter recurses into the raw \code{model_object} if present.
 
-\item \code{optop_as_theta_phi(LDA_t2v)}: Placeholder for \code{text2vec} (WarpLDA)
-support, registered so the method dispatches and fails informatively
-until the adapter is implemented.
+\item \code{optop_as_theta_phi(optop_warplda)}: text2vec WarpLDA fits, wrapped by
+\code{\link[=optop_warplda]{optop_warplda()}}: theta is the matrix the user kept from
+\code{fit_transform()}, phi is \code{model$topic_word_distribution}.
+
+\item \code{optop_as_theta_phi(WarpLDA)}: Guard for raw text2vec WarpLDA R6 objects:
+they do not retain the document-topic matrix, so they must be wrapped
+with \code{\link[=optop_warplda]{optop_warplda()}}. Registered on the R6 class so that raw objects
+never fall through to the \code{topicmodels} \code{LDA} method (the R6 class
+chain contains "LDA" and "TopicModel").
 
 \item \code{optop_as_theta_phi(default)}: Unsupported classes fail with the list of
 supported engines.
+
+\item \code{optop_as_theta_phi(optop_theta_phi)}: Internal container built by the held-out
+tools: the adapter contract stored as-is.
 
 }}
 \keyword{internal}

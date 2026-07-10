@@ -1,40 +1,38 @@
 Package: OpTop
 Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for Topic Models
-Version: 0.13.0
+Version: 0.14.0
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
-    person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph")),
+    person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph"),
+    comment = c(ORCID = "0000-0001-8734-1702")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
-Description: Implements statistical tests and discrepancy indices to select the optimal number of
-    topics and compare goodness-of-fit across Latent Dirichlet Allocation models, following
-    the optimal topic identification approach of Lewis and Grossetti (2022)
-    <https://jmlr.org/papers/v23/19-297.html>.
+Description: Implements statistical tests, goodness-of-fit diagnostics, and topic-number selection     tools for multiple topic-model implementations, including Latent Dirichlet Allocation and related     estimators. The package follows the optimal topic identification approach of Lewis and Grossetti     (2022) <https://jmlr.org/papers/v23/19-297.html>.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-LazyData: true
 URL: https://contefranz.github.io/OpTop/, https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-Depends: R (>= 3.1)
+Depends: R (>= 4.2.0)
 Imports:
     cli (>= 3.6.2),
     data.table (>= 1.11.0),
-    lifecycle,
-    quanteda (>= 2.0.0),
-    tibble (>= 2.1.0),
-    LDATS (>= 0.2.7),
     ggplot2 (>= 3.4.0),
-    patchwork (>= 1.1.1),
+    LDATS (>= 0.2.7),
+    lifecycle,
     Matrix,
     methods,
+    patchwork (>= 1.1.1),
+    quanteda (>= 2.0.0),
+    slam,
     topicmodels
 Suggests:
     knitr,
     rmarkdown,
     seededlda,
     testthat (>= 3.0.0),
+    text2vec,
     withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3

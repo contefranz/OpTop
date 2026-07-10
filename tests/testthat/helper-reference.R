@@ -325,3 +325,108 @@ ref_boot_null <- function(probs, doc_lengths, n_boot) {
   }
   T_null
 }
+
+# Naive reference for the held-out chain of Section 3.7 (topicmodels fits):
+# explicit loops for the alignment, the OOV convention, the fold-in via
+# posterior(), the held-out harmonized partition over K0 = K U {null} with
+# the TRAINING baseline, the Pearson min-bin rule on the evaluation side,
+# the three discrepancies, and the Macro/Micro/gap statistics with their
+# standard errors.
+ref_holdout <- function(models, dtm_eval, baseline, c = 1,
+                        metrics = c("se", "chisq", "deviance"),
+                        conf = 0.95, eps = 1e-12) {
+  vocab <- names(baseline$pi_glob)
+  pi_tr <- unname(baseline$pi_glob)
+  W <- length(vocab)
+  N_raw <- as.matrix(dtm_eval)
+
+  # alignment to the training support + out-of-support counts
+  N_al <- matrix(0, nrow(N_raw), W,
+                 dimnames = list(rownames(N_raw), vocab))
+  hit <- colnames(N_raw)[colnames(N_raw) %in% vocab]
+  N_al[, hit] <- N_raw[, hit]
+  oov <- rowSums(N_raw[, setdiff(colnames(N_raw), vocab), drop = FALSE])
+
+  keep <- rowSums(N_al) > 0
+  N_al <- N_al[keep, , drop = FALSE]
+  oov <- oov[keep]
+  J <- nrow(N_al)
+  L <- rowSums(N_al) + oov            # L_j keeps every token
+  tau <- c / pmax(L, 1)
+
+  # fold-in and fitted probabilities per model
+  thetas <- lapply(models, function(m) {
+    stm <- slam::as.simple_triplet_matrix(N_al)
+    topicmodels::posterior(m, newdata = stm)$topics
+  })
+  phis <- lapply(models, function(m) ref_theta_phi(m)$phi)
+  P <- lapply(seq_along(models), function(i) thetas[[i]] %*% phis[[i]])
+
+  # harmonized union over K0 = K U {null}: min(pi_tr(w), min_K p) < tau_j;
+  # the OOV pseudo-word (zero probability everywhere) is always rare
+  p_min <- Reduce(pmin, P)
+  p_min <- pmin(p_min, matrix(pi_tr, J, W, byrow = TRUE))
+  rare <- p_min < tau
+
+  # Pearson min-bin rule on the evaluation side (the OOV word adds no mass)
+  E_min_by_model <- sapply(P, function(pm) L * rowSums(pm * rare))
+  B_min <- L * as.numeric(rare %*% pi_tr)
+  min_ok <- pmin(apply(E_min_by_model, 1, min), B_min) >= c
+
+  z <- stats::qnorm(1 - (1 - conf) / 2)
+  out <- list()
+  for (metric in metrics) {
+    per_k <- lapply(seq_along(models), function(i) {
+      D_K <- numeric(J); D_0 <- numeric(J)
+      for (j in seq_len(J)) {
+        r_j <- rare[j, ]
+        N_j <- N_al[j, ]
+        E_j <- L[j] * P[[i]][j, ]
+        B_j <- L[j] * pi_tr
+        N_min <- sum(N_j[r_j]) + oov[j]   # OOV tokens enter the min bin
+
+        if (metric == "se") {
+          D_K[j] <- sum((N_j[!r_j] - E_j[!r_j])^2) +
+            (N_min - sum(E_j[r_j]))^2
+          D_0[j] <- sum((N_j[!r_j] - B_j[!r_j])^2) +
+            (N_min - sum(B_j[r_j]))^2
+        } else if (metric == "chisq") {
+          E_f <- pmax(E_j, eps); B_f <- pmax(B_j, eps)
+          dK <- sum((N_j[!r_j] - E_f[!r_j])^2 / E_f[!r_j])
+          d0 <- sum((N_j[!r_j] - B_f[!r_j])^2 / B_f[!r_j])
+          if (min_ok[j]) {
+            E_m <- max(sum(E_f[r_j]), eps)
+            B_m <- max(L[j] * sum(pi_tr[r_j]), eps)
+            dK <- dK + (N_min - E_m)^2 / E_m
+            d0 <- d0 + (N_min - B_m)^2 / B_m
+          }
+          D_K[j] <- dK; D_0[j] <- d0
+        } else {
+          E_m <- max(sum(E_j[r_j]), eps)
+          B_m <- max(L[j] * sum(pi_tr[r_j]), eps)
+          dK_min <- if (N_min == 0) 0 else 2 * N_min * log(N_min / E_m)
+          d0_min <- if (N_min == 0) 0 else 2 * N_min * log(N_min / B_m)
+          D_K[j] <- sum(ref_dev_contrib(N_j[!r_j], E_j[!r_j], eps)) + dK_min
+          D_0[j] <- sum(ref_dev_contrib(N_j[!r_j], B_j[!r_j], eps)) + d0_min
+        }
+      }
+      valid <- D_0 > 0
+      r <- rep(NA_real_, J)
+      r[valid] <- 1 - D_K[valid] / D_0[valid]
+      rv <- r[valid]; A <- D_K[valid]; B <- D_0[valid]; n <- sum(valid)
+      macro <- mean(rv); macro_se <- stats::sd(rv) / sqrt(n)
+      micro <- 1 - mean(A) / mean(B)
+      g2 <- c(-1 / mean(B), mean(A) / mean(B)^2)
+      micro_se <- sqrt(drop(t(g2) %*% stats::cov(cbind(A, B)) %*% g2) / n)
+      g3 <- c(g2, -1)
+      gap_se <- sqrt(drop(t(g3) %*% stats::cov(cbind(A, B, rv)) %*% g3) / n)
+      list(r = r, macro = macro, macro_se = macro_se,
+           ci = macro + c(-1, 1) * z * macro_se,
+           micro = micro, micro_se = micro_se,
+           gap = micro - macro, gap_se = gap_se, n = n,
+           D_K = D_K, D_0 = D_0)
+    })
+    out[[metric]] <- per_k
+  }
+  out
+}

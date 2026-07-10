@@ -16,7 +16,7 @@
 // The running minimum is initialized at the corpus baseline pi_glob(w): the
 // harmonized rare set of the paper takes the union over the model grid AND
 // the no-topics baseline, so a word is rare in document j iff
-// min(pi_glob(w), min_K i^K_jw) < tau_j.
+// min(pi_glob(w), min_K p^K_jw) < tau_j.
 //
 // Threading contract: within a block, the min update and the mask write are
 // parallelized over columns, each column owned by exactly one thread, so the
@@ -133,7 +133,7 @@ void optop_partition_fill_core(Rcpp::LogicalMatrix rare_mask,
 
 // Rare-mass kernel behind the Pearson min-bin inclusion rule. Given the
 // harmonized mask, it accumulates for every model the fitted probability
-// mass of the rare set, sum_{w in C*_j} i^m_jw, one vocabulary block at a
+// mass of the rare set, sum_{w in C*_j} p^m_jw, one vocabulary block at a
 // time with the same blocked gemm as the fill kernel, and returns a
 // J x n_models matrix. The caller scales by L_j and takes the minimum over
 // models to evaluate min_K E^K_{j,min} >= c.

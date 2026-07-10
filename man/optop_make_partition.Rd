@@ -4,7 +4,14 @@
 \alias{optop_make_partition}
 \title{Harmonized Rare-word Partition for OpTop indices}
 \usage{
-optop_make_partition(models, dtm, c = 1, block = 5000, n_threads = 1L)
+optop_make_partition(
+  models,
+  dtm,
+  c = 1,
+  block = 5000,
+  n_threads = 1L,
+  pi_glob = NULL
+)
 }
 \arguments{
 \item{models}{A list of fitted topic models spanning a grid of \eqn{K}.
@@ -29,6 +36,14 @@ Default: \code{5000}.}
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 kernels (default \code{1L}). Results are identical for any value; only
 wall time changes.}
+
+\item{pi_glob}{Optional numeric vector of baseline word probabilities used
+as the null member of the harmonized union and in the Pearson inclusion
+rule. Default \code{NULL} computes the corpus distribution of
+\code{dtm}, the in-sample construction. Supply the \emph{training}
+baseline (\code{optop_make_baseline()$pi_glob}) when partitioning an
+evaluation corpus for held-out scoring, where the null model must come
+from the training sample.}
 }
 \value{
 A list with:
@@ -52,8 +67,8 @@ evaluate the OpTop goodness-of-fit indices on a \strong{common support} across a
 grid of topic models. Following Lewis and Grossetti (2026), the union that
 defines the harmonized set includes the no-topics baseline: a word \eqn{w}
 is rare in document \eqn{j} if
-\eqn{\min\bigl(\hat\pi_{\mathrm{glob}}(w),\, \min_K i^{K}_{jw}\bigr) < \tau_j,}{min(pi_glob(w), min_K i^K_jw) < tau_j,}
-where \eqn{i^{K}_{jw}} is the fitted probability of word \eqn{w} under the
+\eqn{\min\bigl(\hat\pi_{\mathrm{glob}}(w),\, \min_K p^{K}_{jw}\bigr) < \tau_j,}{min(pi_glob(w), min_K p^K_jw) < tau_j,}
+where \eqn{p^{K}_{jw}} is the fitted probability of word \eqn{w} under the
 \eqn{K}-topic model, \eqn{\hat\pi_{\mathrm{glob}}}{pi_glob} is the corpus
 word distribution of \code{\link[=optop_make_baseline]{optop_make_baseline()}}, and \eqn{\tau_j = c / L_j}
 with \eqn{L_j} the document length.
@@ -62,7 +77,11 @@ with \eqn{L_j} the document length.
 OpTop indices (SE, Pearson \eqn{\chi^2}, and Deviance) are computed on the
 fixed support \eqn{\{w \not\in C_j^*\} \cup \{\min\}} for each document,
 where all words in \eqn{C_j^*} are collapsed into a single "\code{min}"
-bin. Using a harmonized partition ensures comparability across \eqn{K} and
+bin. In the paper's notation the union runs over the augmented grid
+\eqn{\mathcal{K}_0 = \mathcal{K} \cup \{\mathrm{null}\}}{K0 = K U {null}},
+which treats the no-topics baseline as an additional model with fitted
+probabilities \eqn{p^{\mathrm{null}}_{jw} = \hat\pi_{\mathrm{glob}}(w)}{p^null_jw = pi_glob(w)}.
+Using a harmonized partition ensures comparability across \eqn{K} and
 prevents support-driven artifacts in goodness-of-fit curves. Because the
 baseline enters the union, every non-min expected count satisfies
 \eqn{E^{K}_{jw} \ge c} and \eqn{B_{jw} \ge c} on the active support, which

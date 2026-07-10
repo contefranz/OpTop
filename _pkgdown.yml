@@ -37,10 +37,20 @@ reference:
       - optop_make_partition
       - optop_make_baseline
 
+  - title: Held-out validation and diagnostics
+    desc: >-
+      Score independent evaluation documents, select the smallest sufficient
+      K, and test for structured residual bias.
+    contents:
+      - optop_index_holdout
+      - optop_gain_table
+      - optop_moment_test
+
   - title: Utilities
-    desc: Simulate corpora for tests and examples.
+    desc: Simulate corpora and wrap external engines.
     contents:
       - sim_dfm
+      - optop_warplda
 
   - title: Deprecated
     desc: Legacy redundant-topic diagnostics, scheduled for removal before v1.0.0.

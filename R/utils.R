@@ -130,14 +130,36 @@ optop_as_theta_phi.nlp_topic_fit <- function(model) {
        terms = as.character(terms))
 }
 
-#' @describeIn optop_as_theta_phi Placeholder for `text2vec` (WarpLDA)
-#'   support, registered so the method dispatches and fails informatively
-#'   until the adapter is implemented.
+#' @describeIn optop_as_theta_phi text2vec WarpLDA fits, wrapped by
+#'   [optop_warplda()]: theta is the matrix the user kept from
+#'   `fit_transform()`, phi is `model$topic_word_distribution`.
 #' @keywords internal
-#' @exportS3Method optop_as_theta_phi LDA_t2v
-optop_as_theta_phi.LDA_t2v <- function(model) {
-  # TODO: map model$doc_topic_distr -> theta; model$topic_word_distribution -> phi (rows sum to 1)
-  stop("text2vec adapter not implemented yet.")
+#' @exportS3Method optop_as_theta_phi optop_warplda
+optop_as_theta_phi.optop_warplda <- function(model) {
+  theta <- model$theta
+  phi <- model$model$topic_word_distribution
+  if (ncol(theta) != nrow(phi)) {
+    stop("doc_topic_distr and the WarpLDA fit disagree on the number of topics")
+  }
+  list(theta = theta,
+       phi   = phi,
+       K     = ncol(theta),
+       docs  = rownames(theta),
+       terms = colnames(phi))
+}
+
+#' @describeIn optop_as_theta_phi Guard for raw text2vec WarpLDA R6 objects:
+#'   they do not retain the document-topic matrix, so they must be wrapped
+#'   with [optop_warplda()]. Registered on the R6 class so that raw objects
+#'   never fall through to the `topicmodels` `LDA` method (the R6 class
+#'   chain contains "LDA" and "TopicModel").
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi WarpLDA
+optop_as_theta_phi.WarpLDA <- function(model) {
+  stop(paste("a raw text2vec WarpLDA object does not retain the",
+             "document-topic matrix; wrap it with",
+             "optop_warplda(model, doc_topic_distr), where doc_topic_distr",
+             "is the matrix returned by model$fit_transform()"))
 }
 
 #' @describeIn optop_as_theta_phi Unsupported classes fail with the list of
@@ -148,8 +170,235 @@ optop_as_theta_phi.default <- function(model) {
   stop(paste0("unsupported topic model class <",
               paste(class(model), collapse = "/"),
               ">. Supported: topicmodels (LDA VEM/Gibbs, CTM), seededlda ",
-              "(textmodel_lda/textmodel_seededlda/textmodel_seqlda) and ",
-              "NLPstudio (nlp_topic_fit)."))
+              "(textmodel_lda/textmodel_seededlda/textmodel_seqlda), ",
+              "NLPstudio (nlp_topic_fit) and text2vec WarpLDA via ",
+              "optop_warplda()."))
+}
+
+#' @describeIn optop_as_theta_phi Internal container built by the held-out
+#'   tools: the adapter contract stored as-is.
+#' @keywords internal
+#' @exportS3Method optop_as_theta_phi optop_theta_phi
+optop_as_theta_phi.optop_theta_phi <- function(model) {
+  model[c("theta", "phi", "K", "docs", "terms")]
+}
+
+# Internal light container carrying an explicit (theta, phi) pair through
+# the adapter interface, used by the held-out construction where theta is
+# folded in rather than stored in a fitted object.
+.optop_tp <- function(theta, phi) {
+  structure(list(theta = theta,
+                 phi   = phi,
+                 K     = ncol(theta),
+                 docs  = rownames(theta),
+                 terms = colnames(phi)),
+            class = c("optop_theta_phi", "list"))
+}
+
+#' Wrap a text2vec WarpLDA fit for OpTop
+#'
+#' Make a WarpLDA topic model usable with every OpTop tool. text2vec's
+#' WarpLDA sampler splits its output in two: `fit_transform()` *returns*
+#' the document-topic matrix to you, while the model object retains only
+#' the topic-word distribution. OpTop needs both halves together, so this
+#' helper bundles the model object and the matrix you kept into one light
+#' object accepted everywhere a fitted topic model is
+#' ([optimal_topic()], [optop_make_partition()], the index family,
+#' [optop_index_holdout()] and [optop_moment_test()]).
+#'
+#' In practice the workflow is: fit with text2vec as usual, keep the matrix
+#' that `fit_transform()` returns, and wrap the two before handing them to
+#' OpTop:
+#' ```
+#' lda <- text2vec::LDA$new(n_topics = 10)
+#' theta <- lda$fit_transform(dtm, n_iter = 1000)
+#' fit <- optop_warplda(lda, theta)
+#' ```
+#' Passing the raw R6 object to an OpTop function fails with a pointer to
+#' this helper, because the document-topic matrix is not stored inside it.
+#'
+#' @param model A fitted `text2vec::LDA` (WarpLDA) R6 object.
+#' @param doc_topic_distr The document-topic probability matrix returned by
+#'   `model$fit_transform()` on the corpus under evaluation (rows are
+#'   documents and carry the document identifiers, columns are topics, rows
+#'   sum to 1). Keep it when fitting; it cannot be recovered from the model
+#'   object alone.
+#'
+#' @return An object of class `optop_warplda` holding the pair; its
+#'   `optop_as_theta_phi()` method exposes theta and phi with the usual
+#'   contract, and the held-out tools fold in new documents through
+#'   `model$transform()`.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("text2vec", quietly = TRUE)) {
+#'   rdir <- function(n, k, a) {
+#'     g <- matrix(stats::rgamma(n * k, shape = a), nrow = n)
+#'     g / rowSums(g)
+#'   }
+#'   set.seed(42)
+#'   corpus <- sim_dfm(DTW = rdir(60, 4, 0.4), TWW = rdir(4, 200, 0.1),
+#'                     doc_length = rep(300, 60), seed = 1)
+#'   dtm <- quanteda::as.dfm(corpus)
+#'
+#'   lda <- text2vec::LDA$new(n_topics = 4)
+#'   theta <- lda$fit_transform(dtm, n_iter = 200, progressbar = FALSE)
+#'   fit <- optop_warplda(lda, theta)
+#'
+#'   part <- optop_make_partition(list(fit), dtm)
+#'   base <- optop_make_baseline(dtm)
+#'   optop_index_deviance(fit, dtm, part, base)$r2
+#' }
+#' }
+#'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+#' diagnostics for topic models. Working paper.
+#'
+#' @seealso [optop_as_theta_phi()], [optop_index_holdout()]
+#'
+#' @export
+optop_warplda <- function(model, doc_topic_distr) {
+  if (!inherits(model, "WarpLDA")) {
+    stop("model must be a fitted text2vec WarpLDA object")
+  }
+  if (!is.matrix(doc_topic_distr) || is.null(rownames(doc_topic_distr))) {
+    stop(paste("doc_topic_distr must be the document-topic matrix returned",
+               "by model$fit_transform(), with document identifiers as",
+               "row names"))
+  }
+  structure(list(model = model, theta = doc_topic_distr),
+            class = c("optop_warplda", "list"))
+}
+
+#' Fold document-topic weights in for new documents
+#'
+#' Answer the question: what would the fitted model say about a document it
+#' has never seen? A trained topic model consists of global objects (the
+#' topic-word distributions) and document-specific topic weights, but the
+#' weights exist only for the documents used in training. "Folding in" fills
+#' that gap: given the word counts of a new document, the engine estimates
+#' the document's topic weights \eqn{\hat\theta_j}{theta_j} while holding
+#' the trained topics fixed, so nothing about the model itself changes. The
+#' combination of the folded-in weights and the trained topics yields the
+#' fitted word probabilities of the new document, which is all the OpTop
+#' diagnostics need.
+#'
+#' This internal generic is the engine behind [optop_index_holdout()] and
+#' [optop_moment_test()]: both call it once per model to score evaluation
+#' documents. It has one method per supported engine, each delegating to
+#' that engine's own prediction routine:
+#' - **topicmodels** fits run the variational E step of
+#'   `topicmodels::posterior(model, newdata)` on the new documents;
+#' - **seededlda** fits are re-estimated on the new documents with the
+#'   trained model held fixed (`textmodel_lda(newdata, model = .)`), the
+#'   package's supported prediction path;
+#' - **text2vec WarpLDA** wrappers call `model$transform()`;
+#' - **NLPstudio** `nlp_topic_fit` objects delegate to the raw backend fit
+#'   they store.
+#'
+#' @param model A fitted topic model supported by [optop_as_theta_phi()],
+#'   trained on the training corpus.
+#' @param newdata A counts document-term matrix of the new documents. Its
+#'   columns must be the training vocabulary, in the same order and with the
+#'   same names: the model can only interpret words it was trained on
+#'   (the held-out tools handle the alignment and the out-of-support words
+#'   before calling this generic).
+#' @param ... Passed to the engine's fold-in routine, for example sampler
+#'   iterations.
+#'
+#' @return A numeric matrix of document-topic weights with one row per
+#'   document of `newdata` and one column per topic; every row sums to 1.
+#'
+#' @details
+#' Fold-in reuses the new document's counts to estimate its own topic
+#' weights, which is why the paper calls the resulting scores a
+#' *reconstruction* target: the model is judged on how well it can rebuild a
+#' document after being allowed to read it once. This is less optimistic
+#' than in-sample evaluation, where the same documents also shaped the
+#' topics themselves, but stricter targets exist (splitting each document
+#' into fold-in and scoring tokens). Documents with no tokens on the
+#' training vocabulary cannot be folded in; the held-out tools drop them
+#' with a warning before reaching this point.
+#'
+#' @references
+#' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
+#' diagnostics for topic models. Working paper.
+#'
+#' @seealso [optop_index_holdout()], [optop_moment_test()],
+#'   [optop_as_theta_phi()]
+#'
+#' @keywords internal
+optop_fold_in <- function(model, newdata, ...) UseMethod("optop_fold_in")
+
+#' @describeIn optop_fold_in topicmodels fits: the fold-in E step of
+#'   `topicmodels::posterior()` on the new documents.
+#' @keywords internal
+#' @exportS3Method optop_fold_in TopicModel
+optop_fold_in.TopicModel <- function(model, newdata, ...) {
+  x <- methods::as(newdata, "CsparseMatrix")
+  trip <- Matrix::summary(x)
+  stm <- slam::simple_triplet_matrix(i = trip$i, j = trip$j, v = trip$x,
+                                     nrow = nrow(x), ncol = ncol(x),
+                                     dimnames = dimnames(x))
+  topicmodels::posterior(model, newdata = stm, ...)$topics
+}
+
+#' @describeIn optop_fold_in seededlda fits: refit the new documents with
+#'   the trained model held fixed (`textmodel_lda(newdata, model = .)`),
+#'   the package's supported prediction path.
+#' @keywords internal
+#' @exportS3Method optop_fold_in textmodel_lda
+optop_fold_in.textmodel_lda <- function(model, newdata, ...) {
+  refit <- withCallingHandlers(
+    suppressMessages(
+      seededlda::textmodel_lda(quanteda::as.dfm(newdata), model = model,
+                               verbose = FALSE, ...)
+    ),
+    warning = function(w) {
+      # seededlda emits this whenever fixed fitted values are intentionally
+      # reused for fold-in; retain every other warning from the backend.
+      if (identical(conditionMessage(w),
+                    "k, alpha, beta and gamma values are overwritten by the fitted model")) {
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+  refit$theta
+}
+
+#' @describeIn optop_fold_in WarpLDA wrappers: `model$transform()` on the
+#'   new documents.
+#' @keywords internal
+#' @exportS3Method optop_fold_in optop_warplda
+optop_fold_in.optop_warplda <- function(model, newdata, ...) {
+  theta <- model$model$transform(newdata, ...)
+  rownames(theta) <- rownames(newdata)
+  theta
+}
+
+#' @describeIn optop_fold_in NLPstudio fits: recurse into the raw backend
+#'   fit stored in `model_object`.
+#' @keywords internal
+#' @exportS3Method optop_fold_in nlp_topic_fit
+optop_fold_in.nlp_topic_fit <- function(model, newdata, ...) {
+  if (is.null(model$model_object)) {
+    stop(paste("this nlp_topic_fit stores no backend model object;",
+               "fold-in needs the raw engine fit"))
+  }
+  optop_fold_in(model$model_object, newdata, ...)
+}
+
+#' @describeIn optop_fold_in Unsupported classes fail with the list of
+#'   engines that support fold-in.
+#' @keywords internal
+#' @exportS3Method optop_fold_in default
+optop_fold_in.default <- function(model, newdata, ...) {
+  stop(paste0("fold-in is not available for class <",
+              paste(class(model), collapse = "/"),
+              ">. Supported: topicmodels fits, seededlda fits, ",
+              "NLPstudio nlp_topic_fit with a stored backend model, and ",
+              "text2vec WarpLDA via optop_warplda()."))
 }
 
 #' Validate an adapter result

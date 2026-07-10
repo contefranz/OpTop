@@ -204,9 +204,9 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
 // are produced by one gemm inside the kernel (tww is phi transposed, W x K),
 // so a document is a contiguous column; counts arrive as the transposed
 // sparse dfm (documents are CSC columns) and the rare mask as packed bits.
-// The dense pass accumulates the zero-count value of every term and the
-// collapsed-bin sums; the sparse pass replaces the zero-count value with the
-// observed-count value at the nonzeros.
+// The dense pass accumulates the zero-count value of every non-rare term
+// and the collapsed-bin sums; the sparse pass replaces the zero-count value
+// with the observed-count value at the non-rare nonzeros.
 //' @keywords internal
 // [[Rcpp::export]]
 Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
@@ -266,12 +266,16 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
         const double Lj = Lp[jj];
         const double* i_col = do_model ? I_t.colptr(jj) : nullptr;
 
-        // dense pass: zero-count values over the full support, plus the
-        // collapsed-bin sums (ascending term order, as in the R rowSums)
-        double se_full = 0.0, se_rare = 0.0, E_min = 0.0;
-        double x2_full = 0.0, x2_rare = 0.0, E_min_f = 0.0;
-        double seN_full = 0.0, seN_rare = 0.0;
-        double x2N_full = 0.0, x2N_rare = 0.0;
+        // dense pass: zero-count values over the non-rare support, plus the
+        // collapsed-bin sums (ascending term order, as in the R rowSums).
+        // Non-rare cells accumulate DIRECTLY rather than as full minus rare:
+        // a rare cell with a large count on an eps-floored expectation would
+        // make both sums huge and their difference catastrophically cancel
+        // (the held-out out-of-support column is exactly that case).
+        double se_nr = 0.0, E_min = 0.0;
+        double x2_nr = 0.0, E_min_f = 0.0;
+        double seN_nr = 0.0;
+        double x2N_nr = 0.0;
         double pi_rare = 0.0;
 
         for (std::size_t w = 0; w < W; ++w) {
@@ -279,93 +283,83 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
             if (do_model) {
                 const double e = i_col[w] * Lj;
                 if (do_se || do_dev) {
-                    if (do_se) {
-                        const double v = e * e;
-                        se_full += v;
-                        if (rare) se_rare += v;
+                    if (rare) {
+                        E_min += e;
+                    } else if (do_se) {
+                        se_nr += e * e;
                     }
-                    if (rare) E_min += e;
                 }
                 if (do_chisq) {
                     const double ef = e < eps ? eps : e;
-                    x2_full += ef;
                     if (rare) {
-                        x2_rare += ef;
                         E_min_f += ef;
+                    } else {
+                        x2_nr += ef;
                     }
                 }
             }
             if (do_null) {
-                if (rare) pi_rare += pip[w];
-                const double bb = Lj * pip[w];
-                if (do_se) {
-                    const double v = bb * bb;
-                    seN_full += v;
-                    if (rare) seN_rare += v;
-                }
-                if (do_chisq) {
-                    const double bf = bb < eps ? eps : bb;
-                    x2N_full += bf;
-                    if (rare) x2N_rare += bf;
+                if (rare) {
+                    pi_rare += pip[w];
+                } else {
+                    const double bb = Lj * pip[w];
+                    if (do_se) {
+                        seN_nr += bb * bb;
+                    }
+                    if (do_chisq) {
+                        const double bf = bb < eps ? eps : bb;
+                        x2N_nr += bf;
+                    }
                 }
             }
         }
 
         // sparse pass: replace the zero-count value with the observed one at
-        // the nonzeros, and collect the observed min-bin mass
+        // the non-rare nonzeros, and collect the observed min-bin mass
         double N_min = 0.0;
-        double dv_full = 0.0, dv_rare = 0.0;
-        double dvN_full = 0.0, dvN_rare = 0.0;
+        double dv_nr = 0.0;
+        double dvN_nr = 0.0;
 
         for (arma::sp_mat::const_col_iterator it = N_t.begin_col(j_global);
              it != N_t.end_col(j_global); ++it) {
             const std::size_t w = it.row();
             const double n = *it;
             const bool rare = bit_get(bits, bit0 + w);
-            if (rare) N_min += n;
+            if (rare) {
+                N_min += n;
+                continue;
+            }
 
             if (do_model) {
                 const double e = i_col[w] * Lj;
                 if (do_se) {
                     const double d = n - e;
-                    const double corr = d * d - e * e;
-                    se_full += corr;
-                    if (rare) se_rare += corr;
+                    se_nr += d * d - e * e;
                 }
                 if (do_chisq) {
                     const double ef = e < eps ? eps : e;
                     const double d = n - ef;
-                    const double corr = d * d / ef - ef;
-                    x2_full += corr;
-                    if (rare) x2_rare += corr;
+                    x2_nr += d * d / ef - ef;
                 }
                 if (do_dev && n > 0.0) {
                     const double ef = e < eps ? eps : e;
-                    const double contrib = 2.0 * n * std::log(n / ef);
-                    dv_full += contrib;
-                    if (rare) dv_rare += contrib;
+                    dv_nr += 2.0 * n * std::log(n / ef);
                 }
             }
             if (do_null) {
                 const double bb = Lj * pip[w];
                 if (do_se) {
                     const double d = n - bb;
-                    const double corr = d * d - bb * bb;
-                    seN_full += corr;
-                    if (rare) seN_rare += corr;
+                    seN_nr += d * d - bb * bb;
                 }
                 if (do_chisq) {
                     const double bf = bb < eps ? eps : bb;
                     const double d = n - bf;
-                    const double corr = d * d / bf - bf;
-                    x2N_full += corr;
-                    if (rare) x2N_rare += corr;
+                    x2N_nr += d * d / bf - bf;
                 }
                 if (do_dev && n > 0.0) {
                     const double bf = bb < eps ? eps : bb;
-                    const double contrib = 2.0 * n * std::log(n / bf);
-                    dvN_full += contrib;
-                    if (rare) dvN_rare += contrib;
+                    dvN_nr += 2.0 * n * std::log(n / bf);
                 }
             }
         }
@@ -375,7 +369,7 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
         if (do_model) {
             if (do_se) {
                 const double d = N_min - E_min;
-                o[jj] = se_full - se_rare + d * d;
+                o[jj] = se_nr + d * d;
             }
             if (do_chisq) {
                 // Pearson inclusion rule: the min bin enters only when the
@@ -384,10 +378,9 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                     const double em = E_min_f < eps ? eps : E_min_f;
                     const double d = N_min - em;
                     o[jj + 2 * static_cast<std::size_t>(b)] =
-                        x2_full - x2_rare + d * d / em;
+                        x2_nr + d * d / em;
                 } else {
-                    o[jj + 2 * static_cast<std::size_t>(b)] =
-                        x2_full - x2_rare;
+                    o[jj + 2 * static_cast<std::size_t>(b)] = x2_nr;
                 }
             }
             if (do_dev) {
@@ -395,25 +388,22 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                 const double nm = N_min < eps ? eps : N_min;
                 const double dev_min =
                     N_min == 0.0 ? 0.0 : 2.0 * N_min * std::log(nm / em);
-                o[jj + 4 * static_cast<std::size_t>(b)] =
-                    dv_full - dv_rare + dev_min;
+                o[jj + 4 * static_cast<std::size_t>(b)] = dv_nr + dev_min;
             }
         }
         if (do_null) {
             if (do_se) {
                 const double d = N_min - B_min_raw;
-                o[jj + static_cast<std::size_t>(b)] =
-                    seN_full - seN_rare + d * d;
+                o[jj + static_cast<std::size_t>(b)] = seN_nr + d * d;
             }
             if (do_chisq) {
                 if (min_ok[jj] == 1) {
                     const double bm = B_min_raw < eps ? eps : B_min_raw;
                     const double d = N_min - bm;
                     o[jj + 3 * static_cast<std::size_t>(b)] =
-                        x2N_full - x2N_rare + d * d / bm;
+                        x2N_nr + d * d / bm;
                 } else {
-                    o[jj + 3 * static_cast<std::size_t>(b)] =
-                        x2N_full - x2N_rare;
+                    o[jj + 3 * static_cast<std::size_t>(b)] = x2N_nr;
                 }
             }
             if (do_dev) {
@@ -421,8 +411,7 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                 const double nm = N_min < eps ? eps : N_min;
                 const double dev_min =
                     N_min == 0.0 ? 0.0 : 2.0 * N_min * std::log(nm / bm);
-                o[jj + 5 * static_cast<std::size_t>(b)] =
-                    dvN_full - dvN_rare + dev_min;
+                o[jj + 5 * static_cast<std::size_t>(b)] = dvN_nr + dev_min;
             }
         }
     }

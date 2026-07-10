@@ -53,7 +53,6 @@ if ( getRversion() >= "2.15.1" ) {
 #' }
 #' @import data.table ggplot2
 #' @importFrom stats pchisq
-#' @importFrom tibble as_tibble
 #' @export
 
 topic_stability <- function( lda_models, optimal_model,
