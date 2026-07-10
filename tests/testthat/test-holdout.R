@@ -151,8 +151,10 @@ test_that("seededlda fits fold in through the holdout layer", {
   models <- lapply(2:3, function(k) {
     seededlda::textmodel_lda(tr_dfm, k = k, max_iter = 200, verbose = FALSE)
   })
-  ho <- optop_index_holdout(models, hx$ev, hx$baseline, c = 1,
-                            metrics = "deviance")
+  expect_no_warning(
+    ho <- optop_index_holdout(models, hx$ev, hx$baseline, c = 1,
+                              metrics = "deviance")
+  )
   expect_identical(dim(ho$scores$deviance), c(10L, 2L))
   expect_true(all(is.finite(ho$summary$macro)))
 })

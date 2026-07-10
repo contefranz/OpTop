@@ -14,21 +14,19 @@ Description: Implements statistical tests and discrepancy indices to select the 
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-LazyData: true
 URL: https://contefranz.github.io/OpTop/, https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues
-Depends: R (>= 3.1)
+Depends: R (>= 4.2.0)
 Imports:
     cli (>= 3.6.2),
     data.table (>= 1.11.0),
-    lifecycle,
-    quanteda (>= 2.0.0),
-    tibble (>= 2.1.0),
-    LDATS (>= 0.2.7),
     ggplot2 (>= 3.4.0),
-    patchwork (>= 1.1.1),
+    LDATS (>= 0.2.7),
+    lifecycle,
     Matrix,
     methods,
+    patchwork (>= 1.1.1),
+    quanteda (>= 2.0.0),
     slam,
     topicmodels
 Suggests:

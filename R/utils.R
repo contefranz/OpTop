@@ -350,9 +350,19 @@ optop_fold_in.TopicModel <- function(model, newdata, ...) {
 #' @keywords internal
 #' @exportS3Method optop_fold_in textmodel_lda
 optop_fold_in.textmodel_lda <- function(model, newdata, ...) {
-  refit <- suppressMessages(
-    seededlda::textmodel_lda(quanteda::as.dfm(newdata), model = model,
-                             verbose = FALSE, ...)
+  refit <- withCallingHandlers(
+    suppressMessages(
+      seededlda::textmodel_lda(quanteda::as.dfm(newdata), model = model,
+                               verbose = FALSE, ...)
+    ),
+    warning = function(w) {
+      # seededlda emits this whenever fixed fitted values are intentionally
+      # reused for fold-in; retain every other warning from the backend.
+      if (identical(conditionMessage(w),
+                    "k, alpha, beta and gamma values are overwritten by the fitted model")) {
+        invokeRestart("muffleWarning")
+      }
+    }
   )
   refit$theta
 }
