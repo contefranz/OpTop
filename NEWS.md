@@ -45,6 +45,10 @@ surface of 0.13.0 conforms to the paper's July revision exactly.
 
 ### Fixes
 
+* **Runtime and dependencies**: OpTop now requires R (>= 4.2.0), matching the
+  package's current vignette tooling and shipped serialized data. The unused
+  `tibble` import and obsolete `LazyData` declaration have been removed.
+
 * The document kernel accumulates non-rare cells directly instead of as full minus
   rare sums: a rare cell with a large count on an eps-floored expectation (the
   held-out out-of-support column is exactly that case) made the subtraction cancel
