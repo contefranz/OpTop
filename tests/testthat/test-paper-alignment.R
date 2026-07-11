@@ -106,10 +106,12 @@ test_that("the inclusion rule keeps a min bin with enough grid-wide mass", {
   expect_true(all(part$chisq_min_ok))
   expect_identical(part$chisq_min_report$n_excluded, 0L)
 
-  # no exclusion message when every min bin passes the rule
+  # no exclusion message when every min bin passes the rule; the three
+  # near-identical documents all sit close to the pooled baseline, so the
+  # 0.14.1 null-discrepancy floor is disabled to isolate the min-bin path
   baseline <- optop_make_baseline(dtm)
   expect_no_message(
-    optop_index_chisq(models[[1]], dtm, part, baseline)
+    optop_index_chisq(models[[1]], dtm, part, baseline, min_null = 0)
   )
 })
 

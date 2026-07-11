@@ -18,6 +18,10 @@
 # * se: no eps flooring anywhere.
 
 ref_theta_phi <- function(model) {
+  if (inherits(model, "optop_theta_phi")) {
+    return(list(theta = model$theta, phi = model$phi,
+                K = ncol(model$theta)))
+  }
   p <- topicmodels::posterior(model)
   list(theta = p$topics, phi = p$terms, K = ncol(p$topics))
 }
@@ -37,7 +41,7 @@ ref_dev_contrib <- function(N, E, eps = 1e-12) {
 # Document-level indices, one slow loop per document.
 ref_index_document <- function(model, dtm, partition, baseline,
                                metric = c("se", "chisq", "deviance"),
-                               reopt = "none", eps = 1e-12) {
+                               reopt = "none", eps = 1e-12, min_null = 0) {
   metric <- match.arg(metric)
   tp <- ref_theta_phi(model)
   vocab <- colnames(tp$phi)
@@ -100,12 +104,15 @@ ref_index_document <- function(model, dtm, partition, baseline,
     r2_doc[j] <- if (dnull > 0) 1 - dK / dnull else NA_real_
   }
 
-  # aggregation over the non-degenerate documents J+ only
-  valid <- D_null > 0
+  # aggregation over J+ = {j : D_null(j) >= min_null}; min_null = 0 keeps
+  # the legacy strict positivity rule
+  valid <- if (min_null > 0) D_null >= min_null else D_null > 0
+  r2_doc[!valid] <- NA_real_
   list(r2 = 1 - sum(D_K[valid]) / sum(D_null[valid]),
        r2_macro = mean(r2_doc[valid]),
        r2_doc = r2_doc,
        D_K = D_K, D_null = D_null,
+       n_null_excluded = sum(!valid & is.finite(D_null)),
        K = tp$K, metric = metric)
 }
 
@@ -334,7 +341,7 @@ ref_boot_null <- function(probs, doc_lengths, n_boot) {
 # standard errors.
 ref_holdout <- function(models, dtm_eval, baseline, c = 1,
                         metrics = c("se", "chisq", "deviance"),
-                        conf = 0.95, eps = 1e-12) {
+                        conf = 0.95, eps = 1e-12, min_null = 0) {
   vocab <- names(baseline$pi_glob)
   pi_tr <- unname(baseline$pi_glob)
   W <- length(vocab)
@@ -410,7 +417,8 @@ ref_holdout <- function(models, dtm_eval, baseline, c = 1,
           D_0[j] <- sum(ref_dev_contrib(N_j[!r_j], B_j[!r_j], eps)) + d0_min
         }
       }
-      valid <- D_0 > 0
+      # J+ = {j : D_0(j) >= min_null}; min_null = 0 keeps strict positivity
+      valid <- if (min_null > 0) D_0 >= min_null else D_0 > 0
       r <- rep(NA_real_, J)
       r[valid] <- 1 - D_K[valid] / D_0[valid]
       rv <- r[valid]; A <- D_K[valid]; B <- D_0[valid]; n <- sum(valid)
@@ -424,6 +432,7 @@ ref_holdout <- function(models, dtm_eval, baseline, c = 1,
            ci = macro + c(-1, 1) * z * macro_se,
            micro = micro, micro_se = micro_se,
            gap = micro - macro, gap_se = gap_se, n = n,
+           n_excluded = sum(!valid & is.finite(D_0)),
            D_K = D_K, D_0 = D_0)
     })
     out[[metric]] <- per_k

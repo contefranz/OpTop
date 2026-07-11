@@ -32,6 +32,13 @@
 #'   changes the estimand to the mean of the stabilized score; fix it before
 #'   evaluation and report sensitivity.
 #' @param n_threads Integer; OpenMP threads of the compiled kernels.
+#' @param min_null Nonnegative scalar; the null-discrepancy floor.
+#'   Evaluation documents with baseline discrepancy
+#'   \eqn{D^{ho}_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}
+#'   are excluded from every estimate and carry an `NA` score. The default
+#'   `NULL` resolves to the threshold constant `c`; `min_null = 0` restores
+#'   the pre-0.14.1 strict positivity rule. See the *Null-discrepancy
+#'   floor* paragraph in Details.
 #' @param ... Passed to the engine's fold-in routine (e.g. sampler
 #'   iterations).
 #'
@@ -89,6 +96,29 @@
 #' expected per-document fit under the training-fitted global objects, not
 #' an unconditional population quantity.
 #'
+#' **Null-discrepancy floor.** A document whose entire support is swept
+#' into the collapsed min-bin at resolution \eqn{c/L_j}{c/L_j}, or whose
+#' word distribution sits very close to the training baseline, has a
+#' baseline discrepancy at or near zero in every family at once, and its
+#' score \eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)} is then
+#' unbounded: a handful of such documents destroys the Macro average and
+#' its confidence interval, while the Micro index, which weights documents
+#' by \eqn{D_j(\mathrm{null})}{D_j(null)}, is far less exposed. The
+#' aggregation therefore conditions on
+#' \eqn{D^{ho}_j(\mathrm{null}) \ge \mathrm{min\_null}}{D_j(null) >= min_null}
+#' (default: the partition constant `c`), sharpening the conditioning event
+#' of Proposition 2 from a strict positivity to a floor at the resolution
+#' of the evaluation support; the estimand becomes the expected fit among
+#' evaluation documents at least that far from the baseline. Tiny values
+#' signal collapsed supports rather than sampling noise (under the null the
+#' binned baseline discrepancy is approximately chi-square with effective
+#' bins minus one degrees of freedom, so values orders of magnitude below
+#' one arise only from degenerate partitions). Exclusions are reported once
+#' per call and per metric in the `n_null_excluded` column; report
+#' sensitivity to `min_null` alongside `c` when the excluded share is
+#' non-negligible. With `min_null > 0`, a positive `stabilize` transforms
+#' only the denominators of the documents that pass the floor.
+#'
 #' **Documents dropped.** Evaluation documents with zero aligned tokens
 #' cannot be folded in and are dropped with a warning.
 #'
@@ -101,14 +131,17 @@
 #'   delta-method standard error; `gap` equals `micro - macro`, positive
 #'   when fit concentrates in high-discrepancy (often long or atypical)
 #'   documents; `gap_se` its standard error; `n_docs` the number of
-#'   non-degenerate evaluation documents behind every estimate.
+#'   non-degenerate evaluation documents behind every estimate;
+#'   `n_null_excluded` the documents excluded by the null-discrepancy
+#'   floor.
 #' - `scores`: named list (one element per metric) of numeric matrices,
 #'   evaluation documents by \eqn{K}, holding the per-document held-out
 #'   indices (`NA` on degenerate documents when `stabilize = 0`). These are
 #'   the scores [optop_gain_table()] pairs across topic counts.
 #' - `d_model`, `d_null`: same shape, the per-document fitted and baseline
 #'   discrepancies, for fit-versus-baseline diagnostics.
-#' - `K`, `metrics`, `conf`, `stabilize`, `c`: the evaluation design.
+#' - `K`, `metrics`, `conf`, `stabilize`, `c`, `min_null`: the evaluation
+#'   design.
 #'
 #' @examples
 #' \donttest{
@@ -152,7 +185,7 @@
 optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
                                 metrics = c("se", "chisq", "deviance"),
                                 conf = 0.95, stabilize = 0,
-                                n_threads = 1L, ...) {
+                                n_threads = 1L, min_null = NULL, ...) {
   stopifnot(length(models) >= 1)
   metrics <- intersect(c("se", "chisq", "deviance"), metrics)
   if (!length(metrics)) stop("no valid metric requested")
@@ -163,6 +196,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
       !is.finite(stabilize) || stabilize < 0) {
     stop("stabilize must be a single nonnegative number")
   }
+  min_null <- .optop_resolve_min_null(min_null, c)
 
   prep <- .optop_holdout_prepare(models, dtm_eval, baseline, ...)
 
@@ -202,7 +236,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
     for (metric in metrics) {
       D_K <- eng[[metric]]$model
       D_0 <- nulls[[metric]]$null
-      st <- .optop_holdout_stats(D_K, D_0, stabilize, z)
+      st <- .optop_holdout_stats(D_K, D_0, stabilize, z, min_null)
       scores[[metric]][, i_mod] <- st$r
       d_model[[metric]][, i_mod] <- D_K
       d_null[[metric]][, i_mod] <- D_0
@@ -213,15 +247,23 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
         ci_hi = st$macro + z * st$macro_se,
         micro = st$micro, micro_se = st$micro_se,
         gap = st$micro - st$macro, gap_se = st$gap_se,
-        n_docs = st$n
+        n_docs = st$n, n_null_excluded = st$n_excluded
       )
     }
   }
 
-  out <- list(summary = data.table::rbindlist(rows),
+  summary <- data.table::rbindlist(rows)
+  # the baseline discrepancy is model-independent, so the floor excludes the
+  # same evaluation documents at every K: one report per metric
+  for (metric in metrics) {
+    n_excl <- max(summary$n_null_excluded[summary$metric == metric])
+    .optop_report_null_floor(n_excl, n_excl / J, min_null, metric)
+  }
+
+  out <- list(summary = summary,
               scores = scores, d_model = d_model, d_null = d_null,
               K = prep$K, metrics = metrics, conf = conf,
-              stabilize = stabilize, c = c)
+              stabilize = stabilize, c = c, min_null = min_null)
   class(out) <- c("optop_holdout", "list")
   out
 }
@@ -353,15 +395,27 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 #' @param stabilize The stabilization constant (0 = none).
 #' @param z The normal quantile of the confidence level (unused here beyond
 #'   symmetry with the caller; kept for clarity).
+#' @param min_null The null-discrepancy floor: J+ collects the documents
+#'   with `D_j(null) >= min_null`. With `min_null = 0` the pre-0.14.1
+#'   semantics apply exactly (strict positivity, and under stabilization
+#'   every document is kept).
 #'
 #' @return A list with `r`, `macro`, `macro_se`, `micro`, `micro_se`,
-#'   `gap_se`, and `n` (the J+ count).
+#'   `gap_se`, `n` (the J+ count), and `n_excluded` (documents outside J+).
 #'
 #' @keywords internal
-.optop_holdout_stats <- function(D_K, D_null, stabilize, z) {
-  if (stabilize > 0) {
-    # stabilized score: every document is finite, the estimand is the mean
-    # of the stabilized score
+.optop_holdout_stats <- function(D_K, D_null, stabilize, z, min_null = 0) {
+  if (min_null > 0) {
+    # the floor defines inclusion; stabilization then transforms the kept
+    # denominators (inert whenever stabilize <= min_null)
+    valid <- D_null >= min_null
+    r <- rep(NA_real_, length(D_K))
+    denom <- if (stabilize > 0) pmax(D_null[valid], stabilize)
+             else D_null[valid]
+    r[valid] <- 1 - D_K[valid] / denom
+  } else if (stabilize > 0) {
+    # legacy stabilized score: every document is finite, the estimand is
+    # the mean of the stabilized score
     r <- 1 - D_K / pmax(D_null, stabilize)
     valid <- rep(TRUE, length(r))
   } else {
@@ -370,6 +424,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
     r[valid] <- 1 - D_K[valid] / D_null[valid]
   }
   n <- sum(valid)
+  n_excluded <- sum(!valid & is.finite(D_null))
   rv <- r[valid]
   A <- D_K[valid]
   B <- D_null[valid]
@@ -391,7 +446,8 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
   gap_se <- sqrt(drop(t(g3) %*% S3 %*% g3) / n)
 
   list(r = r, macro = macro, macro_se = macro_se,
-       micro = micro, micro_se = micro_se, gap_se = gap_se, n = n)
+       micro = micro, micro_se = micro_se, gap_se = gap_se, n = n,
+       n_excluded = n_excluded)
 }
 
 #' Adjacent held-out gains and the epsilon-adequacy selection
@@ -423,7 +479,11 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 #'    point of the actual grid, not mechanically \eqn{K + 1}), the
 #'    per-document gain is
 #'    \eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
-#'    computed on the same evaluation documents.
+#'    computed on the same evaluation documents. Pairs are complete-case:
+#'    documents excluded by the null-discrepancy floor of
+#'    [optop_index_holdout()] (or otherwise `NA`) at either topic count
+#'    drop from that pair, so `n` reports the paired documents actually
+#'    used.
 #' 2. The mean gain estimates how much held-out fit the extra topics buy;
 #'    its one-sided upper confidence bound
 #'    \eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)}
