@@ -15,7 +15,8 @@
   block_size,
   ztest,
   null_disc = NULL,
-  n_threads = 1L
+  n_threads = 1L,
+  min_null = 0
 )
 }
 \arguments{
@@ -61,6 +62,14 @@ re-optimization needs the full baseline counts per document.}
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only
 wall time changes.}
+
+\item{min_null}{Nonnegative scalar; the null-discrepancy floor of the
+document-level aggregation. Documents with baseline discrepancy
+\eqn{D_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}
+are excluded from the Micro and Macro aggregations and carry an \code{NA}
+document-level index. The default \code{NULL} resolves to the partition
+threshold constant \code{c}; \code{min_null = 0} restores the pre-0.14.1 strict
+positivity rule. See the \emph{Null-discrepancy floor} paragraph in Details.}
 }
 \value{
 The same list the exported wrapper documents.

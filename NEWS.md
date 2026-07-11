@@ -1,3 +1,37 @@
+# OpTop 0.14.1
+
+The regularity release: a family-generic null-discrepancy floor protects the
+document-level aggregations from structurally degenerate documents.
+
+### Breaking Changes
+
+* **Null-discrepancy floor** (`min_null`, default: the partition constant
+  `c`): a document enters the Micro and Macro aggregations of
+  `optop_index_se()`, `optop_index_chisq()`, `optop_index_deviance()`,
+  `optop_index_table()` and `optop_index_holdout()` only when its baseline
+  discrepancy satisfies `D_j(null) >= min_null`, uniformly across the three
+  families. At partition resolution `tau_j = c/L_j` a document whose support
+  collapses into the min bin has observed equal to baseline counts by
+  construction, so `D_j(null) ~ 0` in every family at once and the
+  document-level index `1 - D_j(K)/D_j(null)` is unbounded; held-out
+  simulation evidence showed a handful of such documents destroying the
+  Macro curves and their confidence intervals while the discrepancy-weighted
+  Micro index was immune. The floor sharpens the conditioning event of the
+  held-out inference from `{D_j(null) > 0}` to `{D_j(null) >= c}`; the
+  estimand becomes the average fit among documents whose baseline
+  discrepancy is at least the resolution of the evaluation support.
+  Excluded documents carry an `NA` index, are counted per call
+  (`n_null_excluded`, plus a share in the in-sample results and a summary
+  column in the held-out table), and are announced once per metric.
+  `min_null = 0` restores the previous strict-positivity behavior exactly,
+  silence included. Corpora without near-baseline documents are unaffected.
+
+* The word-level indices are unchanged: the `V+` restriction and the
+  Section 3.8 support recommendations already guard that path. The gain
+  table needs no change either; its paired gains were already
+  complete-case, and the man page now states that documents excluded by the
+  floor at either topic count drop from that pair.
+
 # OpTop 0.14.0
 
 The inference release: the held-out layer (Section 3.7 of Lewis and Grossetti 2026)

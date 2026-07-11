@@ -55,7 +55,11 @@ Lewis and Grossetti 2026).
 point of the actual grid, not mechanically \eqn{K + 1}), the
 per-document gain is
 \eqn{\Delta_j(K) = R^{2,ho}_j(succ(K)) - R^{2,ho}_j(K)}{Delta_j(K) = R2_j(succ(K)) - R2_j(K)},
-computed on the same evaluation documents.
+computed on the same evaluation documents. Pairs are complete-case:
+documents excluded by the null-discrepancy floor of
+\code{\link[=optop_index_holdout]{optop_index_holdout()}} (or otherwise \code{NA}) at either topic count
+drop from that pair, so \code{n} reports the paired documents actually
+used.
 \item The mean gain estimates how much held-out fit the extra topics buy;
 its one-sided upper confidence bound
 \eqn{\bar\Delta + z_{1-\alpha}\,\hat\sigma_\Delta/\sqrt{J_+}}{mean + z * sd/sqrt(J+)}

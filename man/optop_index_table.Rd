@@ -17,7 +17,8 @@ optop_index_table(
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
-  n_threads = 1L
+  n_threads = 1L,
+  min_null = NULL
 )
 }
 \arguments{
@@ -69,6 +70,14 @@ held-out evaluation; scheduled for removal before v1.0.0. Default: \code{FALSE}.
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine and, when \code{partition} is computed internally, by the
 partition kernel (default \code{1L}). Results are identical for any value.}
+
+\item{min_null}{Nonnegative scalar; the null-discrepancy floor of the
+document-level aggregation, applied uniformly across metrics and models
+(the baseline discrepancy does not depend on \eqn{K}, so the same
+documents are excluded at every grid point). The default \code{NULL}
+resolves to the partition threshold constant \code{c}; \code{min_null = 0}
+restores the pre-0.14.1 strict positivity rule. See the
+\emph{Null-discrepancy floor} paragraph of \link{optop_index}.}
 }
 \value{
 When \code{level = "document"}, a \code{data.frame} with one row per model and columns:
