@@ -13,6 +13,7 @@ optop_index_holdout(
   conf = 0.95,
   stabilize = 0,
   n_threads = 1L,
+  min_null = NULL,
   ...
 )
 }
@@ -47,6 +48,14 @@ evaluation and report sensitivity.}
 
 \item{n_threads}{Integer; OpenMP threads of the compiled kernels.}
 
+\item{min_null}{Nonnegative scalar; the null-discrepancy floor.
+Evaluation documents with baseline discrepancy
+\eqn{D^{ho}_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}
+are excluded from every estimate and carry an \code{NA} score. The default
+\code{NULL} resolves to the threshold constant \code{c}; \code{min_null = 0} restores
+the pre-0.14.1 strict positivity rule. See the \emph{Null-discrepancy
+floor} paragraph in Details.}
+
 \item{...}{Passed to the engine's fold-in routine (e.g. sampler
 iterations).}
 }
@@ -61,14 +70,17 @@ documents with a large baseline discrepancy weigh more; \code{micro_se} its
 delta-method standard error; \code{gap} equals \code{micro - macro}, positive
 when fit concentrates in high-discrepancy (often long or atypical)
 documents; \code{gap_se} its standard error; \code{n_docs} the number of
-non-degenerate evaluation documents behind every estimate.
+non-degenerate evaluation documents behind every estimate;
+\code{n_null_excluded} the documents excluded by the null-discrepancy
+floor.
 \item \code{scores}: named list (one element per metric) of numeric matrices,
 evaluation documents by \eqn{K}, holding the per-document held-out
 indices (\code{NA} on degenerate documents when \code{stabilize = 0}). These are
 the scores \code{\link[=optop_gain_table]{optop_gain_table()}} pairs across topic counts.
 \item \code{d_model}, \code{d_null}: same shape, the per-document fitted and baseline
 discrepancies, for fit-versus-baseline diagnostics.
-\item \code{K}, \code{metrics}, \code{conf}, \code{stabilize}, \code{c}: the evaluation design.
+\item \code{K}, \code{metrics}, \code{conf}, \code{stabilize}, \code{c}, \code{min_null}: the evaluation
+design.
 }
 }
 \description{
@@ -137,6 +149,29 @@ means, and their standard errors follow by the delta method. All
 inference is conditional on the training sample: the target is the
 expected per-document fit under the training-fitted global objects, not
 an unconditional population quantity.
+
+\strong{Null-discrepancy floor.} A document whose entire support is swept
+into the collapsed min-bin at resolution \eqn{c/L_j}{c/L_j}, or whose
+word distribution sits very close to the training baseline, has a
+baseline discrepancy at or near zero in every family at once, and its
+score \eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)} is then
+unbounded: a handful of such documents destroys the Macro average and
+its confidence interval, while the Micro index, which weights documents
+by \eqn{D_j(\mathrm{null})}{D_j(null)}, is far less exposed. The
+aggregation therefore conditions on
+\eqn{D^{ho}_j(\mathrm{null}) \ge \mathrm{min\_null}}{D_j(null) >= min_null}
+(default: the partition constant \code{c}), sharpening the conditioning event
+of Proposition 2 from a strict positivity to a floor at the resolution
+of the evaluation support; the estimand becomes the expected fit among
+evaluation documents at least that far from the baseline. Tiny values
+signal collapsed supports rather than sampling noise (under the null the
+binned baseline discrepancy is approximately chi-square with effective
+bins minus one degrees of freedom, so values orders of magnitude below
+one arise only from degenerate partitions). Exclusions are reported once
+per call and per metric in the \code{n_null_excluded} column; report
+sensitivity to \code{min_null} alongside \code{c} when the excluded share is
+non-negligible. With \code{min_null > 0}, a positive \code{stabilize} transforms
+only the denominators of the documents that pass the floor.
 
 \strong{Documents dropped.} Evaluation documents with zero aligned tokens
 cannot be folded in and are dropped with a warning.

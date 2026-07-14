@@ -4,7 +4,7 @@
 \alias{.optop_holdout_stats}
 \title{Held-out score statistics for one (metric, K) cell}
 \usage{
-.optop_holdout_stats(D_K, D_null, stabilize, z)
+.optop_holdout_stats(D_K, D_null, stabilize, z, min_null = 0)
 }
 \arguments{
 \item{D_K, D_null}{Per-document fitted and baseline discrepancies.}
@@ -13,10 +13,15 @@
 
 \item{z}{The normal quantile of the confidence level (unused here beyond
 symmetry with the caller; kept for clarity).}
+
+\item{min_null}{The null-discrepancy floor: J+ collects the documents
+with \code{D_j(null) >= min_null}. With \code{min_null = 0} the pre-0.14.1
+semantics apply exactly (strict positivity, and under stabilization
+every document is kept).}
 }
 \value{
 A list with \code{r}, \code{macro}, \code{macro_se}, \code{micro}, \code{micro_se},
-\code{gap_se}, and \code{n} (the J+ count).
+\code{gap_se}, \code{n} (the J+ count), and \code{n_excluded} (documents outside J+).
 }
 \description{
 Computes the per-document scores and the Macro, Micro, and gap estimates

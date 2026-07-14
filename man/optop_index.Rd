@@ -18,7 +18,8 @@ optop_index_se(
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
-  n_threads = 1L
+  n_threads = 1L,
+  min_null = NULL
 )
 
 optop_index_chisq(
@@ -32,7 +33,8 @@ optop_index_chisq(
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
-  n_threads = 1L
+  n_threads = 1L,
+  min_null = NULL
 )
 
 optop_index_deviance(
@@ -45,7 +47,8 @@ optop_index_deviance(
   level = c("document", "word"),
   block_size = NULL,
   ztest = FALSE,
-  n_threads = 1L
+  n_threads = 1L,
+  min_null = NULL
 )
 }
 \arguments{
@@ -91,6 +94,14 @@ v1.0.0; full-corpus indices are descriptive.}
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only
 wall time changes.}
+
+\item{min_null}{Nonnegative scalar; the null-discrepancy floor of the
+document-level aggregation. Documents with baseline discrepancy
+\eqn{D_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}
+are excluded from the Micro and Macro aggregations and carry an \code{NA}
+document-level index. The default \code{NULL} resolves to the partition
+threshold constant \code{c}; \code{min_null = 0} restores the pre-0.14.1 strict
+positivity rule. See the \emph{Null-discrepancy floor} paragraph in Details.}
 }
 \value{
 When \code{level = "document"}, a list with:
@@ -101,6 +112,8 @@ When \code{level = "document"}, a list with:
 documents with zero baseline discrepancy.
 \item \code{d_model}, \code{d_null}: numeric vectors (length J) with the per-document
 fitted and baseline discrepancies.
+\item \code{n_null_excluded}, \code{null_excluded_share}: number and share of documents
+excluded by the null-discrepancy floor.
 \item \code{K}: number of topics in \code{model}.
 \item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
 \item \code{ztest}: (if \code{ztest = TRUE}; deprecated) list with \code{z}, \code{pval}, \code{se}, \code{ci}, \code{J}.
@@ -170,14 +183,39 @@ pools discrepancies before the ratio and is therefore a
 discrepancy-weighted average of the document-level fits, with weights
 proportional to the baseline discrepancy \eqn{D_j(\mathrm{null})}{D_j(null)};
 the Macro index is their unweighted average. Both aggregate over the
-non-degenerate documents \eqn{J_+ = \{j : D_j(\mathrm{null}) > 0\}}{J+ = {j: D_j(null) > 0}}
-only, and degenerate documents carry an \code{NA} document-level index. The
+non-degenerate documents
+\eqn{J_+ = \{j : D_j(\mathrm{null}) \ge \mathrm{min\_null}\}}{J+ = {j: D_j(null) >= min_null}}
+only, and excluded documents carry an \code{NA} document-level index. The
 Micro–Macro gap is itself diagnostic: it equals the covariance between
 document-level fit and baseline discrepancy (normalized by the mean
 baseline discrepancy), so a positive gap indicates that fit concentrates
 in high-discrepancy (often long or atypical) documents. The returned
 \code{d_model} and \code{d_null} vectors support the recommended scatter of
 document-level fit against baseline discrepancy or length.
+
+\strong{Null-discrepancy floor.} At partition resolution
+\eqn{\tau_j = c/L_j}{tau_j = c/L_j} a document whose support is entirely
+swept into the collapsed min-bin has observed equal to baseline counts by
+construction, so its baseline discrepancy is zero in every family at
+once, and a document whose word distribution sits close to the corpus
+baseline has \eqn{D_j(\mathrm{null})}{D_j(null)} arbitrarily near zero.
+In both regimes the document-level index
+\eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)} is unbounded,
+and the Macro index, an unweighted mean, can be destroyed by a handful of
+such documents, while the Micro index is far less exposed because it
+weights documents by \eqn{D_j(\mathrm{null})}{D_j(null)} itself. The
+aggregation therefore conditions on
+\eqn{D_j(\mathrm{null}) \ge \mathrm{min\_null}}{D_j(null) >= min_null},
+with default equal to the partition constant \code{c}: the estimand becomes
+the average fit among documents whose baseline discrepancy is at least
+the resolution of the evaluation support. Tiny baseline discrepancies
+signal collapsed supports rather than sampling noise: under the null, a
+document's binned baseline discrepancy is approximately chi-square with
+(number of effective bins - 1) degrees of freedom, so values orders of
+magnitude below one arise only when the partition has degenerated.
+Exclusions are reported once per call and returned as
+\code{n_null_excluded}; report sensitivity to \code{min_null} alongside \code{c} when
+the excluded share is non-negligible.
 
 \strong{Word-level aggregation} (\code{level = "word"}). Word-level indices are
 computed on the unbinned vocabulary and are descriptive diagnostics: they

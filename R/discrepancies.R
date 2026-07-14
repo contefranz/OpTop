@@ -36,6 +36,13 @@
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   index engine (default `1L`). Results are identical for any value; only
 #'   wall time changes.
+#' @param min_null Nonnegative scalar; the null-discrepancy floor of the
+#'   document-level aggregation. Documents with baseline discrepancy
+#'   \eqn{D_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}
+#'   are excluded from the Micro and Macro aggregations and carry an `NA`
+#'   document-level index. The default `NULL` resolves to the partition
+#'   threshold constant `c`; `min_null = 0` restores the pre-0.14.1 strict
+#'   positivity rule. See the *Null-discrepancy floor* paragraph in Details.
 #'
 #' @details
 #' **Harmonized support.** For each document, rare words (as determined by
@@ -77,14 +84,39 @@
 #' discrepancy-weighted average of the document-level fits, with weights
 #' proportional to the baseline discrepancy \eqn{D_j(\mathrm{null})}{D_j(null)};
 #' the Macro index is their unweighted average. Both aggregate over the
-#' non-degenerate documents \eqn{J_+ = \{j : D_j(\mathrm{null}) > 0\}}{J+ = {j: D_j(null) > 0}}
-#' only, and degenerate documents carry an `NA` document-level index. The
+#' non-degenerate documents
+#' \eqn{J_+ = \{j : D_j(\mathrm{null}) \ge \mathrm{min\_null}\}}{J+ = {j: D_j(null) >= min_null}}
+#' only, and excluded documents carry an `NA` document-level index. The
 #' Micro–Macro gap is itself diagnostic: it equals the covariance between
 #' document-level fit and baseline discrepancy (normalized by the mean
 #' baseline discrepancy), so a positive gap indicates that fit concentrates
 #' in high-discrepancy (often long or atypical) documents. The returned
 #' `d_model` and `d_null` vectors support the recommended scatter of
 #' document-level fit against baseline discrepancy or length.
+#'
+#' **Null-discrepancy floor.** At partition resolution
+#' \eqn{\tau_j = c/L_j}{tau_j = c/L_j} a document whose support is entirely
+#' swept into the collapsed min-bin has observed equal to baseline counts by
+#' construction, so its baseline discrepancy is zero in every family at
+#' once, and a document whose word distribution sits close to the corpus
+#' baseline has \eqn{D_j(\mathrm{null})}{D_j(null)} arbitrarily near zero.
+#' In both regimes the document-level index
+#' \eqn{1 - D_j(K)/D_j(\mathrm{null})}{1 - D_j(K)/D_j(null)} is unbounded,
+#' and the Macro index, an unweighted mean, can be destroyed by a handful of
+#' such documents, while the Micro index is far less exposed because it
+#' weights documents by \eqn{D_j(\mathrm{null})}{D_j(null)} itself. The
+#' aggregation therefore conditions on
+#' \eqn{D_j(\mathrm{null}) \ge \mathrm{min\_null}}{D_j(null) >= min_null},
+#' with default equal to the partition constant `c`: the estimand becomes
+#' the average fit among documents whose baseline discrepancy is at least
+#' the resolution of the evaluation support. Tiny baseline discrepancies
+#' signal collapsed supports rather than sampling noise: under the null, a
+#' document's binned baseline discrepancy is approximately chi-square with
+#' (number of effective bins - 1) degrees of freedom, so values orders of
+#' magnitude below one arise only when the partition has degenerated.
+#' Exclusions are reported once per call and returned as
+#' `n_null_excluded`; report sensitivity to `min_null` alongside `c` when
+#' the excluded share is non-negligible.
 #'
 #' **Word-level aggregation** (`level = "word"`). Word-level indices are
 #' computed on the unbinned vocabulary and are descriptive diagnostics: they
@@ -105,6 +137,8 @@
 #'   documents with zero baseline discrepancy.
 #' - `d_model`, `d_null`: numeric vectors (length J) with the per-document
 #'   fitted and baseline discrepancies.
+#' - `n_null_excluded`, `null_excluded_share`: number and share of documents
+#'   excluded by the null-discrepancy floor.
 #' - `K`: number of topics in `model`.
 #' - `metric`: one of `"se"`, `"chisq"`, `"deviance"`.
 #' - `ztest`: (if `ztest = TRUE`; deprecated) list with `z`, `pval`, `se`, `ci`, `J`.
@@ -199,15 +233,22 @@ optop_index_se <- function(model, dtm, partition, baseline,
                            level = c("document", "word"),
                            block_size = NULL,
                            ztest = FALSE,
-                           n_threads = 1L) {
+                           n_threads = 1L,
+                           min_null = NULL) {
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  min_null <- .optop_resolve_min_null(min_null, partition$c)
   .optop_deprecate_index_args("optop_index_se", reopt, add_baseline_topic,
                               ztest)
-  .optop_index_se_impl(model, dtm, partition, baseline, macro, reopt,
-                       add_baseline_topic, level, block_size, ztest,
-                       n_threads = n_threads)
+  res <- .optop_index_se_impl(model, dtm, partition, baseline, macro, reopt,
+                              add_baseline_topic, level, block_size, ztest,
+                              n_threads = n_threads, min_null = min_null)
+  if (level == "document") {
+    .optop_report_null_floor(res$n_null_excluded, res$null_excluded_share,
+                             min_null, "se")
+  }
+  res
 }
 
 #' Worker behind optop_index_se()
@@ -229,7 +270,8 @@ optop_index_se <- function(model, dtm, partition, baseline,
 #' @keywords internal
 .optop_index_se_impl <- function(model, dtm, partition, baseline, macro, reopt,
                                  add_baseline_topic, level, block_size, ztest,
-                                 null_disc = NULL, n_threads = 1L) {
+                                 null_disc = NULL, n_threads = 1L,
+                                 min_null = 0) {
 
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
@@ -250,7 +292,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
   if (level == "document" && reopt == "se") {
     return(.optop_index_se_reopt(theta, phi, dtm, partition, pi_row,
-                                 tp$K, macro, ztest))
+                                 tp$K, macro, ztest, min_null))
   }
 
   eng <- .optop_index_engine(theta, phi, dtm, partition, pi_row, "se",
@@ -262,7 +304,8 @@ optop_index_se <- function(model, dtm, partition, baseline,
                                     tp$K, "se"))
   }
   D_null <- if (is.null(null_disc)) eng$se$null else null_disc
-  .optop_index_result_doc(eng$se$model, D_null, tp$K, "se", macro, ztest)
+  .optop_index_result_doc(eng$se$model, D_null, tp$K, "se", macro, ztest,
+                          min_null)
 }
 
 #' SE re-optimization path (document level)
@@ -274,7 +317,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
 #'
 #' @keywords internal
 .optop_index_se_reopt <- function(theta, phi, dtm, partition, pi_row,
-                                  K, macro, ztest) {
+                                  K, macro, ztest, min_null = 0) {
   J <- nrow(theta)
   W <- ncol(phi)
   block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
@@ -326,7 +369,7 @@ optop_index_se <- function(model, dtm, partition, baseline,
     }
   }
 
-  .optop_index_result_doc(D_K, D_null, K, "se", macro, ztest)
+  .optop_index_result_doc(D_K, D_null, K, "se", macro, ztest, min_null)
 }
 
 #' @describeIn optop_index Pearson chi-square index \eqn{R^2_{chisq}}{R2_chisq},
@@ -339,16 +382,24 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                               level = c("document", "word"),
                               block_size = NULL,
                               ztest = FALSE,
-                              n_threads = 1L) {
+                              n_threads = 1L,
+                              min_null = NULL) {
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  min_null <- .optop_resolve_min_null(min_null, partition$c)
   .optop_deprecate_index_args("optop_index_chisq", reopt, add_baseline_topic,
                               ztest)
   if (level == "document") .optop_report_chisq_min(partition)
-  .optop_index_chisq_impl(model, dtm, partition, baseline, macro, reopt,
-                          add_baseline_topic, level, block_size, ztest,
-                          n_threads = n_threads)
+  res <- .optop_index_chisq_impl(model, dtm, partition, baseline, macro,
+                                 reopt, add_baseline_topic, level,
+                                 block_size, ztest, n_threads = n_threads,
+                                 min_null = min_null)
+  if (level == "document") {
+    .optop_report_null_floor(res$n_null_excluded, res$null_excluded_share,
+                             min_null, "chisq")
+  }
+  res
 }
 
 #' Worker behind optop_index_chisq()
@@ -364,7 +415,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
 .optop_index_chisq_impl <- function(model, dtm, partition, baseline, macro,
                                     reopt, add_baseline_topic, level,
                                     block_size, ztest, null_disc = NULL,
-                                    n_threads = 1L) {
+                                    n_threads = 1L, min_null = 0) {
 
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
@@ -388,7 +439,8 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                                     tp$K, "chisq"))
   }
   D_null <- if (is.null(null_disc)) eng$chisq$null else null_disc
-  .optop_index_result_doc(eng$chisq$model, D_null, tp$K, "chisq", macro, ztest)
+  .optop_index_result_doc(eng$chisq$model, D_null, tp$K, "chisq", macro,
+                          ztest, min_null)
 }
 
 #' @describeIn optop_index Deviance index \eqn{R^2_{dev}}{R2_dev}, the
@@ -403,15 +455,23 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
                                  level = c("document", "word"),
                                  block_size = NULL,
                                  ztest = FALSE,
-                                 n_threads = 1L) {
+                                 n_threads = 1L,
+                                 min_null = NULL) {
 
   level <- match.arg(level)
   reopt <- match.arg(reopt)
+  min_null <- .optop_resolve_min_null(min_null, partition$c)
   .optop_deprecate_index_args("optop_index_deviance", reopt,
                               add_baseline_topic = FALSE, ztest)
-  .optop_index_deviance_impl(model, dtm, partition, baseline, macro, reopt,
-                             level, block_size, ztest,
-                             n_threads = n_threads)
+  res <- .optop_index_deviance_impl(model, dtm, partition, baseline, macro,
+                                    reopt, level, block_size, ztest,
+                                    n_threads = n_threads,
+                                    min_null = min_null)
+  if (level == "document") {
+    .optop_report_null_floor(res$n_null_excluded, res$null_excluded_share,
+                             min_null, "deviance")
+  }
+  res
 }
 
 #' Worker behind optop_index_deviance()
@@ -426,7 +486,8 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @keywords internal
 .optop_index_deviance_impl <- function(model, dtm, partition, baseline, macro,
                                        reopt, level, block_size, ztest,
-                                       null_disc = NULL, n_threads = 1L) {
+                                       null_disc = NULL, n_threads = 1L,
+                                       min_null = 0) {
 
   tp <- optop_as_theta_phi(model)
   vocab_model <- colnames(tp$phi)
@@ -445,7 +506,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   }
   D_null <- if (is.null(null_disc)) eng$deviance$null else null_disc
   .optop_index_result_doc(eng$deviance$model, D_null, tp$K, "deviance",
-                          macro, ztest)
+                          macro, ztest, min_null)
 }
 
 
@@ -490,6 +551,13 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   index engine and, when `partition` is computed internally, by the
 #'   partition kernel (default `1L`). Results are identical for any value.
+#' @param min_null Nonnegative scalar; the null-discrepancy floor of the
+#'   document-level aggregation, applied uniformly across metrics and models
+#'   (the baseline discrepancy does not depend on \eqn{K}, so the same
+#'   documents are excluded at every grid point). The default `NULL`
+#'   resolves to the partition threshold constant `c`; `min_null = 0`
+#'   restores the pre-0.14.1 strict positivity rule. See the
+#'   *Null-discrepancy floor* paragraph of [optop_index].
 #'
 #' @details
 #' The function wraps [`optop_index_se()`], [`optop_index_chisq()`], and
@@ -582,7 +650,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                               level = c("document", "word"),
                               block_size = NULL,
                               ztest = FALSE,
-                              n_threads = 1L) {
+                              n_threads = 1L,
+                              min_null = NULL) {
 
   level <- match.arg(level)
   stopifnot(length(models) >= 1)
@@ -593,6 +662,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                                       n_threads = n_threads)
   }
   if (is.null(baseline))  baseline  <- optop_make_baseline(dtm)
+  min_null <- .optop_resolve_min_null(min_null, partition$c)
 
   metrics <- intersect(c("se", "chisq", "deviance"), metrics)
   if ("chisq" %in% metrics && level == "document") {
@@ -623,6 +693,9 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   }
 
   rows <- vector("list", length(models))
+  # D_null is model-independent, so the floor excludes the same documents at
+  # every K: one report per metric, taken from the first model's result
+  floor_report <- list()
   for (i_mod in seq_along(models)) {
     m <- models[[i_mod]]
     tp <- optop_as_theta_phi(m)
@@ -675,11 +748,13 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                                macro = macro, reopt = "se",
                                add_baseline_topic = add_baseline_topic,
                                level = "document", block_size = block_size,
-                               ztest = ztest, n_threads = n_threads)
+                               ztest = ztest, n_threads = n_threads,
+                               min_null = min_null)
         } else {
           .optop_index_result_doc(eng$se$model, nulls$se$null, tp$K, "se",
-                                  macro, ztest)
+                                  macro, ztest, min_null)
         }
+        if (i_mod == 1L) floor_report$se <- x
         res$R2_SE <- x$r2
         if (macro) res$R2_SE_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -689,7 +764,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       }
       if ("chisq" %in% metrics) {
         x <- .optop_index_result_doc(eng$chisq$model, nulls$chisq$null,
-                                     tp$K, "chisq", macro, ztest)
+                                     tp$K, "chisq", macro, ztest, min_null)
+        if (i_mod == 1L) floor_report$chisq <- x
         res$R2_chisq <- x$r2
         if (macro) res$R2_chisq_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -699,7 +775,9 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       }
       if ("deviance" %in% metrics) {
         x <- .optop_index_result_doc(eng$deviance$model, nulls$deviance$null,
-                                     tp$K, "deviance", macro, ztest)
+                                     tp$K, "deviance", macro, ztest,
+                                     min_null)
+        if (i_mod == 1L) floor_report$deviance <- x
         res$R2_dev <- x$r2
         if (macro) res$R2_dev_macro <- x$r2_macro
         if (ztest && !is.null(x$ztest)) {
@@ -709,6 +787,11 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       }
     }
     rows[[i_mod]] <- as.data.frame(res, check.names = FALSE)
+  }
+  for (metric in names(floor_report)) {
+    x <- floor_report[[metric]]
+    .optop_report_null_floor(x$n_null_excluded, x$null_excluded_share,
+                             min_null, metric)
   }
   out <- do.call(rbind, rows)
   data.table::setDT(out)[]
@@ -821,16 +904,27 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 
 # Assemble the document-level result list from the per-document
 # discrepancies. Aggregation is restricted to the non-degenerate documents
-# J+ = {j : D_null(j) > 0}: the Micro sums run over J+ only and degenerate
-# documents carry an undefined (NA) document-level index.
-.optop_index_result_doc <- function(D_K, D_null, K, metric, macro, ztest) {
-  valid <- D_null > 0
+# J+ = {j : D_j(null) >= min_null}: the Micro sums run over J+ only and
+# excluded documents carry an undefined (NA) document-level index. With
+# min_null = 0 the set falls back to the legacy strict positivity rule
+# J+ = {j : D_j(null) > 0}, which reproduces pre-0.14.1 output exactly.
+# The floor is the family-generic regularity condition on the Macro
+# estimand: at partition resolution tau_j = c/L_j a document whose support
+# is swept into the min bin has observed == baseline by construction, so
+# D_j(null) ~ 0 in every family at once and r_j = 1 - D_j(K)/D_j(null) is
+# unbounded below. Micro is nearly immune (weights prop. to D_j(null)).
+.optop_index_result_doc <- function(D_K, D_null, K, metric, macro, ztest,
+                                    min_null = 0) {
+  valid <- if (min_null > 0) D_null >= min_null else D_null > 0
   r2_doc <- rep(NA_real_, length(D_K))
   r2_doc[valid] <- 1 - D_K[valid] / D_null[valid]
   r2_micro <- 1 - sum(D_K[valid]) / sum(D_null[valid])
   r2_macro <- mean(r2_doc[valid])
   result <- list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
                  r2_doc = r2_doc, d_model = D_K, d_null = D_null,
+                 n_null_excluded = sum(!valid & is.finite(D_null)),
+                 null_excluded_share =
+                   sum(!valid & is.finite(D_null)) / length(D_null),
                  K = K, metric = metric)
   if (ztest) {
     result$ztest <- .optop_ztest(r2_doc[valid], r2_macro)
@@ -970,6 +1064,62 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                       "before v1.0.0.")
     )
   }
+  invisible(NULL)
+}
+
+#' Resolve the null-discrepancy floor of the document-level indices
+#'
+#' The default `min_null = NULL` resolves to the partition threshold
+#' constant `c`, so the conditioning event of the document-level
+#' aggregation sharpens from \eqn{\{D_j(\mathrm{null}) > 0\}}{{D_j(null) > 0}}
+#' to \eqn{\{D_j(\mathrm{null}) \ge c\}}{{D_j(null) >= c}}. Partitions
+#' created before the field existed resolve to `0`, the legacy rule.
+#'
+#' @param min_null The user-supplied value (`NULL` for the default).
+#' @param c_part The partition's threshold constant (`partition$c`).
+#'
+#' @return A single nonnegative number.
+#'
+#' @keywords internal
+.optop_resolve_min_null <- function(min_null, c_part) {
+  if (is.null(min_null)) {
+    return(if (is.null(c_part)) 0 else c_part)
+  }
+  if (!is.numeric(min_null) || length(min_null) != 1L ||
+      !is.finite(min_null) || min_null < 0) {
+    stop("min_null must be a single nonnegative number")
+  }
+  min_null
+}
+
+#' Report the null-discrepancy floor exclusions
+#'
+#' Signals once per call how many documents were excluded from the
+#' document-level aggregation because \eqn{D_j(\mathrm{null}) <
+#' \mathrm{min\_null}}{D_j(null) < min_null}. Tiny baseline discrepancies
+#' signal structurally collapsed supports rather than sampling noise: under
+#' the null a document's binned baseline discrepancy is approximately
+#' chi-square with (number of effective bins - 1) degrees of freedom, so
+#' values orders of magnitude below 1 can only arise when the partition has
+#' degenerated to essentially one bin.
+#'
+#' @param n_excluded Number of excluded documents.
+#' @param share Excluded share of the corpus.
+#' @param min_null The resolved floor.
+#' @param metric The discrepancy family, for the message.
+#'
+#' @return Invisibly `NULL`; called for its side effect.
+#'
+#' @keywords internal
+.optop_report_null_floor <- function(n_excluded, share, min_null, metric) {
+  # min_null = 0 is the legacy escape hatch: pre-0.14.1 behavior, silence
+  # included (documents with D_null exactly zero were always excluded)
+  if (min_null <= 0 || !isTRUE(n_excluded > 0)) return(invisible(NULL))
+  cli::cli_alert_info(paste(
+    "{n_excluded} document{?s} excluded from the {metric} aggregation by",
+    "the null-discrepancy floor (D_null < {min_null};",
+    "{sprintf('%.1f%%', 100 * share)} of the corpus)"
+  ))
   invisible(NULL)
 }
 

@@ -4,7 +4,17 @@
 \alias{.optop_index_se_reopt}
 \title{SE re-optimization path (document level)}
 \usage{
-.optop_index_se_reopt(theta, phi, dtm, partition, pi_row, K, macro, ztest)
+.optop_index_se_reopt(
+  theta,
+  phi,
+  dtm,
+  partition,
+  pi_row,
+  K,
+  macro,
+  ztest,
+  min_null = 0
+)
 }
 \description{
 The pre-engine block loop, kept verbatim: the per-document lambda blending
