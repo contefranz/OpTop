@@ -94,6 +94,26 @@ Journal of Machine Learning Research, 3(Jan):993–1022.
 
 ### Installation
 
+OpTop compiles C++ code (via Rcpp/RcppArmadillo) and links your R installation's
+BLAS/LAPACK, so installing from GitHub builds from source and needs a C/C++ toolchain
+**and gfortran** in place first.
+
+- **Windows.** Install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) matching
+  your R version (Rtools43 for R 4.3, Rtools44 for R 4.4, and so on). It provides the
+  C/C++ compiler, gfortran, `make`, and OpenMP; nothing else is required and
+  multithreading works out of the box.
+- **macOS.** Install the Command Line Tools for Xcode with `xcode-select --install` (C/C++
+  compiler and `make`), then the official R gfortran toolchain from
+  [mac.r-project.org/tools](https://mac.r-project.org/tools/) (for example
+  `gfortran-14.2-universal.pkg`). gfortran is required to link the BLAS/LAPACK Fortran
+  runtime; without it the build fails at the link step with a missing `-lgfortran`. Apple's
+  default clang has no OpenMP, so OpTop runs single-threaded on a stock toolchain (results
+  are identical, only serial); to enable multithreading install LLVM/`libomp` and point
+  `~/.R/Makevars` at it.
+- **Linux.** Install a C/C++ compiler, gfortran, and the R headers, for example on
+  Debian/Ubuntu `sudo apt-get install build-essential gfortran r-base-dev`. GCC provides
+  OpenMP automatically.
+
 ```r
 # From GitHub
 # install.packages("pak")
@@ -148,6 +168,19 @@ tab       <- optop_index_table(models = VEM_models,
                                macro = TRUE)
 tab
 ```
+
+### Reproducibility across platforms
+
+OpTop itself is deterministic: envelope ties are broken in a fixed order, the bootstrap
+draws from its own internal random-number stream, and all reductions run in a fixed
+order, so for a given set of fitted models it returns identical results on Windows,
+macOS, and Linux and for any `n_threads`. The small differences you may see when running
+the example on different machines come from the model-fitting step upstream:
+`topicmodels::LDA(method = "VEM")` is a numerical optimization whose result depends on the
+platform's BLAS/LAPACK and math library, so `set.seed()` fixes the initialization but not
+the last-digit rounding, and the fitted probabilities differ slightly across platforms.
+To compare results exactly across machines, fit once and share the fitted model objects
+(OpTop returns identical output for identical inputs), or use the same BLAS on both.
 
 ### Bug Reporting
 
