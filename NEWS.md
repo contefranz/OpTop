@@ -1,3 +1,14 @@
+# OpTop 0.14.2
+
+A documentation release. The README now states the per-platform build
+prerequisites for installing from source (Rtools on Windows; the Command Line
+Tools and the official R gfortran toolchain on macOS, the latter required to
+link the BLAS/LAPACK Fortran runtime; the compiler, gfortran and R headers on
+Linux), and adds a note on cross-platform reproducibility: OpTop is
+deterministic for a given set of fitted models, while the small differences
+seen across operating systems originate in the upstream VEM fit. No code
+changes.
+
 # OpTop 0.14.1
 
 The regularity release: a family-generic null-discrepancy floor protects the
