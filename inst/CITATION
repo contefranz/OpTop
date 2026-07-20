@@ -1,0 +1,25 @@
+if (!exists("meta") || is.null(meta)) meta <- utils::packageDescription("OpTop")
+year <- if (!is.null(meta$Date)) sub("-.*", "", meta$Date) else format(Sys.Date(), "%Y")
+
+citHeader("To cite OpTop in publications, please cite both the software and the methodological paper:")
+
+bibentry(
+  bibtype = "Manual",
+  title   = "{OpTop}: Optimal Topic Selection and Goodness-of-Fit for Topic Models",
+  author  = c(person("Francesco", "Grossetti"), person("Craig M.", "Lewis")),
+  year    = year,
+  note    = sprintf("R package version %s", meta$Version),
+  url     = "https://contefranz.github.io/OpTop/"
+)
+
+bibentry(
+  bibtype = "Article",
+  title   = "A Statistical Approach for Optimal Topic Model Identification",
+  author  = c(person("Craig M.", "Lewis"), person("Francesco", "Grossetti")),
+  journal = "Journal of Machine Learning Research",
+  year    = "2022",
+  volume  = "23",
+  number  = "58",
+  pages   = "1--20",
+  url     = "https://jmlr.org/papers/v23/19-297.html"
+)

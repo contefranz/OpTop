@@ -14,7 +14,15 @@ home:
   description: >
     Parametric tests and discrepancy indices to select the optimal number of
     topics and assess goodness-of-fit across topic models in R.
-  sidebar: false
+  sidebar:
+    structure: [links, license, citation, authorlist]
+    components:
+      authorlist:
+        title: Authors
+        text: |
+          Francesco Grossetti <a href="https://orcid.org/0000-0002-5130-7745" target="orcid.widget" aria-label="ORCID iD for Francesco Grossetti"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>. Author, maintainer.
+
+          Craig M. Lewis <a href="https://orcid.org/0000-0001-8734-1702" target="orcid.widget" aria-label="ORCID iD for Craig M. Lewis"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>. Author.
 
 news:
   cran_dates: false

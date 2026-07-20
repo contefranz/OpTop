@@ -1,0 +1,24 @@
+/* Widen the main reading column.
+
+   pkgdown caps content at `.row > main { max-width: 50rem }` (800px). Letting it
+   fill the Bootstrap grid column (col-md-9) makes the body noticeably wider — up
+   to ~990px at the xxl container — on reference, article, and home pages alike. */
+.row > main {
+  max-width: none;
+}
+
+/* pkgdown gives the right-hand sidebar a 5rem left margin. Once `main` fills its
+   column, col-md-9 (75%) + col-md-3 (25%) already occupy the whole row, so that
+   extra margin pushes the total past 100% and wraps the sidebar to the foot of
+   the page. Drop the margin, then restore a comfortable gap with inside padding
+   only when the columns sit side by side (md and up); padding does not change the
+   grid width, so it cannot cause wrapping. */
+.col-md-3 {
+  margin-left: 0;
+}
+
+@media (min-width: 768px) {
+  .col-md-3 {
+    padding-left: 2rem;
+  }
+}
