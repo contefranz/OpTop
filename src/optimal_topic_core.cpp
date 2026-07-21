@@ -55,20 +55,39 @@ struct EnvelopeCmp {
 // [[Rcpp::export]]
 Rcpp::List optimal_topic_core(const arma::mat& theta,
                               const arma::mat& phi,
-                              const arma::sp_mat& dfm_t,
+                              const Rcpp::IntegerVector& dfm_p,
+                              const Rcpp::IntegerVector& dfm_i,
+                              const Rcpp::NumericVector& dfm_x,
+                              int n_terms_in,
                               double q,
                               const arma::uvec& doc_map,
                               bool return_envelope,
                               int n_threads)
 {
-    // dfm_t is the weighted dfm transposed once by the caller (W x J): a
-    // document is a contiguous CSC column, so densifying a block of
-    // documents is a cheap column-range extraction instead of
-    // element-by-element sparse row reads
-    const arma::uword n_docs = dfm_t.n_cols;
-    const arma::uword n_terms = dfm_t.n_rows;
+    // The weighted dfm arrives transposed once by the caller (W x J) as the
+    // raw CSC slots of the dgCMatrix (dfm_p column pointers, dfm_i row
+    // indices, dfm_x values): a document is a contiguous CSC column, and the
+    // Rcpp vectors are zero-copy views of R memory, so no Armadillo sparse
+    // container is ever constructed. This removes both the per-call copy of
+    // the corpus and the J x W addressability check of SpMat::init(), so the
+    // shape of the corpus is unbounded; only the nonzero count is bounded
+    // (by R's dgCMatrix container, at 2^31 - 1).
+    if (dfm_p.size() < 1) {
+        Rcpp::stop("the dfm column pointers are empty");
+    }
+    if (n_terms_in < 0) {
+        Rcpp::stop("the vocabulary size must be nonnegative");
+    }
+    const arma::uword n_docs = static_cast<arma::uword>(dfm_p.size() - 1);
+    const arma::uword n_terms = static_cast<arma::uword>(n_terms_in);
     const arma::uword current_k = theta.n_cols;
 
+    if (dfm_i.size() != dfm_x.size()) {
+        Rcpp::stop("the dfm index and value slots disagree in length");
+    }
+    if (static_cast<R_xlen_t>(dfm_p[dfm_p.size() - 1]) != dfm_i.size()) {
+        Rcpp::stop("the dfm column pointers do not close on the nonzeros");
+    }
     if (phi.n_rows != current_k) {
         Rcpp::stop("theta and phi disagree on the number of topics");
     }
@@ -88,6 +107,11 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
     if (n_threads < 1) {
         n_threads = 1;
     }
+
+    // raw pointers hoisted once: safe to read inside OpenMP regions
+    const int* dfm_pp = dfm_p.begin();
+    const int* dfm_ii = dfm_i.begin();
+    const double* dfm_xx = dfm_x.begin();
 
     // documents are processed in fixed-size blocks: one BLAS product per
     // block replaces a dense W x K temporary per document, while keeping
@@ -137,9 +161,10 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
             double* col = dfm_block.colptr(j_col);
             std::fill(col, col + n_terms, 0.0);
             const arma::uword j_doc = block_start + static_cast<arma::uword>(j_col);
-            for (arma::sp_mat::const_col_iterator it = dfm_t.begin_col(j_doc);
-                 it != dfm_t.end_col(j_doc); ++it) {
-                col[it.row()] = *it;
+            const int c0 = dfm_pp[j_doc];
+            const int c1 = dfm_pp[j_doc + 1];
+            for (int idx = c0; idx < c1; ++idx) {
+                col[dfm_ii[idx]] = dfm_xx[idx];
             }
         }
 

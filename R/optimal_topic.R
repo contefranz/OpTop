@@ -474,8 +474,11 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   pval_cal <- rep(NA_real_, n_models)
   if (!legacy) {
     # transpose once: a document becomes a contiguous sparse column for the
-    # C++ core, and every per-model call shares the same copy
+    # C++ core. The raw CSC slots (@p, @i, @x) cross the boundary as
+    # zero-copy views, so no per-model conversion or copy of the corpus is
+    # ever made and the J x W shape is unbounded
     dfm_t <- Matrix::t(methods::as(weighted_dfm, "dgCMatrix"))
+    dfm_terms <- nrow(dfm_t)
   }
   for (i_mod in seq_len(n_models)) {
     if (legacy) {
@@ -487,7 +490,8 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
         tp <- optop_as_theta_phi(topic_models[[i_mod]])
       }
       doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
-      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map_i,
+      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
+                                     dfm_t@x, dfm_terms, q, doc_map_i,
                                      calibrating, n_threads)
     }
     Chi_K_rows[[i_mod]] <- core_out$stat

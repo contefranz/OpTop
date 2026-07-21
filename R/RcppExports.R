@@ -27,8 +27,8 @@ optop_index_doc_core <- function(tww, theta_blk, N_t, doc_start, mask_bits, L_bl
 }
 
 #' @keywords internal
-optimal_topic_core <- function(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads) {
-    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_t, q, doc_map, return_envelope, n_threads)
+optimal_topic_core <- function(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads) {
+    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads)
 }
 
 #' @keywords internal

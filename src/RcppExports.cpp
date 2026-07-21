@@ -97,19 +97,22 @@ BEGIN_RCPP
 END_RCPP
 }
 // optimal_topic_core
-Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const arma::sp_mat& dfm_t, double q, const arma::uvec& doc_map, bool return_envelope, int n_threads);
-RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_tSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP, SEXP n_threadsSEXP) {
+Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const Rcpp::IntegerVector& dfm_p, const Rcpp::IntegerVector& dfm_i, const Rcpp::NumericVector& dfm_x, int n_terms_in, double q, const arma::uvec& doc_map, bool return_envelope, int n_threads);
+RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_pSEXP, SEXP dfm_iSEXP, SEXP dfm_xSEXP, SEXP n_terms_inSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type phi(phiSEXP);
-    Rcpp::traits::input_parameter< const arma::sp_mat& >::type dfm_t(dfm_tSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type dfm_p(dfm_pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type dfm_i(dfm_iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type dfm_x(dfm_xSEXP);
+    Rcpp::traits::input_parameter< int >::type n_terms_in(n_terms_inSEXP);
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
     Rcpp::traits::input_parameter< bool >::type return_envelope(return_envelopeSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads));
+    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -190,7 +193,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_OpTop_optop_pack_mask_core", (DL_FUNC) &_OpTop_optop_pack_mask_core, 1},
     {"_OpTop_optop_index_word_core", (DL_FUNC) &_OpTop_optop_index_word_core, 13},
     {"_OpTop_optop_index_doc_core", (DL_FUNC) &_OpTop_optop_index_doc_core, 15},
-    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 7},
+    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 10},
     {"_OpTop_optimal_topic_core_legacy", (DL_FUNC) &_OpTop_optimal_topic_core_legacy, 4},
     {"_OpTop_optop_partition_fill_core", (DL_FUNC) &_OpTop_optop_partition_fill_core, 7},
     {"_OpTop_optop_partition_minmass_core", (DL_FUNC) &_OpTop_optop_partition_minmass_core, 5},
