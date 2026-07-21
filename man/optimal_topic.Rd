@@ -29,12 +29,21 @@ or Gibbs), \code{topicmodels::CTM()} fits, the seededlda models
 \code{seededlda::textmodel_seqlda()}) and NLPstudio fits (\code{nlp_topic_fit}).
 Classes can be mixed within a grid as long as every model was fitted on
 the same corpus and vocabulary; the test consumes the models only
-through their fitted word probabilities (see Details).}
+through their fitted word probabilities (see Details). Elements may
+also be loader functions returning a fit: each is materialized on
+demand and released, so very large grids never sit in memory at once
+(extracted weights are still cached under a fixed budget when they
+fit).}
 
 \item{weighted_dfm}{A weighted \code{quanteda::dfm} containing word proportions
 for each document, built from the same counts dfm the models were
 fitted on; it is recommended that document ids are available via
-\code{quanteda::docid()}.}
+\code{quanteda::docid()}. May also be an \code{\link[=optop_corpus]{optop_corpus()}} of proportion
+shards for corpora past the size of a single dfm: shards are evaluated
+one at a time and combine exactly (a one-shard corpus reproduces the
+plain call bit for bit, calibrated p-values included; multi-shard runs
+agree up to floating-point summation order). With a corpus,
+\code{doc_lengths} must be named and \code{selection = "legacy"} is unavailable.}
 
 \item{q}{Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 "relatively important" words; the remaining words are collapsed into a

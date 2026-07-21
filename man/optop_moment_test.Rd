@@ -23,12 +23,14 @@ optop_moment_test(
 corpus (any fold-in-capable engine; see \code{\link[=optop_index_holdout]{optop_index_holdout()}}).}
 
 \item{dtm_eval}{A counts document-term matrix of the evaluation
-documents; columns are matched to the training vocabulary by name.}
+documents, or an \code{\link[=optop_corpus]{optop_corpus()}} of evaluation shards; columns are
+matched to the training vocabulary by name.}
 
 \item{dtm_train}{The counts document-term matrix of the \emph{training}
-corpus, used only to build the instruments (word frequencies and, for
-\code{type = "fit"}, the training word-level fit score); never touched by
-the evaluation residuals.}
+corpus, or an \code{\link[=optop_corpus]{optop_corpus()}} of training shards (frequencies and
+document frequencies are pooled), used only to build the instruments
+(word frequencies and, for \code{type = "fit"}, the training word-level fit
+score); never touched by the evaluation residuals.}
 
 \item{type}{Instrument family:
 \itemize{

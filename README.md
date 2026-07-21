@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.14.3-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.14.3)
+[![release](https://img.shields.io/badge/release-v0.15.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.15.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -36,6 +36,14 @@ within one model grid.
   Rare words are collapsed via a fixed, document-specific partition so all indices are evaluated on a common support (`optop_make_partition()`), with a fixed corpus baseline for fair normalization (`optop_make_baseline()`).
 
 - **Performance at scale**  
+  As of v0.15.0 the package evaluates corpora of tens of millions of documents with
+  bounded memory: the corpus crosses the compiled boundary as zero-copy sparse views,
+  the harmonized partition stores per-document non-rare word lists whose size scales
+  with the token count rather than with documents times features, corpora beyond the
+  2^31 - 1 nonzero container cap of a single sparse matrix are supplied as document
+  shards through `optop_corpus()` (streamed one at a time, with per-document results
+  bit-identical to an unsharded run), and model grids too large for memory are
+  supplied as loader functions materialized one model at a time.
   Core routines are implemented in C/C++ for large vocabularies and model grids. As of
   v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
   documents with the fitted models by identifier, so the dfm row order no longer matters.

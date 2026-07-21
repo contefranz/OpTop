@@ -20,11 +20,13 @@
 #' @param models A list of topic models fitted on the \emph{training}
 #'   corpus (any fold-in-capable engine; see [optop_index_holdout()]).
 #' @param dtm_eval A counts document-term matrix of the evaluation
-#'   documents; columns are matched to the training vocabulary by name.
+#'   documents, or an [optop_corpus()] of evaluation shards; columns are
+#'   matched to the training vocabulary by name.
 #' @param dtm_train The counts document-term matrix of the \emph{training}
-#'   corpus, used only to build the instruments (word frequencies and, for
-#'   `type = "fit"`, the training word-level fit score); never touched by
-#'   the evaluation residuals.
+#'   corpus, or an [optop_corpus()] of training shards (frequencies and
+#'   document frequencies are pooled), used only to build the instruments
+#'   (word frequencies and, for `type = "fit"`, the training word-level fit
+#'   score); never touched by the evaluation residuals.
 #' @param type Instrument family:
 #'   * `"contrast"` (Test 1): one row contrasting the top against the bottom
 #'     training-frequency quintile; the scalar `t` statistic applies.

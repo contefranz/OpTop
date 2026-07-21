@@ -22,11 +22,20 @@ if (getRversion() >= "2.15.1") {
 #'   `seededlda::textmodel_seqlda()`) and NLPstudio fits (`nlp_topic_fit`).
 #'   Classes can be mixed within a grid as long as every model was fitted on
 #'   the same corpus and vocabulary; the test consumes the models only
-#'   through their fitted word probabilities (see Details).
+#'   through their fitted word probabilities (see Details). Elements may
+#'   also be loader functions returning a fit: each is materialized on
+#'   demand and released, so very large grids never sit in memory at once
+#'   (extracted weights are still cached under a fixed budget when they
+#'   fit).
 #' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
 #'   for each document, built from the same counts dfm the models were
 #'   fitted on; it is recommended that document ids are available via
-#'   `quanteda::docid()`.
+#'   `quanteda::docid()`. May also be an [optop_corpus()] of proportion
+#'   shards for corpora past the size of a single dfm: shards are evaluated
+#'   one at a time and combine exactly (a one-shard corpus reproduces the
+#'   plain call bit for bit, calibrated p-values included; multi-shard runs
+#'   agree up to floating-point summation order). With a corpus,
+#'   `doc_lengths` must be named and `selection = "legacy"` is unavailable.
 #' @param q Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 #'   "relatively important" words; the remaining words are collapsed into a
 #'   single bin whose mass stays strictly below \eqn{1 - q}. Equals

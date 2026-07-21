@@ -8,7 +8,8 @@ optop_make_baseline(dtm, smooth_lambda = 0)
 }
 \arguments{
 \item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
-columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.}
+columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
+an \code{\link[=optop_corpus]{optop_corpus()}} of count shards, whose counts are pooled.}
 
 \item{smooth_lambda}{Nonnegative additive smoothing constant:
 \eqn{\hat\pi^{\lambda}_{\mathrm{glob}}(w) \propto N_{\cdot w} + \lambda}{pi^lambda_glob(w) proportional to N_.w + lambda}.

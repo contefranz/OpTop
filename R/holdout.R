@@ -16,7 +16,8 @@
 #'   `nlp_topic_fit` with a stored backend, text2vec WarpLDA via
 #'   [optop_warplda()]).
 #' @param dtm_eval A counts document-term matrix of the \emph{evaluation}
-#'   documents. Columns are matched to the training vocabulary by name;
+#'   documents, or an [optop_corpus()] of evaluation shards streamed one at
+#'   a time. Columns are matched to the training vocabulary by name;
 #'   evaluation-only words follow the out-of-support convention below.
 #' @param baseline The \emph{training} baseline from
 #'   [optop_make_baseline()], optionally smoothed (`smooth_lambda`).

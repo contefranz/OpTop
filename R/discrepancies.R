@@ -10,9 +10,13 @@
 #' of [`optop_make_partition()`]; word-level indices are evaluated on the
 #' unbinned vocabulary.
 #'
-#' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs).
+#' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs), or
+#'   a loader function returning one (materialized on demand).
 #' @param dtm A counts document–term matrix (documents × terms). Use `Matrix::dgCMatrix`
-#'   or a `quanteda::dfm` that represents raw counts (not weighted).
+#'   or a `quanteda::dfm` that represents raw counts (not weighted), or an
+#'   [optop_corpus()] of count shards for corpora past the size of a single
+#'   matrix (shards stream one at a time; per-document results are
+#'   bit-identical to an unsharded run).
 #' @param partition Result from [`optop_make_partition()`], computed on a DTM that is
 #'   *aligned* to the model vocabulary (same features and order).
 #' @param baseline Result from [`optop_make_baseline()`], computed on the same aligned
@@ -526,10 +530,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' for a list of fitted topic models and returns a tidy table by number of topics \eqn{K}.
 #'
 #' @param models A non-empty `list` of fitted `topicmodels::LDA` models (VEM or Gibbs),
-#'   typically a grid over different \eqn{K}.
+#'   typically a grid over different \eqn{K}; elements may be loader
+#'   functions returning a fit, materialized one at a time.
 #' @param dtm A counts document–term matrix (documents × terms). Use
 #'   `Matrix::dgCMatrix` or a `quanteda::dfm` that represents raw counts
-#'   (not weighted).
+#'   (not weighted), or an [optop_corpus()] of count shards.
 #' @param metrics Character vector selecting which indices to compute. Any subset of
 #'   `c("se", "chisq", "deviance")`. Default: `c("se","chisq","deviance")`.
 #' @param c Positive scalar used inside [`optop_make_partition()`] to set the per-document

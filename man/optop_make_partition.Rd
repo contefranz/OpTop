@@ -20,7 +20,9 @@ Supports every class handled by the internal adapters:
 fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.}
 
 \item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
-columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.}
+columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
+an \code{\link[=optop_corpus]{optop_corpus()}} of count shards streamed one at a time. The rows,
+concatenated in shard order, must align with the models' documents.}
 
 \item{c}{Positive scalar controlling the per-document threshold
 \eqn{\tau_j = c / L_j}. Larger values classify more words as rare.

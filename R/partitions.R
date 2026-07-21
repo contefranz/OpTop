@@ -16,7 +16,9 @@
 #'   \code{topicmodels::LDA} (VEM or Gibbs) and \code{topicmodels::CTM}
 #'   fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.
 #' @param dtm A document–term matrix of **counts** with rows = documents and
-#'   columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.
+#'   columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
+#'   an [optop_corpus()] of count shards streamed one at a time. The rows,
+#'   concatenated in shard order, must align with the models' documents.
 #' @param c Positive scalar controlling the per-document threshold
 #'   \eqn{\tau_j = c / L_j}. Larger values classify more words as rare.
 #'   Default: \code{1}, the value the paper adopts and recommends when the
@@ -392,7 +394,8 @@ optop_make_partition <- function(models, dtm, c = 1, block = 5000,
 #' the same corpus-level word distribution, scaled by its length.
 #'
 #' @param dtm A document–term matrix of **counts** with rows = documents and
-#'   columns = vocabulary. Recommended class is \code{Matrix::dgCMatrix}.
+#'   columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
+#'   an [optop_corpus()] of count shards, whose counts are pooled.
 #' @param smooth_lambda Nonnegative additive smoothing constant:
 #'   \eqn{\hat\pi^{\lambda}_{\mathrm{glob}}(w) \propto N_{\cdot w} + \lambda}{pi^lambda_glob(w) proportional to N_.w + lambda}.
 #'   Default \code{0} (no smoothing, the in-sample construction). A positive
