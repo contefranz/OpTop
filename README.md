@@ -177,6 +177,27 @@ tab       <- optop_index_table(models = VEM_models,
 tab
 ```
 
+### At very large scale (optional)
+
+Nothing above changes for corpora that fit in a single dfm. When a corpus outgrows one
+sparse matrix (the container caps at 2^31 - 1 nonzero entries) or the model grid outgrows
+memory, two optional inputs take over; everything else, and every result, stays the same:
+
+```r
+# corpora beyond a single dfm: document shards, streamed one at a time
+corp <- optop_corpus(shard_files, reader = function(p) qs2::qs_read(p))
+
+# grids beyond memory: loader functions, materialized one model at a time
+loaders <- lapply(fit_files, function(f) { force(f); function() qs2::qs_read(f) })
+
+res  <- optimal_topic(loaders, corp_weighted, n_threads = 20)
+part <- optop_make_partition(loaders, corp, c = 1)
+```
+
+Sharded evaluation is exact, not an approximation: per-document results are bit-identical
+to an unsharded run and a one-shard corpus reproduces the plain call bit for bit,
+calibrated p-values included. See `?optop_corpus` for the full contract.
+
 ### Reproducibility across platforms
 
 OpTop itself is deterministic: envelope ties are broken in a fixed order, the bootstrap
