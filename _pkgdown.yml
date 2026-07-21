@@ -15,7 +15,7 @@ home:
     Parametric tests and discrepancy indices to select the optimal number of
     topics and assess goodness-of-fit across topic models in R.
   sidebar:
-    structure: [links, license, citation, authorlist]
+    structure: [links, license, citation, authorlist, dev]
     components:
       authorlist:
         title: Authors
