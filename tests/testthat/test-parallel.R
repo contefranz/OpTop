@@ -109,7 +109,9 @@ test_that("the index engine and partition kernel are thread-invariant", {
   fx <- optop_test_fixture()
 
   part4 <- optop_make_partition(fx$models, fx$dtm, c = 5, n_threads = 4L)
-  expect_identical(part4$rare_mask, fx$partition$rare_mask)
+  expect_identical(part4$nonrare_offsets, fx$partition$nonrare_offsets)
+  expect_identical(part4$nonrare_words, fx$partition$nonrare_words)
+  expect_identical(part4$chisq_min_ok, fx$partition$chisq_min_ok)
 
   tab <- function(threads, lvl) {
     as.data.frame(optop_index_table(fx$models, fx$dtm,

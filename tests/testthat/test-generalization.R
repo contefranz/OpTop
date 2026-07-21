@@ -78,7 +78,8 @@ test_that("tied fitted probabilities resolve like R's stable order()", {
   q <- 0.95
   dfm_t <- Matrix::t(methods::as(Matrix::Matrix(o, sparse = TRUE),
                                  "CsparseMatrix"))
-  got <- optimal_topic_core(theta, phi, dfm_t, q,
+  got <- optimal_topic_core(theta, phi, dfm_t@p, dfm_t@i, dfm_t@x,
+                            nrow(dfm_t), q,
                             doc_map = seq_len(J) - 1L,
                             return_envelope = TRUE, n_threads = 1L)
 

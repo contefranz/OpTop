@@ -39,8 +39,9 @@ test_that("the no-topics baseline enters the harmonized union", {
 
   # every fitted probability clears tau = 0.05, so without the baseline term
   # nothing would be rare; pi_glob(w4) = 1/60 makes w4 rare in every document
-  expect_true(all(part$rare_mask[, "w4"]))
-  expect_false(any(part$rare_mask[, c("w1", "w2", "w3")]))
+  mask <- ref_rare_mask(part, nrow(toy$counts), ncol(toy$counts))
+  expect_true(all(mask[, "w4"]))
+  expect_false(any(mask[, c("w1", "w2", "w3")]))
 })
 
 test_that("the Pearson min bin is excluded when the baseline mass is small", {
@@ -101,8 +102,9 @@ test_that("the inclusion rule keeps a min bin with enough grid-wide mass", {
   models <- list(toy_model(phi_row, docs, vocab))
 
   part <- optop_make_partition(models, dtm, c = 1)
-  expect_true(all(part$rare_mask[, c("w4", "w5")]))
-  expect_false(any(part$rare_mask[, c("w1", "w2", "w3")]))
+  mask <- ref_rare_mask(part, nrow(counts), ncol(counts))
+  expect_true(all(mask[, c("w4", "w5")]))
+  expect_false(any(mask[, c("w1", "w2", "w3")]))
   expect_true(all(part$chisq_min_ok))
   expect_identical(part$chisq_min_report$n_excluded, 0L)
 
@@ -178,10 +180,13 @@ test_that("the word-level fitted deviance is the Poisson unit deviance", {
 test_that("partitions from OpTop < 0.13.0 fall back with a warning", {
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
-  old_part <- fx$partition[c("rare_mask", "L")]
+  old_part <- list(rare_mask = ref_rare_mask(fx$partition, fx$J, fx$W),
+                   L = fx$partition$L)
 
   expect_warning(
-    old <- optop_index_chisq(m, fx$dtm, old_part, fx$baseline),
+    old <- suppressMessages(
+      optop_index_chisq(m, fx$dtm, old_part, fx$baseline)
+    ),
     "chisq_min_ok"
   )
 

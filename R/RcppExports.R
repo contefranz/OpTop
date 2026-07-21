@@ -2,8 +2,8 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' @keywords internal
-optop_boot_null_core <- function(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads) {
-    .Call(`_OpTop_optop_boot_null_core`, bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads)
+optop_boot_null_core <- function(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads, doc_offset = 0) {
+    .Call(`_OpTop_optop_boot_null_core`, bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads, doc_offset)
 }
 
 #' @keywords internal
@@ -12,23 +12,18 @@ optop_openmp_available <- function() {
 }
 
 #' @keywords internal
-optop_pack_mask_core <- function(mask) {
-    .Call(`_OpTop_optop_pack_mask_core`, mask)
+optop_index_word_core <- function(theta, phi_cols, N_p, N_i, N_x, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
+    .Call(`_OpTop_optop_index_word_core`, theta, phi_cols, N_p, N_i, N_x, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
 }
 
 #' @keywords internal
-optop_index_word_core <- function(E_block, N, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
-    .Call(`_OpTop_optop_index_word_core`, E_block, N, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
+optop_index_doc_core <- function(theta, phi, Nt_p, Nt_i, Nt_x, nr_off, nr_words, L, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
+    .Call(`_OpTop_optop_index_doc_core`, theta, phi, Nt_p, Nt_i, Nt_x, nr_off, nr_words, L, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
 }
 
 #' @keywords internal
-optop_index_doc_core <- function(tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads) {
-    .Call(`_OpTop_optop_index_doc_core`, tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads)
-}
-
-#' @keywords internal
-optimal_topic_core <- function(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads) {
-    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_t, q, doc_map, return_envelope, n_threads)
+optimal_topic_core <- function(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads) {
+    .Call(`_OpTop_optimal_topic_core`, theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads)
 }
 
 #' @keywords internal
@@ -37,13 +32,33 @@ optimal_topic_core_legacy <- function(lda_models, weighted_dfm, q, doc_map) {
 }
 
 #' @keywords internal
-optop_partition_fill_core <- function(rare_mask, theta_list, phi_list, pi_glob, tau, block, n_threads) {
-    invisible(.Call(`_OpTop_optop_partition_fill_core`, rare_mask, theta_list, phi_list, pi_glob, tau, block, n_threads))
+optop_partition_candidates_core <- function(pi_sorted, tau, n_threads) {
+    .Call(`_OpTop_optop_partition_candidates_core`, pi_sorted, tau, n_threads)
 }
 
 #' @keywords internal
-optop_partition_minmass_core <- function(rare_mask, theta_list, phi_list, block, n_threads) {
-    .Call(`_OpTop_optop_partition_minmass_core`, rare_mask, theta_list, phi_list, block, n_threads)
+optop_partition_pass_core <- function(theta, phi, order, cand_off, keep, tau, doc_offset, n_threads) {
+    invisible(.Call(`_OpTop_optop_partition_pass_core`, theta, phi, order, cand_off, keep, tau, doc_offset, n_threads))
+}
+
+#' @keywords internal
+optop_partition_compact_core <- function(cand_off, keep, order, n_threads) {
+    .Call(`_OpTop_optop_partition_compact_core`, cand_off, keep, order, n_threads)
+}
+
+#' @keywords internal
+optop_partition_sums_core <- function(theta, phi, nr_off, nr_words, doc_offset, n_threads) {
+    .Call(`_OpTop_optop_partition_sums_core`, theta, phi, nr_off, nr_words, doc_offset, n_threads)
+}
+
+#' @keywords internal
+optop_partition_pisum_core <- function(nr_off, nr_words, pi_glob, n_threads) {
+    .Call(`_OpTop_optop_partition_pisum_core`, nr_off, nr_words, pi_glob, n_threads)
+}
+
+#' @keywords internal
+optop_partition_obsmass_core <- function(Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads) {
+    .Call(`_OpTop_optop_partition_obsmass_core`, Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads)
 }
 
 #' @keywords internal

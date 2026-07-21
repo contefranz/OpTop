@@ -52,10 +52,14 @@ optop_index_deviance(
 )
 }
 \arguments{
-\item{model}{A single fitted \code{topicmodels::LDA} model (VEM or Gibbs).}
+\item{model}{A single fitted \code{topicmodels::LDA} model (VEM or Gibbs), or
+a loader function returning one (materialized on demand).}
 
 \item{dtm}{A counts document–term matrix (documents × terms). Use \code{Matrix::dgCMatrix}
-or a \code{quanteda::dfm} that represents raw counts (not weighted).}
+or a \code{quanteda::dfm} that represents raw counts (not weighted), or an
+\code{\link[=optop_corpus]{optop_corpus()}} of count shards for corpora past the size of a single
+matrix (shards stream one at a time; per-document results are
+bit-identical to an unsharded run).}
 
 \item{partition}{Result from \code{\link[=optop_make_partition]{optop_make_partition()}}, computed on a DTM that is
 \emph{aligned} to the model vocabulary (same features and order).}

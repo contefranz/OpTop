@@ -1,3 +1,72 @@
+# OpTop 0.15.0
+
+The scale release: the package now evaluates corpora of tens of millions of
+documents on server machines with bounded memory, exactly. Three
+architectural changes carry it, each gated by equivalence tests against the
+previous behavior.
+
+### New Features
+
+* **Sharded corpora** (`optop_corpus()`): a dtm, a list of document shards,
+  or per-shard file paths with a reader are accepted wherever a dtm or
+  weighted dfm is accepted, by `optimal_topic()`, the partition and baseline
+  builders, the index family and grid table, the held-out layer, and the
+  moment tests. Every statistic is a sum of independent per-document terms,
+  so sharded evaluation is exact: per-document outputs are bit-identical to
+  an unsharded run and concatenate, sums agree up to floating-point
+  summation order, and the calibration bootstrap keys each document's random
+  stream by its global index, so a one-shard corpus reproduces the plain
+  call bit for bit, calibrated p-values included. Sharding is how the
+  package passes the container cap of R sparse matrices (2^31 - 1 nonzeros
+  per dgCMatrix): shards stay under it individually while the corpus does
+  not.
+
+* **Lazy models**: elements of a model grid may be loader functions
+  returning a fit; `optimal_topic()`, the partition builder, the index
+  family, the holdout, and the moment tests materialize one model at a time
+  and release it, so the grid never needs to sit in memory at once.
+  Extracted weight matrices are still cached under a fixed budget when they
+  fit.
+
+### Performance
+
+* **Sparse harmonized partition**: the partition stores the complement of
+  the rare set, the per-document non-rare word lists, bounded in total by
+  tokens divided by `c`. The construction is candidate-based and exact:
+  because the null baseline belongs to the augmented union, a cell can be
+  non-rare only if its baseline probability clears `tau_j`, so each
+  document's candidates form a prefix of the baseline-sorted vocabulary.
+  Cost falls from `O(J * W * sum_K K)` dense products to
+  `O((tokens / c) * sum_K K)`, and no J x W object of any kind exists
+  anymore (the dense `rare_mask`, its packed bits, and the per-document
+  full-vocabulary traversal are gone). On 100,000 documents by 30,000
+  features the partition builds in 0.2 s as a 53 MB object where the dense
+  mask alone was 12 GB.
+
+* **Merge-join document kernel**: each document is scored by merge-joining
+  its non-rare list with its sparse counts at `O(|NR_j| * K + nnz_j)`; the
+  word kernel blocks documents internally. The corpus crosses the C++
+  boundary everywhere as zero-copy dgCMatrix slot views: no Armadillo
+  sparse container, no per-model copy, no shape limit.
+
+### Breaking Changes
+
+* **Partition format 2**: `optop_make_partition()` returns the sparse
+  fields (`nonrare_offsets`, `nonrare_words`, `vocab`, `format = 2L`)
+  instead of the dense `rare_mask`. Partitions saved by 0.13.0 to 0.14.3
+  are upgraded automatically on first use, with an alert; the `block`
+  argument is accepted and ignored. The deprecated SE re-optimization path
+  reconstructs its dense rows from the sparse lists and remains a
+  small-corpus path.
+
+* **Pearson min-bin convention**: the fitted min-bin mass is now the
+  unfloored sum of the rare fitted probabilities, floored once at the
+  numerical epsilon, unifying it with the null side (previously the fitted
+  side summed element-wise floored expectations, which a complement-based
+  construction cannot reproduce). The difference is bounded by `W * eps`
+  in absolute terms on a bin that enters the Pearson family only when its
+  mass clears `c`; reference implementations follow the same convention.
+
 # OpTop 0.14.3
 
 A large-corpus indexing release.

@@ -75,6 +75,13 @@
 #'   touched and no per-document list is ever materialized. The flattened
 #'   layout is identical to `unlist(probs)`, so both entry points draw the
 #'   same replicates under the same seed.
+#' @param doc_offset Nonnegative scalar; the global index of the first
+#'   document of this call minus one. Every document's RNG stream is keyed
+#'   by `seed` and its GLOBAL index, so each document draws bit-identical
+#'   replicates whatever the sharding; summing the per-shard replicate
+#'   vectors reproduces the unsharded totals up to floating-point summation
+#'   order (a few ulp, since the grouping of the additions changes).
+#'   Default `0` (the unsharded call).
 #'
 #' @return A numeric vector of length `n_boot` with the null replicates
 #'   \eqn{T^\ast}{T*}.
@@ -82,7 +89,7 @@
 #' @keywords internal
 .optop_boot_null <- function(probs, doc_lengths, n_boot, seed = NULL,
                              n_threads = 1L, bin_probs = NULL,
-                             bin_counts = NULL) {
+                             bin_counts = NULL, doc_offset = 0) {
   if (is.null(seed)) {
     seed <- sample.int(.Machine$integer.max, 1L)
   }
@@ -95,7 +102,8 @@
                        as.numeric(doc_lengths),
                        as.integer(n_boot),
                        as.numeric(seed),
-                       as.integer(n_threads))
+                       as.integer(n_threads),
+                       as.numeric(doc_offset))
 }
 
 #' Exact null moments of the Test 1 statistic and their Satterthwaite match

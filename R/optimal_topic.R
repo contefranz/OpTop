@@ -22,11 +22,20 @@ if (getRversion() >= "2.15.1") {
 #'   `seededlda::textmodel_seqlda()`) and NLPstudio fits (`nlp_topic_fit`).
 #'   Classes can be mixed within a grid as long as every model was fitted on
 #'   the same corpus and vocabulary; the test consumes the models only
-#'   through their fitted word probabilities (see Details).
+#'   through their fitted word probabilities (see Details). Elements may
+#'   also be loader functions returning a fit: each is materialized on
+#'   demand and released, so very large grids never sit in memory at once
+#'   (extracted weights are still cached under a fixed budget when they
+#'   fit).
 #' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
 #'   for each document, built from the same counts dfm the models were
 #'   fitted on; it is recommended that document ids are available via
-#'   `quanteda::docid()`.
+#'   `quanteda::docid()`. May also be an [optop_corpus()] of proportion
+#'   shards for corpora past the size of a single dfm: shards are evaluated
+#'   one at a time and combine exactly (a one-shard corpus reproduces the
+#'   plain call bit for bit, calibrated p-values included; multi-shard runs
+#'   agree up to floating-point summation order). With a corpus,
+#'   `doc_lengths` must be named and `selection = "legacy"` is unavailable.
 #' @param q Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 #'   "relatively important" words; the remaining words are collapsed into a
 #'   single bin whose mass stays strictly below \eqn{1 - q}. Equals
@@ -257,8 +266,8 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                "This is strange since the test should be performed",
                "on multiple topic models."))
   }
-  if (!quanteda::is.dfm(weighted_dfm)) {
-    stop("weighted_dfm must be a dfm")
+  if (!quanteda::is.dfm(weighted_dfm) && !.optop_is_corpus(weighted_dfm)) {
+    stop("weighted_dfm must be a dfm or an optop_corpus")
   }
   if (!is.numeric(q)) {
     stop("q must be a numeric")
@@ -317,6 +326,14 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   if (verbose) {
     cli::cli_h2("Optimal topic selection")
   }
+  if (.optop_is_corpus(weighted_dfm)) {
+    if (legacy) {
+      stop('selection = "legacy" does not accept an optop_corpus')
+    }
+    return(.optop_ot_corpus(weighted_dfm, topic_models, q, alpha, selection,
+                            calibrate, n_boot, doc_lengths, seed, n_threads,
+                            do_plot, verbose, tic))
+  }
   docs <- as.character(quanteda::docid(weighted_dfm))
   if (anyDuplicated(docs)) {
     stop(paste("weighted_dfm has duplicated document ids; document",
@@ -359,7 +376,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cache_bytes <- 0
     cache_budget <- 256 * 1024^2
     for (i_mod in seq_along(topic_models)) {
-      tp <- optop_as_theta_phi(topic_models[[i_mod]])
+      tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
       .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
       meta[[i_mod]] <- tp[c("K", "docs", "terms")]
       cache_bytes <- cache_bytes + 8 * (length(tp$theta) + length(tp$phi))
@@ -474,8 +491,11 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   pval_cal <- rep(NA_real_, n_models)
   if (!legacy) {
     # transpose once: a document becomes a contiguous sparse column for the
-    # C++ core, and every per-model call shares the same copy
+    # C++ core. The raw CSC slots (@p, @i, @x) cross the boundary as
+    # zero-copy views, so no per-model conversion or copy of the corpus is
+    # ever made and the J x W shape is unbounded
     dfm_t <- Matrix::t(methods::as(weighted_dfm, "dgCMatrix"))
+    dfm_terms <- nrow(dfm_t)
   }
   for (i_mod in seq_len(n_models)) {
     if (legacy) {
@@ -484,10 +504,11 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     } else {
       tp <- tp_cache[[i_mod]]
       if (is.null(tp)) {
-        tp <- optop_as_theta_phi(topic_models[[i_mod]])
+        tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
       }
       doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
-      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t, q, doc_map_i,
+      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
+                                     dfm_t@x, dfm_terms, q, doc_map_i,
                                      calibrating, n_threads)
     }
     Chi_K_rows[[i_mod]] <- core_out$stat
@@ -516,6 +537,22 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cli::cli_progress_done()
   }
 
+  .optop_ot_finish(Chi_K_rows, pval_cal, legacy, calibrating,
+                   calibrate, n_boot, selection, alpha, do_plot,
+                   verbose, tic)
+}
+
+#' Shared assembly, selection, and reporting tail of optimal_topic()
+#'
+#' Consumes the per-model statistic rows (K, raw, df) plus the calibrated
+#' p-values, builds the returned table, applies the selection rule, and
+#' handles the plot and the verbose reporting. One implementation serves
+#' the single-matrix and the sharded-corpus evaluation paths.
+#'
+#' @keywords internal
+.optop_ot_finish <- function(Chi_K_rows, pval_cal, legacy, calibrating,
+                             calibrate, n_boot, selection, alpha, do_plot,
+                             verbose, tic) {
   Chi_K <- data.table::as.data.table(do.call(rbind, Chi_K_rows))
   data.table::setnames(Chi_K, old = names(Chi_K), c("topic", "raw", "df"))
   Chi_K[, OpTop := raw / df]
@@ -617,4 +654,273 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cli::cli_alert_info("Completed in {round(runtime[3L], 2)}s")
   }
   return(Chi_K)
+}
+
+#' Sharded evaluation path of optimal_topic()
+#'
+#' Evaluates the model grid over an [optop_corpus()], one shard at a time:
+#' per shard and per model, the compiled core contributes the shard's raw
+#' statistic and degrees of freedom, which add exactly across shards
+#' because the Test 1 statistic is a sum of independent per-document terms.
+#' Calibration composes the same way: bootstrap replicates are drawn per
+#' shard with the document streams keyed by the global document index
+#' (`doc_offset`), and the closed-form moments accumulate their per-shard
+#' mean and variance contributions. Models supplied as loader functions are
+#' materialized on demand; extracted weight matrices are cached across
+#' shards under the usual fixed memory budget, so cheap grids avoid
+#' reloading while very large grids stream one model at a time.
+#'
+#' Requirements specific to the sharded path: with calibration,
+#' `doc_lengths` must be named (row order across shards is not a reliable
+#' identity at this scale), and `selection = "legacy"` is not available.
+#'
+#' @keywords internal
+.optop_ot_corpus <- function(corpus, topic_models, q, alpha, selection,
+                             calibrate, n_boot, doc_lengths, seed, n_threads,
+                             do_plot, verbose, tic) {
+  calibrating <- calibrate != "none"
+  if (calibrating && is.null(names(doc_lengths))) {
+    stop(paste("corpus input needs named doc_lengths: names are matched to",
+               "the document ids of every shard"))
+  }
+
+  # meta pass: materialize each model once for K, vocabulary, and document
+  # ids; identical document vectors are stored once (the common case)
+  n_models <- length(topic_models)
+  metas <- vector("list", n_models)
+  docs_ref <- NULL
+  for (i in seq_len(n_models)) {
+    tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i]]))
+    .optop_validate_theta_phi(tp, class(topic_models[[i]]))
+    own_docs <- if (is.null(docs_ref)) {
+      docs_ref <- tp$docs
+      NULL
+    } else if (identical(tp$docs, docs_ref)) {
+      NULL
+    } else {
+      tp$docs
+    }
+    metas[[i]] <- list(K = tp$K, terms = tp$terms, docs = own_docs)
+  }
+  ks <- vapply(metas, function(m) as.integer(m$K), integer(1L))
+  if (anyDuplicated(ks)) {
+    stop(paste("topic_models contains more than one model with the same",
+               "number of topics; the grid must have one model per K"))
+  }
+  if (is.unsorted(ks)) {
+    ord <- order(ks)
+    topic_models <- topic_models[ord]
+    metas <- metas[ord]
+    ks <- ks[ord]
+    cli::cli_alert_warning(
+      "Reordered topic_models by increasing number of topics"
+    )
+  }
+  ref_terms <- metas[[1L]]$terms
+  same_terms <- vapply(metas[-1L], function(m) identical(m$terms, ref_terms),
+                       logical(1L))
+  if (!all(same_terms)) {
+    stop(paste("all models must share the same vocabulary in the same",
+               "order; refit the grid on a common dfm"))
+  }
+
+  # extracted weight matrices are cached across shards under the fixed
+  # budget; past it, models are re-materialized per shard
+  cache_budget <- 256 * 1024^2
+  tp_cache <- vector("list", n_models)
+  cache_bytes <- 0
+  tp_get <- function(i) {
+    if (!is.null(tp_cache[[i]])) {
+      return(tp_cache[[i]])
+    }
+    tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i]]))
+    bytes <- 8 * (length(tp$theta) + length(tp$phi))
+    if (cache_bytes + bytes <= cache_budget) {
+      tp_cache[[i]] <<- tp[c("theta", "phi", "docs")]
+      cache_bytes <<- cache_bytes + bytes
+      return(tp_cache[[i]])
+    }
+    tp[c("theta", "phi", "docs")]
+  }
+
+  n_sh <- corpus$n_shards
+  if (verbose) {
+    cli::cli_alert_info(paste(
+      "Evaluating {n_models} models over a corpus of {n_sh} shard{?s}",
+      "({length(ref_terms)} features; q = {q}, alpha = {alpha},",
+      "selection = {selection})"
+    ))
+    if (calibrate == "bootstrap") {
+      seed_note <- if (is.null(seed)) "" else paste0(", seed = ", seed)
+      cli::cli_alert_info(paste0(
+        "Calibrating p-values by parametric bootstrap (B = {n_boot}",
+        seed_note, ") under the fitted-model null"
+      ))
+    } else if (calibrate == "moment") {
+      cli::cli_alert_info(paste(
+        "Calibrating p-values by moment matching (Satterthwaite scaled",
+        "chi-square) under the fitted-model null"
+      ))
+    }
+    cli::cli_progress_bar("Processing corpus shards",
+                          total = n_sh * n_models)
+  }
+
+  # one bootstrap seed per model, drawn upfront so every shard of a model
+  # shares the stream base (set.seed() governs reproducibility as usual)
+  seeds_model <- NULL
+  if (calibrate == "bootstrap") {
+    if (!is.null(seed)) {
+      set.seed(seed)
+    }
+    seeds_model <- sample.int(.Machine$integer.max, n_models)
+  }
+
+  raw_sum <- numeric(n_models)
+  df_sum <- numeric(n_models)
+  T_null_sum <- if (calibrate == "bootstrap") {
+    matrix(0, n_boot, n_models)
+  } else {
+    NULL
+  }
+  mm_mu <- numeric(n_models)
+  mm_s2 <- numeric(n_models)
+  T_kept <- 0
+  n_dropped <- 0
+  warned_perm <- FALSE
+  warned_mass <- FALSE
+
+  for (s in seq_len(n_sh)) {
+    m <- .optop_corpus_shard(corpus, s)
+    docs_s <- rownames(m)
+    if (is.null(docs_s) || anyDuplicated(docs_s)) {
+      stop(sprintf("shard %d needs unique document identifiers", s))
+    }
+    feats <- colnames(m)
+    if (!identical(feats, ref_terms)) {
+      if (length(feats) == length(ref_terms) && !anyDuplicated(feats) &&
+          setequal(feats, ref_terms)) {
+        m <- m[, ref_terms]
+        if (!warned_perm) {
+          cli::cli_alert_warning(
+            "Reordered shard features to the models' vocabulary"
+          )
+          warned_perm <- TRUE
+        }
+      } else {
+        stop(sprintf(paste("the features of shard %d do not match the",
+                           "models' vocabulary"), s))
+      }
+    }
+    if (!warned_mass) {
+      row_mass <- Matrix::rowSums(m)
+      if (any(abs(row_mass - 1) > 1e-6)) {
+        cli::cli_alert_warning(paste(
+          "corpus rows do not sum to 1: expected word proportions as",
+          'produced by quanteda::dfm_weight(scheme = "prop")'
+        ))
+        warned_mass <- TRUE
+      }
+    }
+
+    keep <- rep(TRUE, length(docs_s))
+    keep <- keep & docs_s %in% docs_ref
+    for (mt in metas) {
+      if (!is.null(mt$docs)) {
+        keep <- keep & docs_s %in% mt$docs
+      }
+    }
+    if (!all(keep)) {
+      n_dropped <- n_dropped + sum(!keep)
+      m <- m[keep, , drop = FALSE]
+      docs_s <- docs_s[keep]
+    }
+    if (!length(docs_s)) {
+      for (i in seq_len(n_models)) {
+        if (verbose) cli::cli_progress_update()
+      }
+      next
+    }
+
+    dl_s <- NULL
+    if (calibrating) {
+      dl_s <- doc_lengths[docs_s]
+      if (anyNA(dl_s)) {
+        stop("doc_lengths is missing entries for some corpus documents")
+      }
+    }
+
+    dfm_t <- Matrix::t(m)
+    dfm_terms <- nrow(dfm_t)
+
+    for (i in seq_len(n_models)) {
+      tp <- tp_get(i)
+      model_docs <- if (is.null(metas[[i]]$docs)) docs_ref else
+        metas[[i]]$docs
+      doc_map_i <- match(docs_s, model_docs) - 1L
+      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
+                                     dfm_t@x, dfm_terms, q, doc_map_i,
+                                     calibrating, n_threads)
+      raw_sum[i] <- raw_sum[i] + core_out$stat[1L, 2L]
+      df_sum[i] <- df_sum[i] + core_out$stat[1L, 3L]
+      if (calibrate == "bootstrap") {
+        T_null_sum[, i] <- T_null_sum[, i] +
+          .optop_boot_null(doc_lengths = dl_s, n_boot = n_boot,
+                           seed = seeds_model[i], n_threads = n_threads,
+                           bin_probs = core_out$bin_probs,
+                           bin_counts = core_out$bin_counts,
+                           doc_offset = T_kept)
+      } else if (calibrate == "moment") {
+        probs <- .optop_split_envelope(core_out$bin_probs,
+                                       core_out$bin_counts)
+        mm <- .optop_moment_null(probs, dl_s)
+        mm_mu[i] <- mm_mu[i] + mm$mu
+        mm_s2[i] <- mm_s2[i] + mm$sigma2
+      }
+      if (verbose) {
+        cli::cli_progress_update(
+          status = paste0("shard ", s, "/", n_sh, ", k = ", ks[i])
+        )
+      }
+    }
+    T_kept <- T_kept + length(docs_s)
+  }
+  if (verbose) {
+    cli::cli_progress_done()
+  }
+  if (n_dropped > 0) {
+    cli::cli_alert_warning(
+      "Removed {n_dropped} document{?s} not present in the models"
+    )
+  }
+  if (T_kept == 0) {
+    stop(paste("Document matching went really wrong. Check the document",
+               "ids of the corpus against those stored in the models"))
+  }
+  if (verbose) {
+    cli::cli_alert_info(
+      "Evaluated {T_kept} document{?s} across {n_sh} shard{?s}"
+    )
+  }
+
+  pval_cal <- rep(NA_real_, n_models)
+  if (calibrate == "bootstrap") {
+    pval_cal <- vapply(seq_len(n_models), function(i) {
+      (1 + sum(T_null_sum[, i] >= raw_sum[i])) / (n_boot + 1)
+    }, numeric(1))
+  } else if (calibrate == "moment") {
+    pval_cal <- vapply(seq_len(n_models), function(i) {
+      a <- mm_s2[i] / (2 * mm_mu[i])
+      nu <- 2 * mm_mu[i]^2 / mm_s2[i]
+      stats::pchisq(raw_sum[i] / a, df = nu, lower.tail = FALSE)
+    }, numeric(1))
+  }
+
+  Chi_K_rows <- lapply(seq_len(n_models), function(i) {
+    matrix(c(ks[i], raw_sum[i], df_sum[i]), 1L, 3L)
+  })
+  .optop_ot_finish(Chi_K_rows, pval_cal, legacy = FALSE,
+                   calibrating = calibrating, calibrate = calibrate,
+                   n_boot = n_boot, selection = selection, alpha = alpha,
+                   do_plot = do_plot, verbose = verbose, tic = tic)
 }

@@ -12,8 +12,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // optop_boot_null_core
-Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs, const Rcpp::IntegerVector& bin_counts, const Rcpp::NumericVector& doc_lengths, int n_boot, double seed, int n_threads);
-RcppExport SEXP _OpTop_optop_boot_null_core(SEXP bin_probsSEXP, SEXP bin_countsSEXP, SEXP doc_lengthsSEXP, SEXP n_bootSEXP, SEXP seedSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs, const Rcpp::IntegerVector& bin_counts, const Rcpp::NumericVector& doc_lengths, int n_boot, double seed, int n_threads, double doc_offset);
+RcppExport SEXP _OpTop_optop_boot_null_core(SEXP bin_probsSEXP, SEXP bin_countsSEXP, SEXP doc_lengthsSEXP, SEXP n_bootSEXP, SEXP seedSEXP, SEXP n_threadsSEXP, SEXP doc_offsetSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -23,7 +23,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_boot(n_bootSEXP);
     Rcpp::traits::input_parameter< double >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optop_boot_null_core(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads));
+    Rcpp::traits::input_parameter< double >::type doc_offset(doc_offsetSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_boot_null_core(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads, doc_offset));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -37,25 +38,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// optop_pack_mask_core
-Rcpp::RawVector optop_pack_mask_core(const Rcpp::LogicalMatrix& mask);
-RcppExport SEXP _OpTop_optop_pack_mask_core(SEXP maskSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::LogicalMatrix& >::type mask(maskSEXP);
-    rcpp_result_gen = Rcpp::wrap(optop_pack_mask_core(mask));
-    return rcpp_result_gen;
-END_RCPP
-}
 // optop_index_word_core
-Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block, const arma::sp_mat& N, int w_start, int w_len, const Rcpp::NumericVector& L, const Rcpp::NumericVector& pi_w, double eps, bool do_model, bool do_null, bool do_se, bool do_chisq, bool do_dev, int n_threads);
-RcppExport SEXP _OpTop_optop_index_word_core(SEXP E_blockSEXP, SEXP NSEXP, SEXP w_startSEXP, SEXP w_lenSEXP, SEXP LSEXP, SEXP pi_wSEXP, SEXP epsSEXP, SEXP do_modelSEXP, SEXP do_nullSEXP, SEXP do_seSEXP, SEXP do_chisqSEXP, SEXP do_devSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericMatrix optop_index_word_core(const arma::mat& theta, const arma::mat& phi_cols, const Rcpp::IntegerVector& N_p, const Rcpp::IntegerVector& N_i, const Rcpp::NumericVector& N_x, int w_start, int w_len, const Rcpp::NumericVector& L, const Rcpp::NumericVector& pi_w, double eps, bool do_model, bool do_null, bool do_se, bool do_chisq, bool do_dev, int n_threads);
+RcppExport SEXP _OpTop_optop_index_word_core(SEXP thetaSEXP, SEXP phi_colsSEXP, SEXP N_pSEXP, SEXP N_iSEXP, SEXP N_xSEXP, SEXP w_startSEXP, SEXP w_lenSEXP, SEXP LSEXP, SEXP pi_wSEXP, SEXP epsSEXP, SEXP do_modelSEXP, SEXP do_nullSEXP, SEXP do_seSEXP, SEXP do_chisqSEXP, SEXP do_devSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::mat& >::type E_block(E_blockSEXP);
-    Rcpp::traits::input_parameter< const arma::sp_mat& >::type N(NSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type phi_cols(phi_colsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type N_p(N_pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type N_i(N_iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type N_x(N_xSEXP);
     Rcpp::traits::input_parameter< int >::type w_start(w_startSEXP);
     Rcpp::traits::input_parameter< int >::type w_len(w_lenSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type L(LSEXP);
@@ -67,22 +60,24 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type do_chisq(do_chisqSEXP);
     Rcpp::traits::input_parameter< bool >::type do_dev(do_devSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optop_index_word_core(E_block, N, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads));
+    rcpp_result_gen = Rcpp::wrap(optop_index_word_core(theta, phi_cols, N_p, N_i, N_x, w_start, w_len, L, pi_w, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
 // optop_index_doc_core
-Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww, const arma::mat& theta_blk, const arma::sp_mat& N_t, int doc_start, const Rcpp::RawVector& mask_bits, const Rcpp::NumericVector& L_blk, const Rcpp::NumericVector& pi_row, const Rcpp::LogicalVector& chisq_min_ok, double eps, bool do_model, bool do_null, bool do_se, bool do_chisq, bool do_dev, int n_threads);
-RcppExport SEXP _OpTop_optop_index_doc_core(SEXP twwSEXP, SEXP theta_blkSEXP, SEXP N_tSEXP, SEXP doc_startSEXP, SEXP mask_bitsSEXP, SEXP L_blkSEXP, SEXP pi_rowSEXP, SEXP chisq_min_okSEXP, SEXP epsSEXP, SEXP do_modelSEXP, SEXP do_nullSEXP, SEXP do_seSEXP, SEXP do_chisqSEXP, SEXP do_devSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& theta, const arma::mat& phi, const Rcpp::IntegerVector& Nt_p, const Rcpp::IntegerVector& Nt_i, const Rcpp::NumericVector& Nt_x, const Rcpp::NumericVector& nr_off, const Rcpp::IntegerVector& nr_words, const Rcpp::NumericVector& L, const Rcpp::NumericVector& pi_row, const Rcpp::LogicalVector& chisq_min_ok, double eps, bool do_model, bool do_null, bool do_se, bool do_chisq, bool do_dev, int n_threads);
+RcppExport SEXP _OpTop_optop_index_doc_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP Nt_pSEXP, SEXP Nt_iSEXP, SEXP Nt_xSEXP, SEXP nr_offSEXP, SEXP nr_wordsSEXP, SEXP LSEXP, SEXP pi_rowSEXP, SEXP chisq_min_okSEXP, SEXP epsSEXP, SEXP do_modelSEXP, SEXP do_nullSEXP, SEXP do_seSEXP, SEXP do_chisqSEXP, SEXP do_devSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::mat& >::type tww(twwSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type theta_blk(theta_blkSEXP);
-    Rcpp::traits::input_parameter< const arma::sp_mat& >::type N_t(N_tSEXP);
-    Rcpp::traits::input_parameter< int >::type doc_start(doc_startSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::RawVector& >::type mask_bits(mask_bitsSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type L_blk(L_blkSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type phi(phiSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type Nt_p(Nt_pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type Nt_i(Nt_iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type Nt_x(Nt_xSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type nr_off(nr_offSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type nr_words(nr_wordsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type L(LSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type pi_row(pi_rowSEXP);
     Rcpp::traits::input_parameter< const Rcpp::LogicalVector& >::type chisq_min_ok(chisq_min_okSEXP);
     Rcpp::traits::input_parameter< double >::type eps(epsSEXP);
@@ -92,24 +87,27 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type do_chisq(do_chisqSEXP);
     Rcpp::traits::input_parameter< bool >::type do_dev(do_devSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optop_index_doc_core(tww, theta_blk, N_t, doc_start, mask_bits, L_blk, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads));
+    rcpp_result_gen = Rcpp::wrap(optop_index_doc_core(theta, phi, Nt_p, Nt_i, Nt_x, nr_off, nr_words, L, pi_row, chisq_min_ok, eps, do_model, do_null, do_se, do_chisq, do_dev, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
 // optimal_topic_core
-Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const arma::sp_mat& dfm_t, double q, const arma::uvec& doc_map, bool return_envelope, int n_threads);
-RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_tSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP, SEXP n_threadsSEXP) {
+Rcpp::List optimal_topic_core(const arma::mat& theta, const arma::mat& phi, const Rcpp::IntegerVector& dfm_p, const Rcpp::IntegerVector& dfm_i, const Rcpp::NumericVector& dfm_x, int n_terms_in, double q, const arma::uvec& doc_map, bool return_envelope, int n_threads);
+RcppExport SEXP _OpTop_optimal_topic_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP dfm_pSEXP, SEXP dfm_iSEXP, SEXP dfm_xSEXP, SEXP n_terms_inSEXP, SEXP qSEXP, SEXP doc_mapSEXP, SEXP return_envelopeSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type phi(phiSEXP);
-    Rcpp::traits::input_parameter< const arma::sp_mat& >::type dfm_t(dfm_tSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type dfm_p(dfm_pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type dfm_i(dfm_iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type dfm_x(dfm_xSEXP);
+    Rcpp::traits::input_parameter< int >::type n_terms_in(n_terms_inSEXP);
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
     Rcpp::traits::input_parameter< bool >::type return_envelope(return_envelopeSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_t, q, doc_map, return_envelope, n_threads));
+    rcpp_result_gen = Rcpp::wrap(optimal_topic_core(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, doc_map, return_envelope, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -127,34 +125,94 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// optop_partition_fill_core
-void optop_partition_fill_core(Rcpp::LogicalMatrix rare_mask, const Rcpp::List& theta_list, const Rcpp::List& phi_list, const Rcpp::NumericVector& pi_glob, const Rcpp::NumericVector& tau, int block, int n_threads);
-RcppExport SEXP _OpTop_optop_partition_fill_core(SEXP rare_maskSEXP, SEXP theta_listSEXP, SEXP phi_listSEXP, SEXP pi_globSEXP, SEXP tauSEXP, SEXP blockSEXP, SEXP n_threadsSEXP) {
-BEGIN_RCPP
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::LogicalMatrix >::type rare_mask(rare_maskSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type theta_list(theta_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type phi_list(phi_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type pi_glob(pi_globSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type tau(tauSEXP);
-    Rcpp::traits::input_parameter< int >::type block(blockSEXP);
-    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    optop_partition_fill_core(rare_mask, theta_list, phi_list, pi_glob, tau, block, n_threads);
-    return R_NilValue;
-END_RCPP
-}
-// optop_partition_minmass_core
-Rcpp::NumericMatrix optop_partition_minmass_core(const Rcpp::LogicalMatrix& rare_mask, const Rcpp::List& theta_list, const Rcpp::List& phi_list, int block, int n_threads);
-RcppExport SEXP _OpTop_optop_partition_minmass_core(SEXP rare_maskSEXP, SEXP theta_listSEXP, SEXP phi_listSEXP, SEXP blockSEXP, SEXP n_threadsSEXP) {
+// optop_partition_candidates_core
+Rcpp::IntegerVector optop_partition_candidates_core(const Rcpp::NumericVector& pi_sorted, const Rcpp::NumericVector& tau, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_candidates_core(SEXP pi_sortedSEXP, SEXP tauSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::LogicalMatrix& >::type rare_mask(rare_maskSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type theta_list(theta_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type phi_list(phi_listSEXP);
-    Rcpp::traits::input_parameter< int >::type block(blockSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type pi_sorted(pi_sortedSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type tau(tauSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(optop_partition_minmass_core(rare_mask, theta_list, phi_list, block, n_threads));
+    rcpp_result_gen = Rcpp::wrap(optop_partition_candidates_core(pi_sorted, tau, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// optop_partition_pass_core
+void optop_partition_pass_core(const arma::mat& theta, const arma::mat& phi, const Rcpp::IntegerVector& order, const Rcpp::NumericVector& cand_off, Rcpp::RawVector keep, const Rcpp::NumericVector& tau, double doc_offset, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_pass_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP orderSEXP, SEXP cand_offSEXP, SEXP keepSEXP, SEXP tauSEXP, SEXP doc_offsetSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type phi(phiSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type order(orderSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type cand_off(cand_offSEXP);
+    Rcpp::traits::input_parameter< Rcpp::RawVector >::type keep(keepSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< double >::type doc_offset(doc_offsetSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    optop_partition_pass_core(theta, phi, order, cand_off, keep, tau, doc_offset, n_threads);
+    return R_NilValue;
+END_RCPP
+}
+// optop_partition_compact_core
+Rcpp::List optop_partition_compact_core(const Rcpp::NumericVector& cand_off, const Rcpp::RawVector& keep, const Rcpp::IntegerVector& order, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_compact_core(SEXP cand_offSEXP, SEXP keepSEXP, SEXP orderSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type cand_off(cand_offSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::RawVector& >::type keep(keepSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type order(orderSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_partition_compact_core(cand_off, keep, order, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// optop_partition_sums_core
+Rcpp::NumericVector optop_partition_sums_core(const arma::mat& theta, const arma::mat& phi, const Rcpp::NumericVector& nr_off, const Rcpp::IntegerVector& nr_words, double doc_offset, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_sums_core(SEXP thetaSEXP, SEXP phiSEXP, SEXP nr_offSEXP, SEXP nr_wordsSEXP, SEXP doc_offsetSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type phi(phiSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type nr_off(nr_offSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type nr_words(nr_wordsSEXP);
+    Rcpp::traits::input_parameter< double >::type doc_offset(doc_offsetSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_partition_sums_core(theta, phi, nr_off, nr_words, doc_offset, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// optop_partition_pisum_core
+Rcpp::NumericVector optop_partition_pisum_core(const Rcpp::NumericVector& nr_off, const Rcpp::IntegerVector& nr_words, const Rcpp::NumericVector& pi_glob, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_pisum_core(SEXP nr_offSEXP, SEXP nr_wordsSEXP, SEXP pi_globSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type nr_off(nr_offSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type nr_words(nr_wordsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type pi_glob(pi_globSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_partition_pisum_core(nr_off, nr_words, pi_glob, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// optop_partition_obsmass_core
+Rcpp::NumericVector optop_partition_obsmass_core(const Rcpp::IntegerVector& Nt_p, const Rcpp::IntegerVector& Nt_i, const Rcpp::NumericVector& Nt_x, const Rcpp::NumericVector& nr_off, const Rcpp::IntegerVector& nr_words, double doc_offset, int n_threads);
+RcppExport SEXP _OpTop_optop_partition_obsmass_core(SEXP Nt_pSEXP, SEXP Nt_iSEXP, SEXP Nt_xSEXP, SEXP nr_offSEXP, SEXP nr_wordsSEXP, SEXP doc_offsetSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type Nt_p(Nt_pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type Nt_i(Nt_iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type Nt_x(Nt_xSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type nr_off(nr_offSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type nr_words(nr_wordsSEXP);
+    Rcpp::traits::input_parameter< double >::type doc_offset(doc_offsetSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(optop_partition_obsmass_core(Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -185,15 +243,18 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_OpTop_optop_boot_null_core", (DL_FUNC) &_OpTop_optop_boot_null_core, 6},
+    {"_OpTop_optop_boot_null_core", (DL_FUNC) &_OpTop_optop_boot_null_core, 7},
     {"_OpTop_optop_openmp_available", (DL_FUNC) &_OpTop_optop_openmp_available, 0},
-    {"_OpTop_optop_pack_mask_core", (DL_FUNC) &_OpTop_optop_pack_mask_core, 1},
-    {"_OpTop_optop_index_word_core", (DL_FUNC) &_OpTop_optop_index_word_core, 13},
-    {"_OpTop_optop_index_doc_core", (DL_FUNC) &_OpTop_optop_index_doc_core, 15},
-    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 7},
+    {"_OpTop_optop_index_word_core", (DL_FUNC) &_OpTop_optop_index_word_core, 16},
+    {"_OpTop_optop_index_doc_core", (DL_FUNC) &_OpTop_optop_index_doc_core, 17},
+    {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 10},
     {"_OpTop_optimal_topic_core_legacy", (DL_FUNC) &_OpTop_optimal_topic_core_legacy, 4},
-    {"_OpTop_optop_partition_fill_core", (DL_FUNC) &_OpTop_optop_partition_fill_core, 7},
-    {"_OpTop_optop_partition_minmass_core", (DL_FUNC) &_OpTop_optop_partition_minmass_core, 5},
+    {"_OpTop_optop_partition_candidates_core", (DL_FUNC) &_OpTop_optop_partition_candidates_core, 3},
+    {"_OpTop_optop_partition_pass_core", (DL_FUNC) &_OpTop_optop_partition_pass_core, 8},
+    {"_OpTop_optop_partition_compact_core", (DL_FUNC) &_OpTop_optop_partition_compact_core, 4},
+    {"_OpTop_optop_partition_sums_core", (DL_FUNC) &_OpTop_optop_partition_sums_core, 6},
+    {"_OpTop_optop_partition_pisum_core", (DL_FUNC) &_OpTop_optop_partition_pisum_core, 4},
+    {"_OpTop_optop_partition_obsmass_core", (DL_FUNC) &_OpTop_optop_partition_obsmass_core, 7},
     {"_OpTop_topic_match_core", (DL_FUNC) &_OpTop_topic_match_core, 4},
     {"_OpTop_normalize_columns", (DL_FUNC) &_OpTop_normalize_columns, 1},
     {NULL, NULL, 0}

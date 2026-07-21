@@ -23,11 +23,12 @@ optop_index_table(
 }
 \arguments{
 \item{models}{A non-empty \code{list} of fitted \code{topicmodels::LDA} models (VEM or Gibbs),
-typically a grid over different \eqn{K}.}
+typically a grid over different \eqn{K}; elements may be loader
+functions returning a fit, materialized one at a time.}
 
 \item{dtm}{A counts document–term matrix (documents × terms). Use
 \code{Matrix::dgCMatrix} or a \code{quanteda::dfm} that represents raw counts
-(not weighted).}
+(not weighted), or an \code{\link[=optop_corpus]{optop_corpus()}} of count shards.}
 
 \item{metrics}{Character vector selecting which indices to compute. Any subset of
 \code{c("se", "chisq", "deviance")}. Default: \code{c("se","chisq","deviance")}.}

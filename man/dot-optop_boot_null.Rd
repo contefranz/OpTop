@@ -11,7 +11,8 @@
   seed = NULL,
   n_threads = 1L,
   bin_probs = NULL,
-  bin_counts = NULL
+  bin_counts = NULL,
+  doc_offset = 0
 )
 }
 \arguments{
@@ -34,6 +35,14 @@ exported by \code{optimal_topic_core()}; when supplied, \code{probs} is not
 touched and no per-document list is ever materialized. The flattened
 layout is identical to \code{unlist(probs)}, so both entry points draw the
 same replicates under the same seed.}
+
+\item{doc_offset}{Nonnegative scalar; the global index of the first
+document of this call minus one. Every document's RNG stream is keyed
+by \code{seed} and its GLOBAL index, so each document draws bit-identical
+replicates whatever the sharding; summing the per-shard replicate
+vectors reproduces the unsharded totals up to floating-point summation
+order (a few ulp, since the grouping of the additions changes).
+Default \code{0} (the unsharded call).}
 }
 \value{
 A numeric vector of length \code{n_boot} with the null replicates

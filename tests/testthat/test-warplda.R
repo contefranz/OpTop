@@ -22,7 +22,8 @@ test_that("the WarpLDA wrapper feeds the adapter contract", {
 
   # the wrapper flows through the partition and the index family
   part <- optop_make_partition(list(fit), fx$dtm, c = 1)
-  expect_identical(dim(part$rare_mask), c(fx$J, fx$W))
+  expect_identical(part$format, 2L)
+  expect_length(part$nonrare_offsets, fx$J + 1L)
   res <- optop_index_deviance(fit, fx$dtm, part, fx$baseline, macro = TRUE)
   expect_true(is.finite(res$r2))
   expect_lte(res$r2, 1)
@@ -70,13 +71,15 @@ test_that("unbinned aggregation commutes between documents and words", {
   fx <- optop_test_fixture()
   m <- fx$models[[2]]
   unbinned <- list(
-    rare_mask = matrix(FALSE, fx$J, fx$W,
-                       dimnames = dimnames(fx$counts)),
+    nonrare_offsets = as.numeric(seq(0, fx$J * fx$W, by = fx$W)),
+    nonrare_words = rep(seq_len(fx$W) - 1L, fx$J),
+    vocab = colnames(fx$counts),
     L = fx$partition$L,
     chisq_min_ok = rep(TRUE, fx$J),
     chisq_min_report = list(n_excluded = 0L, share = 0,
                             excluded_mass = NA_real_),
-    c = 1
+    c = 1,
+    format = 2L
   )
   doc <- optop_index_deviance(m, fx$dtm, unbinned, fx$baseline)
   word <- optop_index_deviance(m, fx$dtm, unbinned, fx$baseline,

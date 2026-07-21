@@ -94,7 +94,8 @@ Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs,
                                          const Rcpp::NumericVector& doc_lengths,
                                          int n_boot,
                                          double seed,
-                                         int n_threads)
+                                         int n_threads,
+                                         double doc_offset = 0)
 {
     const int n_docs = bin_counts.size();
     if (doc_lengths.size() != n_docs) {
@@ -103,9 +104,21 @@ Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs,
     if (n_boot < 1) {
         Rcpp::stop("n_boot must be positive");
     }
+    if (doc_offset < 0) {
+        Rcpp::stop("doc_offset must be nonnegative");
+    }
     if (n_threads < 1) {
         n_threads = 1;
     }
+    // sharded evaluation: the RNG stream of a document is keyed by its
+    // GLOBAL index (shard offset + local index), so every document draws
+    // bit-identical replicates whatever the sharding. The corpus replicate
+    // T*_b is a sum of per-document terms; summing per-shard subtotals
+    // groups the floating-point additions differently from the unsharded
+    // serial reduction, so sharded totals agree to summation order (a few
+    // ulp), not bit for bit.
+    const std::uint64_t off64 = static_cast<std::uint64_t>(
+        static_cast<long long>(doc_offset));
 
     // per-document offsets into the flattened bin-probability vector
     std::vector<std::size_t> offset(n_docs + 1, 0);
@@ -159,9 +172,11 @@ Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs,
                 double* T_doc =
                     contrib_ptr + static_cast<std::size_t>(local) * n_boot;
 
-                // private, thread-count-independent stream for this document
+                // private, thread-count-independent stream for this document,
+                // keyed by the global document index
                 std::mt19937_64 rng(
-                    splitmix64(seed64 + static_cast<std::uint64_t>(j) + 1));
+                    splitmix64(seed64 + off64
+                               + static_cast<std::uint64_t>(j) + 1));
 
                 if (k > n) {
                     // wide envelope: draw the n tokens directly, accumulate

@@ -25,7 +25,8 @@ adapters and by fold-in (topicmodels fits, seededlda fits, NLPstudio
 \code{\link[=optop_warplda]{optop_warplda()}}).}
 
 \item{dtm_eval}{A counts document-term matrix of the \emph{evaluation}
-documents. Columns are matched to the training vocabulary by name;
+documents, or an \code{\link[=optop_corpus]{optop_corpus()}} of evaluation shards streamed one at
+a time. Columns are matched to the training vocabulary by name;
 evaluation-only words follow the out-of-support convention below.}
 
 \item{baseline}{The \emph{training} baseline from

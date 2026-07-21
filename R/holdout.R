@@ -16,7 +16,8 @@
 #'   `nlp_topic_fit` with a stored backend, text2vec WarpLDA via
 #'   [optop_warplda()]).
 #' @param dtm_eval A counts document-term matrix of the \emph{evaluation}
-#'   documents. Columns are matched to the training vocabulary by name;
+#'   documents, or an [optop_corpus()] of evaluation shards streamed one at
+#'   a time. Columns are matched to the training vocabulary by name;
 #'   evaluation-only words follow the out-of-support convention below.
 #' @param baseline The \emph{training} baseline from
 #'   [optop_make_baseline()], optionally smoothed (`smooth_lambda`).
@@ -198,50 +199,97 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
   }
   min_null <- .optop_resolve_min_null(min_null, c)
 
-  prep <- .optop_holdout_prepare(models, dtm_eval, baseline, ...)
-
-  # held-out harmonized partition on the evaluation corpus: the union runs
-  # over K0 = K U {null} with the TRAINING baseline as the null member
-  part <- optop_make_partition(prep$tp_eval, prep$dtm_aug, c = c,
-                               n_threads = n_threads,
-                               pi_glob = prep$pi_aug)
-  if ("chisq" %in% metrics) .optop_report_chisq_min(part)
-  baseline_aug <- list(pi_glob = stats::setNames(prep$pi_aug,
-                                                 prep$vocab_aug))
-  pi_row <- .optop_validate_alignment(prep$vocab_aug, prep$dtm_aug, part,
-                                      baseline_aug)
-
-  # the baseline (no-topics) side is model-independent: one engine sweep
-  nulls <- .optop_index_engine(theta = NULL, phi = NULL, prep$dtm_aug, part,
-                               pi_row, metrics, "document", NULL, n_threads,
-                               do_model = FALSE, do_null = TRUE)
-
-  n_k <- length(models)
-  J <- nrow(prep$dtm_aug)
-  z <- stats::qnorm(1 - (1 - conf) / 2)
-  empty_mat <- function() {
-    matrix(NA_real_, J, n_k,
-           dimnames = list(rownames(prep$dtm_aug), prep$K))
+  # sharded evaluation corpora stream one shard at a time: alignment, the
+  # out-of-support convention, fold-in, the held-out partition, and the
+  # engine all operate per document, so per-shard evaluation is exact and
+  # the per-document discrepancies concatenate in corpus order (a shard
+  # without out-of-support words simply has no synthetic column, which is
+  # equivalent to a zero-probability column that never receives mass)
+  shards <- if (.optop_is_corpus(dtm_eval)) {
+    lapply(seq_len(dtm_eval$n_shards),
+           function(s) .optop_corpus_shard(dtm_eval, s))
+  } else {
+    list(dtm_eval)
   }
-  scores <- d_model <- d_null <- stats::setNames(
-    lapply(metrics, function(m) empty_mat()), metrics
-  )
+
+  D_model_sh <- list()
+  D_null_sh <- list()
+  rownames_sh <- list()
+  K_grid <- NULL
+  for (s in seq_along(shards)) {
+    prep <- .optop_holdout_prepare(models, shards[[s]], baseline, ...)
+    if (is.null(K_grid)) {
+      K_grid <- prep$K
+    } else if (!identical(K_grid, prep$K)) {
+      stop("the model grid changed across evaluation shards")
+    }
+
+    # held-out harmonized partition on the shard: the union runs over
+    # K0 = K U {null} with the TRAINING baseline as the null member
+    part <- optop_make_partition(prep$tp_eval, prep$dtm_aug, c = c,
+                                 n_threads = n_threads,
+                                 pi_glob = prep$pi_aug)
+    if ("chisq" %in% metrics) .optop_report_chisq_min(part)
+    baseline_aug <- list(pi_glob = stats::setNames(prep$pi_aug,
+                                                   prep$vocab_aug))
+    pi_row <- .optop_validate_alignment(prep$vocab_aug, prep$dtm_aug, part,
+                                        baseline_aug)
+
+    # the baseline (no-topics) side is model-independent: one engine sweep
+    nulls <- .optop_index_engine(theta = NULL, phi = NULL, prep$dtm_aug,
+                                 part, pi_row, metrics, "document", NULL,
+                                 n_threads, do_model = FALSE,
+                                 do_null = TRUE)
+    n_k <- length(prep$tp_eval)
+    Dm_s <- lapply(metrics, function(m) {
+      matrix(NA_real_, nrow(prep$dtm_aug), n_k)
+    })
+    names(Dm_s) <- metrics
+    Dn_s <- Dm_s
+    for (i_mod in seq_len(n_k)) {
+      tp <- prep$tp_eval[[i_mod]]
+      eng <- .optop_index_engine(tp$theta, tp$phi, prep$dtm_aug, part,
+                                 pi_row, metrics, "document", NULL,
+                                 n_threads, do_model = TRUE,
+                                 do_null = FALSE)
+      for (metric in metrics) {
+        Dm_s[[metric]][, i_mod] <- eng[[metric]]$model
+        Dn_s[[metric]][, i_mod] <- nulls[[metric]]$null
+      }
+    }
+    D_model_sh[[s]] <- Dm_s
+    D_null_sh[[s]] <- Dn_s
+    rownames_sh[[s]] <- rownames(prep$dtm_aug)
+  }
+
+  n_k <- length(K_grid)
+  all_rows <- unlist(rownames_sh, use.names = FALSE)
+  J <- length(all_rows)
+  z <- stats::qnorm(1 - (1 - conf) / 2)
+  bind_metric <- function(lst, metric) {
+    out <- do.call(rbind, lapply(lst, `[[`, metric))
+    dimnames(out) <- list(all_rows, K_grid)
+    out
+  }
+  scores <- stats::setNames(lapply(metrics, function(m) {
+    matrix(NA_real_, J, n_k, dimnames = list(all_rows, K_grid))
+  }), metrics)
+  d_model <- stats::setNames(lapply(metrics, function(m) {
+    bind_metric(D_model_sh, m)
+  }), metrics)
+  d_null <- stats::setNames(lapply(metrics, function(m) {
+    bind_metric(D_null_sh, m)
+  }), metrics)
   rows <- list()
 
   for (i_mod in seq_len(n_k)) {
-    tp <- prep$tp_eval[[i_mod]]
-    eng <- .optop_index_engine(tp$theta, tp$phi, prep$dtm_aug, part, pi_row,
-                               metrics, "document", NULL, n_threads,
-                               do_model = TRUE, do_null = FALSE)
     for (metric in metrics) {
-      D_K <- eng[[metric]]$model
-      D_0 <- nulls[[metric]]$null
+      D_K <- d_model[[metric]][, i_mod]
+      D_0 <- d_null[[metric]][, i_mod]
       st <- .optop_holdout_stats(D_K, D_0, stabilize, z, min_null)
       scores[[metric]][, i_mod] <- st$r
-      d_model[[metric]][, i_mod] <- D_K
-      d_null[[metric]][, i_mod] <- D_0
       rows[[length(rows) + 1L]] <- data.table::data.table(
-        metric = metric, K = prep$K[i_mod],
+        metric = metric, K = K_grid[i_mod],
         macro = st$macro, macro_se = st$macro_se,
         ci_lo = st$macro - z * st$macro_se,
         ci_hi = st$macro + z * st$macro_se,
@@ -262,7 +310,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 
   out <- list(summary = summary,
               scores = scores, d_model = d_model, d_null = d_null,
-              K = prep$K, metrics = metrics, conf = conf,
+              K = K_grid, metrics = metrics, conf = conf,
               stabilize = stabilize, c = c, min_null = min_null)
   class(out) <- c("optop_holdout", "list")
   out
@@ -287,6 +335,7 @@ optop_index_holdout <- function(models, dtm_eval, baseline, c = 1,
 #'
 #' @keywords internal
 .optop_holdout_prepare <- function(models, dtm_eval, baseline, ...) {
+  models <- lapply(models, .optop_materialize_model)
   if (is.null(names(baseline$pi_glob))) {
     stop("baseline$pi_glob must be named; recompute optop_make_baseline()")
   }

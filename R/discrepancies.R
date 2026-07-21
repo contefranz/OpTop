@@ -10,9 +10,13 @@
 #' of [`optop_make_partition()`]; word-level indices are evaluated on the
 #' unbinned vocabulary.
 #'
-#' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs).
+#' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs), or
+#'   a loader function returning one (materialized on demand).
 #' @param dtm A counts document–term matrix (documents × terms). Use `Matrix::dgCMatrix`
-#'   or a `quanteda::dfm` that represents raw counts (not weighted).
+#'   or a `quanteda::dfm` that represents raw counts (not weighted), or an
+#'   [optop_corpus()] of count shards for corpora past the size of a single
+#'   matrix (shards stream one at a time; per-document results are
+#'   bit-identical to an unsharded run).
 #' @param partition Result from [`optop_make_partition()`], computed on a DTM that is
 #'   *aligned* to the model vocabulary (same features and order).
 #' @param baseline Result from [`optop_make_baseline()`], computed on the same aligned
@@ -273,7 +277,11 @@ optop_index_se <- function(model, dtm, partition, baseline,
                                  null_disc = NULL, n_threads = 1L,
                                  min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  if (.optop_is_corpus(dtm) && identical(reopt, "se")) {
+    stop(paste("the deprecated SE re-optimization is a small-corpus path",
+               "and does not accept an optop_corpus"))
+  }
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -324,7 +332,13 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
   D_K <- numeric(J)
   D_null <- numeric(J)
-  rare_mask <- partition$rare_mask
+  # deprecated small-corpus path: reconstruct the dense rare rows per block
+  # from the sparse partition (the only remaining dense-mask consumer)
+  partition <- .optop_partition_upgrade(partition)
+  rare_mask <- matrix(FALSE, J, W)
+  for (j in seq_len(J)) {
+    rare_mask[j, ] <- .optop_partition_rare_row(partition, j, W)
+  }
 
   for (start in seq(1L, J, by = block_size_doc)) {
     end <- min(start + block_size_doc - 1L, J)
@@ -417,7 +431,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                                     block_size, ztest, null_disc = NULL,
                                     n_threads = 1L, min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -489,7 +503,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
                                        null_disc = NULL, n_threads = 1L,
                                        min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -516,10 +530,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' for a list of fitted topic models and returns a tidy table by number of topics \eqn{K}.
 #'
 #' @param models A non-empty `list` of fitted `topicmodels::LDA` models (VEM or Gibbs),
-#'   typically a grid over different \eqn{K}.
+#'   typically a grid over different \eqn{K}; elements may be loader
+#'   functions returning a fit, materialized one at a time.
 #' @param dtm A counts document–term matrix (documents × terms). Use
 #'   `Matrix::dgCMatrix` or a `quanteda::dfm` that represents raw counts
-#'   (not weighted).
+#'   (not weighted), or an [optop_corpus()] of count shards.
 #' @param metrics Character vector selecting which indices to compute. Any subset of
 #'   `c("se", "chisq", "deviance")`. Default: `c("se","chisq","deviance")`.
 #' @param c Positive scalar used inside [`optop_make_partition()`] to set the per-document
@@ -682,7 +697,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   # The baseline (no-topics) discrepancy does not depend on the fitted
   # model: one engine sweep computes it for every metric, shared across the
   # whole grid of K.
-  pi_row_tab <- .optop_validate_alignment(colnames(dtm), dtm, partition,
+  dtm_vocab <- if (.optop_is_corpus(dtm)) {
+    .optop_corpus_vocab(dtm)
+  } else {
+    colnames(dtm)
+  }
+  pi_row_tab <- .optop_validate_alignment(dtm_vocab, dtm, partition,
                                           baseline)
   nulls <- if (length(metrics_engine)) {
     .optop_index_engine(theta = NULL, phi = NULL, dtm, partition, pi_row_tab,
@@ -697,7 +717,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   # every K: one report per metric, taken from the first model's result
   floor_report <- list()
   for (i_mod in seq_along(models)) {
-    m <- models[[i_mod]]
+    m <- .optop_materialize_model(models[[i_mod]])
     tp <- optop_as_theta_phi(m)
     vocab_model <- colnames(tp$phi)
     pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
@@ -831,6 +851,56 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                                 metrics, level, block_size = NULL,
                                 n_threads = 1L, do_model = TRUE,
                                 do_null = TRUE) {
+  # sharded corpora stream one shard at a time: per-document rows (document
+  # level) and per-word accumulators (word level) combine exactly across
+  # shards because every document is independent
+  if (.optop_is_corpus(dtm)) {
+    # word level needs only the document lengths from the partition object,
+    # so length-only stubs (the fit-strata instrument builder) stay valid
+    if (level == "document") {
+      partition <- .optop_partition_upgrade(partition)
+    }
+    acc <- NULL
+    offset <- 0
+    for (s in seq_len(dtm$n_shards)) {
+      m <- .optop_corpus_shard(dtm, s)
+      n_s <- nrow(m)
+      idx <- offset + seq_len(n_s)
+      part_s <- if (level == "document") {
+        .optop_partition_slice(partition, offset, n_s)
+      } else {
+        list(L = partition$L[idx])
+      }
+      theta_s <- if (do_model) theta[idx, , drop = FALSE] else theta
+      eng_s <- .optop_index_engine(theta_s, phi, m, part_s, pi_row, metrics,
+                                   level, block_size, n_threads,
+                                   do_model, do_null)
+      if (level == "word") {
+        if (is.null(acc)) {
+          acc <- eng_s
+        } else {
+          for (metric in names(acc)) {
+            acc[[metric]]$model <- acc[[metric]]$model + eng_s[[metric]]$model
+            acc[[metric]]$null <- acc[[metric]]$null + eng_s[[metric]]$null
+          }
+        }
+      } else {
+        if (is.null(acc)) {
+          J_tot <- length(partition$L)
+          acc <- lapply(eng_s, function(e) {
+            list(model = numeric(J_tot), null = numeric(J_tot))
+          })
+        }
+        for (metric in names(acc)) {
+          acc[[metric]]$model[idx] <- eng_s[[metric]]$model
+          acc[[metric]]$null[idx] <- eng_s[[metric]]$null
+        }
+      }
+      offset <- offset + n_s
+    }
+    return(acc)
+  }
+
   do_se <- "se" %in% metrics
   do_chisq <- "chisq" %in% metrics
   do_dev <- "deviance" %in% metrics
@@ -843,30 +913,35 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   n_threads <- as.integer(n_threads)
 
   if (level == "word") {
+    # the document dimension is blocked INSIDE the kernel (a block x w_len
+    # gemm buffer), so the word block size only bounds the phi slice and the
+    # accumulator width; counts cross the boundary as zero-copy CSC slots
     if (is.null(block_size)) {
-      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+      block_size <- 4096L
     }
+    theta_in <- if (do_model) theta else matrix(0, 0, 0)
     acc <- matrix(0, W, 6)
     for (start in seq(1L, W, by = block_size)) {
       end <- min(start + block_size - 1L, W)
       w_idx <- start:end
-      E_block <- if (do_model) {
-        (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
+      phi_cols <- if (do_model) {
+        phi[, w_idx, drop = FALSE]
       } else {
         matrix(0, 0, 0)
       }
-      acc[w_idx, ] <- optop_index_word_core(E_block, N, start - 1L,
-                                            length(w_idx), L,
+      acc[w_idx, ] <- optop_index_word_core(theta_in, phi_cols,
+                                            N@p, N@i, N@x,
+                                            start - 1L, length(w_idx), L,
                                             pi_num[w_idx], eps,
                                             do_model, do_null,
                                             do_se, do_chisq, do_dev,
                                             n_threads)
     }
   } else {
-    block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
+    # sparse-partition merge-join: one call over all documents, each at
+    # O(|NR_j| * K + nnz_j); dense-mask partitions are upgraded on entry
+    partition <- .optop_partition_upgrade(partition)
     N_t <- Matrix::t(N)
-    mask_bits <- optop_pack_mask_core(partition$rare_mask)
-    tww <- if (do_model) t(phi) else matrix(0, 0, 0)
     # Pearson min-bin inclusion flags: partitions from OpTop < 0.13.0 lack
     # the field and keep the pre-rule behavior (every min bin included)
     min_ok <- partition$chisq_min_ok
@@ -880,22 +955,15 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       }
       min_ok <- rep(TRUE, J)
     }
-    acc <- matrix(0, J, 6)
-    for (start in seq(1L, J, by = block_size_doc)) {
-      end <- min(start + block_size_doc - 1L, J)
-      j_idx <- start:end
-      theta_blk <- if (do_model) {
-        theta[j_idx, , drop = FALSE]
-      } else {
-        matrix(0, 0, 0)
-      }
-      acc[j_idx, ] <- optop_index_doc_core(tww, theta_blk, N_t, start - 1L,
-                                           mask_bits, L[j_idx], pi_num,
-                                           min_ok[j_idx], eps,
-                                           do_model, do_null,
-                                           do_se, do_chisq, do_dev,
-                                           n_threads)
-    }
+    theta_in <- if (do_model) theta else matrix(0, 0, 0)
+    phi_in <- if (do_model) phi else matrix(0, 0, 0)
+    acc <- optop_index_doc_core(theta_in, phi_in, N_t@p, N_t@i, N_t@x,
+                                partition$nonrare_offsets,
+                                partition$nonrare_words,
+                                L, pi_num, min_ok, eps,
+                                do_model, do_null,
+                                do_se, do_chisq, do_dev,
+                                n_threads)
   }
   list(se = list(model = acc[, 1], null = acc[, 2]),
        chisq = list(model = acc[, 3], null = acc[, 4]),
@@ -965,7 +1033,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 #'
 #' @keywords internal
 .optop_validate_alignment <- function(vocab_model, dtm, partition, baseline) {
-  if (!identical(colnames(dtm), vocab_model))
+  dtm_vocab <- if (.optop_is_corpus(dtm)) {
+    .optop_corpus_vocab(dtm)
+  } else {
+    colnames(dtm)
+  }
+  if (!identical(dtm_vocab, vocab_model))
     stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
   # baseline alignment
   if (!is.null(names(baseline$pi_glob))) {
@@ -978,9 +1051,14 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     pi_row <- baseline$pi_glob
   }
 
-  # partition alignment
-  if (is.null(colnames(partition$rare_mask)) ||
-      !identical(colnames(partition$rare_mask), vocab_model)) {
+  # partition alignment: sparse partitions carry the vocabulary explicitly,
+  # dense-mask partitions (OpTop < 0.15.0) carry it as mask column names
+  part_vocab <- if (identical(partition$format, 2L)) {
+    partition$vocab
+  } else {
+    colnames(partition$rare_mask)
+  }
+  if (is.null(part_vocab) || !identical(part_vocab, vocab_model)) {
     stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
   }
   pi_row

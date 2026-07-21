@@ -1129,6 +1129,28 @@ scaling with `n_threads` is not. The internal helper
 `OpTop:::optop_openmp_available()` reports whether the installed build
 supports OpenMP.
 
+### Very large corpora
+
+As of version 0.15.0 the package evaluates corpora of tens of millions of
+documents with bounded memory, exactly. Three design elements carry the
+scaling. First, the corpus crosses the compiled boundary as zero-copy views
+of the sparse matrix slots, so no copy of the corpus is ever made and its
+shape is unconstrained. Second, the harmonized partition stores the
+complement of the rare set, the per-document non-rare word lists, whose
+total size is bounded by the token count divided by `c`; the construction
+evaluates only the candidate cells whose baseline probability clears the
+document threshold, so its cost scales with the token count rather than
+with the documents-by-features product, and no dense documents-by-features
+object of any kind is materialized. Third, corpora larger than a single
+sparse matrix can hold (the container caps at 2^31 - 1 nonzero entries)
+are supplied as document shards through `optop_corpus()`, which every
+entry point accepts; shards are streamed one at a time, per-document
+results are bit-identical to an unsharded run, and the calibration
+bootstrap keys each document's random stream by its global index. Model
+grids too large for memory are supplied as loader functions, materialized
+one model at a time. The scale benchmark in the development folder records
+the reference timings.
+
 ## Notes
 
 - The legacy stability helpers (`topic_stability()`, `agg_topic_stability()`,

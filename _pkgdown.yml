@@ -55,9 +55,10 @@ reference:
       - optop_moment_test
 
   - title: Utilities
-    desc: Simulate corpora and wrap external engines.
+    desc: Simulate corpora, shard very large ones, and wrap external engines.
     contents:
       - sim_dfm
+      - optop_corpus
       - optop_warplda
 
   - title: Deprecated
