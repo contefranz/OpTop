@@ -2,8 +2,8 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' @keywords internal
-optop_boot_null_core <- function(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads) {
-    .Call(`_OpTop_optop_boot_null_core`, bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads)
+optop_boot_null_core <- function(bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads, doc_offset = 0) {
+    .Call(`_OpTop_optop_boot_null_core`, bin_probs, bin_counts, doc_lengths, n_boot, seed, n_threads, doc_offset)
 }
 
 #' @keywords internal
@@ -37,8 +37,8 @@ optop_partition_candidates_core <- function(pi_sorted, tau, n_threads) {
 }
 
 #' @keywords internal
-optop_partition_pass_core <- function(theta, phi, order, cand_off, keep, tau, n_threads) {
-    invisible(.Call(`_OpTop_optop_partition_pass_core`, theta, phi, order, cand_off, keep, tau, n_threads))
+optop_partition_pass_core <- function(theta, phi, order, cand_off, keep, tau, doc_offset, n_threads) {
+    invisible(.Call(`_OpTop_optop_partition_pass_core`, theta, phi, order, cand_off, keep, tau, doc_offset, n_threads))
 }
 
 #' @keywords internal
@@ -47,8 +47,8 @@ optop_partition_compact_core <- function(cand_off, keep, order, n_threads) {
 }
 
 #' @keywords internal
-optop_partition_sums_core <- function(theta, phi, nr_off, nr_words, n_threads) {
-    .Call(`_OpTop_optop_partition_sums_core`, theta, phi, nr_off, nr_words, n_threads)
+optop_partition_sums_core <- function(theta, phi, nr_off, nr_words, doc_offset, n_threads) {
+    .Call(`_OpTop_optop_partition_sums_core`, theta, phi, nr_off, nr_words, doc_offset, n_threads)
 }
 
 #' @keywords internal
@@ -57,8 +57,8 @@ optop_partition_pisum_core <- function(nr_off, nr_words, pi_glob, n_threads) {
 }
 
 #' @keywords internal
-optop_partition_obsmass_core <- function(Nt_p, Nt_i, Nt_x, nr_off, nr_words, n_threads) {
-    .Call(`_OpTop_optop_partition_obsmass_core`, Nt_p, Nt_i, Nt_x, nr_off, nr_words, n_threads)
+optop_partition_obsmass_core <- function(Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads) {
+    .Call(`_OpTop_optop_partition_obsmass_core`, Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads)
 }
 
 #' @keywords internal

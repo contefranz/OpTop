@@ -155,21 +155,65 @@ optop_make_partition <- function(models, dtm, c = 1, block = 5000,
       !is.finite(n_threads) || n_threads < 1) {
     stop("n_threads must be a single integer >= 1")
   }
-  L <- Matrix::rowSums(dtm)                           # L_j
-  tau <- c / pmax(L, 1)                               # tau_j = c / L_j
-  theta_phi <- lapply(models, optop_as_theta_phi)
-  J <- nrow(theta_phi[[1]]$theta); W <- ncol(theta_phi[[1]]$phi)
-  if (nrow(dtm) != J || ncol(dtm) != W) {
+  n_threads <- as.integer(n_threads)
+  corpus <- .optop_as_corpus_internal(dtm)
+  n_sh <- corpus$n_shards
+  n_models <- length(models)
+
+  # lazy models: loader elements are materialized on demand and released
+  # after each pass; in-memory fits are adapted once and cached
+  is_loader <- vapply(models, is.function, logical(1))
+  tp_cache <- vector("list", n_models)
+  vocab <- NULL
+  tp_get <- function(i) {
+    if (!is.null(tp_cache[[i]])) {
+      return(tp_cache[[i]])
+    }
+    tp <- optop_as_theta_phi(.optop_materialize_model(models[[i]]))
+    if (is.null(vocab)) {
+      vocab <<- colnames(tp$phi)
+    } else if (!identical(colnames(tp$phi), vocab)) {
+      stop(paste("all models must share the same vocabulary in the same",
+                 "order"))
+    }
+    if (!is_loader[i]) {
+      tp_cache[[i]] <<- tp
+    }
+    tp
+  }
+  tp1 <- tp_get(1L)
+  W <- ncol(tp1$phi)
+  J_models <- nrow(tp1$theta)
+
+  # shard scan: document lengths and, when needed, the pooled baseline
+  shard_rows <- integer(n_sh)
+  L_list <- vector("list", n_sh)
+  cs <- NULL
+  for (s in seq_len(n_sh)) {
+    m <- .optop_corpus_shard(corpus, s)
+    if (ncol(m) != W) {
+      stop("dtm dimensions do not match the models; align the dtm first")
+    }
+    shard_rows[s] <- nrow(m)
+    L_list[[s]] <- Matrix::rowSums(m)
+    if (is.null(pi_glob)) {
+      cs_s <- Matrix::colSums(m)
+      cs <- if (is.null(cs)) cs_s else cs + cs_s
+    }
+  }
+  L <- unlist(L_list)                                 # L_j
+  J <- length(L)
+  if (J != J_models) {
     stop("dtm dimensions do not match the models; align the dtm first")
   }
+  tau <- c / pmax(L, 1)                               # tau_j = c / L_j
 
   # the null baseline enters the harmonized union (K0 = K U {null}): rare iff
   # min(pi_glob(w), min_K p^K_jw) < tau_j. In sample the baseline is the
   # corpus distribution of dtm; for held-out partitions the caller supplies
   # the training baseline instead.
   if (is.null(pi_glob)) {
-    N_tot <- Matrix::colSums(dtm)
-    pi_glob <- as.numeric(N_tot) / sum(N_tot)
+    pi_glob <- as.numeric(cs) / sum(cs)
   } else {
     pi_glob <- as.numeric(pi_glob)
     if (length(pi_glob) != W) {
@@ -187,32 +231,46 @@ optop_make_partition <- function(models, dtm, c = 1, block = 5000,
   pi_sorted <- pi_glob[ord]
   order0 <- as.integer(ord - 1L)
   prefix_len <- optop_partition_candidates_core(pi_sorted, as.numeric(tau),
-                                                as.integer(n_threads))
+                                                n_threads)
   cand_off <- c(0, cumsum(as.numeric(prefix_len)))
   keep <- as.raw(rep(1L, cand_off[J + 1]))
 
-  # one pass per model: a candidate survives while p^K_jw >= tau_j under
-  # every model of the grid
-  for (tp in theta_phi) {
-    optop_partition_pass_core(tp$theta, tp$phi, order0, cand_off, keep,
-                              as.numeric(tau), as.integer(n_threads))
+  # one pass per model over the document slices of each shard: a candidate
+  # survives while p^K_jw >= tau_j under every model of the grid. Loaders
+  # are materialized once per pass (twice per model in total).
+  shard_off <- c(0, cumsum(shard_rows))
+  for (i in seq_len(n_models)) {
+    tp <- tp_get(i)
+    if (nrow(tp$theta) != J) {
+      stop("dtm dimensions do not match the models; align the dtm first")
+    }
+    for (s in seq_len(n_sh)) {
+      th_s <- if (n_sh == 1L) tp$theta else
+        tp$theta[shard_off[s] + seq_len(shard_rows[s]), , drop = FALSE]
+      optop_partition_pass_core(th_s, tp$phi, order0, cand_off, keep,
+                                as.numeric(tau), shard_off[s], n_threads)
+    }
   }
-  nr <- optop_partition_compact_core(cand_off, keep, order0,
-                                     as.integer(n_threads))
+  nr <- optop_partition_compact_core(cand_off, keep, order0, n_threads)
 
   # Pearson min-bin inclusion rule, decided once for the whole grid: keep
   # the collapsed bin iff min(min_K E^K_min, B_min) >= c, with the min-bin
   # masses by compensated complement, E^K_min = L * (1 - sum_NR p^K) and
   # B_min = L * (1 - sum_NR pi)
   psum_max <- rep(-Inf, J)
-  for (tp in theta_phi) {
-    s <- optop_partition_sums_core(tp$theta, tp$phi, nr$offsets, nr$words,
-                                   as.integer(n_threads))
-    psum_max <- pmax(psum_max, s)
+  for (i in seq_len(n_models)) {
+    tp <- tp_get(i)
+    for (s in seq_len(n_sh)) {
+      idx <- shard_off[s] + seq_len(shard_rows[s])
+      th_s <- if (n_sh == 1L) tp$theta else tp$theta[idx, , drop = FALSE]
+      s_val <- optop_partition_sums_core(th_s, tp$phi, nr$offsets, nr$words,
+                                         shard_off[s], n_threads)
+      psum_max[idx] <- pmax(psum_max[idx], s_val)
+    }
   }
   E_min_min <- L * pmax(0, 1 - psum_max)
   pisum <- optop_partition_pisum_core(nr$offsets, nr$words, pi_glob,
-                                      as.integer(n_threads))
+                                      n_threads)
   B_min <- L * pmax(0, 1 - pisum)
   chisq_min_ok <- pmin(E_min_min, B_min) >= c
 
@@ -224,23 +282,50 @@ optop_make_partition <- function(models, dtm, c = 1, block = 5000,
   excluded <- has_min & !chisq_min_ok
   excluded_mass <- NA_real_
   if (any(excluded)) {
-    Nt <- Matrix::t(methods::as(dtm, "CsparseMatrix"))
-    obs_nr <- optop_partition_obsmass_core(Nt@p, Nt@i, Nt@x,
-                                           nr$offsets, nr$words,
-                                           as.integer(n_threads))
+    obs_nr <- numeric(J)
+    for (s in seq_len(n_sh)) {
+      idx <- shard_off[s] + seq_len(shard_rows[s])
+      Nt <- Matrix::t(.optop_corpus_shard(corpus, s))
+      obs_nr[idx] <- optop_partition_obsmass_core(Nt@p, Nt@i, Nt@x,
+                                                  nr$offsets, nr$words,
+                                                  shard_off[s], n_threads)
+    }
     N_min <- pmax(0, L - obs_nr)
     excluded_mass <- mean(N_min[excluded] / pmax(L[excluded], 1))
   }
 
   list(nonrare_offsets = nr$offsets,
        nonrare_words = nr$words,
-       vocab = colnames(theta_phi[[1]]$phi),
+       vocab = if (is.null(vocab)) .optop_corpus_vocab(corpus) else vocab,
        L = L,
        chisq_min_ok = chisq_min_ok,
        chisq_min_report = list(n_excluded = sum(excluded),
                                share = mean(excluded),
                                excluded_mass = excluded_mass),
        c = c,
+       format = 2L)
+}
+
+# Slice a format-2 partition to the documents [offset + 1, offset + n]: the
+# per-shard view the index engine feeds to the document kernel. The word
+# list is copied for the slice (bounded by the shard's tokens / c); offsets
+# are rebased to zero.
+.optop_partition_slice <- function(partition, offset, n) {
+  j <- offset + seq_len(n)
+  off <- partition$nonrare_offsets[c(j, offset + n + 1)]
+  base <- off[1]
+  words <- if (off[n + 1] > base) {
+    partition$nonrare_words[(base + 1):off[n + 1]]
+  } else {
+    integer(0)
+  }
+  list(nonrare_offsets = off - base,
+       nonrare_words = words,
+       vocab = partition$vocab,
+       L = partition$L[j],
+       chisq_min_ok = partition$chisq_min_ok[j],
+       chisq_min_report = partition$chisq_min_report,
+       c = partition$c,
        format = 2L)
 }
 
@@ -360,9 +445,21 @@ optop_make_baseline <- function(dtm, smooth_lambda = 0) {
       !is.finite(smooth_lambda) || smooth_lambda < 0) {
     stop("smooth_lambda must be a single nonnegative number")
   }
-  # pi^lambda_glob(w) = (N_.w + lambda) / sum_w (N_.w + lambda)
-  N_tot <- Matrix::colSums(dtm) + smooth_lambda
+  # pi^lambda_glob(w) = (N_.w + lambda) / sum_w (N_.w + lambda), with the
+  # counts pooled across the shards when dtm is an optop_corpus
+  if (.optop_is_corpus(dtm)) {
+    cs <- NULL
+    for (s in seq_len(dtm$n_shards)) {
+      cs_s <- Matrix::colSums(.optop_corpus_shard(dtm, s))
+      cs <- if (is.null(cs)) cs_s else cs + cs_s
+    }
+    N_tot <- cs + smooth_lambda
+    vocab <- .optop_corpus_vocab(dtm)
+  } else {
+    N_tot <- Matrix::colSums(dtm) + smooth_lambda
+    vocab <- colnames(dtm)
+  }
   pi_glob <- as.numeric(N_tot) / sum(N_tot)
-  names(pi_glob) <- colnames(dtm)   # <-- add names for safe alignment
+  names(pi_glob) <- vocab   # <-- add names for safe alignment
   list(pi_glob = pi_glob)
 }

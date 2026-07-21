@@ -273,7 +273,11 @@ optop_index_se <- function(model, dtm, partition, baseline,
                                  null_disc = NULL, n_threads = 1L,
                                  min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  if (.optop_is_corpus(dtm) && identical(reopt, "se")) {
+    stop(paste("the deprecated SE re-optimization is a small-corpus path",
+               "and does not accept an optop_corpus"))
+  }
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -423,7 +427,7 @@ optop_index_chisq <- function(model, dtm, partition, baseline,
                                     block_size, ztest, null_disc = NULL,
                                     n_threads = 1L, min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -495,7 +499,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
                                        null_disc = NULL, n_threads = 1L,
                                        min_null = 0) {
 
-  tp <- optop_as_theta_phi(model)
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
@@ -688,7 +692,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   # The baseline (no-topics) discrepancy does not depend on the fitted
   # model: one engine sweep computes it for every metric, shared across the
   # whole grid of K.
-  pi_row_tab <- .optop_validate_alignment(colnames(dtm), dtm, partition,
+  dtm_vocab <- if (.optop_is_corpus(dtm)) {
+    .optop_corpus_vocab(dtm)
+  } else {
+    colnames(dtm)
+  }
+  pi_row_tab <- .optop_validate_alignment(dtm_vocab, dtm, partition,
                                           baseline)
   nulls <- if (length(metrics_engine)) {
     .optop_index_engine(theta = NULL, phi = NULL, dtm, partition, pi_row_tab,
@@ -703,7 +712,7 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   # every K: one report per metric, taken from the first model's result
   floor_report <- list()
   for (i_mod in seq_along(models)) {
-    m <- models[[i_mod]]
+    m <- .optop_materialize_model(models[[i_mod]])
     tp <- optop_as_theta_phi(m)
     vocab_model <- colnames(tp$phi)
     pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
@@ -837,6 +846,56 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                                 metrics, level, block_size = NULL,
                                 n_threads = 1L, do_model = TRUE,
                                 do_null = TRUE) {
+  # sharded corpora stream one shard at a time: per-document rows (document
+  # level) and per-word accumulators (word level) combine exactly across
+  # shards because every document is independent
+  if (.optop_is_corpus(dtm)) {
+    # word level needs only the document lengths from the partition object,
+    # so length-only stubs (the fit-strata instrument builder) stay valid
+    if (level == "document") {
+      partition <- .optop_partition_upgrade(partition)
+    }
+    acc <- NULL
+    offset <- 0
+    for (s in seq_len(dtm$n_shards)) {
+      m <- .optop_corpus_shard(dtm, s)
+      n_s <- nrow(m)
+      idx <- offset + seq_len(n_s)
+      part_s <- if (level == "document") {
+        .optop_partition_slice(partition, offset, n_s)
+      } else {
+        list(L = partition$L[idx])
+      }
+      theta_s <- if (do_model) theta[idx, , drop = FALSE] else theta
+      eng_s <- .optop_index_engine(theta_s, phi, m, part_s, pi_row, metrics,
+                                   level, block_size, n_threads,
+                                   do_model, do_null)
+      if (level == "word") {
+        if (is.null(acc)) {
+          acc <- eng_s
+        } else {
+          for (metric in names(acc)) {
+            acc[[metric]]$model <- acc[[metric]]$model + eng_s[[metric]]$model
+            acc[[metric]]$null <- acc[[metric]]$null + eng_s[[metric]]$null
+          }
+        }
+      } else {
+        if (is.null(acc)) {
+          J_tot <- length(partition$L)
+          acc <- lapply(eng_s, function(e) {
+            list(model = numeric(J_tot), null = numeric(J_tot))
+          })
+        }
+        for (metric in names(acc)) {
+          acc[[metric]]$model[idx] <- eng_s[[metric]]$model
+          acc[[metric]]$null[idx] <- eng_s[[metric]]$null
+        }
+      }
+      offset <- offset + n_s
+    }
+    return(acc)
+  }
+
   do_se <- "se" %in% metrics
   do_chisq <- "chisq" %in% metrics
   do_dev <- "deviance" %in% metrics
@@ -969,7 +1028,12 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
 #'
 #' @keywords internal
 .optop_validate_alignment <- function(vocab_model, dtm, partition, baseline) {
-  if (!identical(colnames(dtm), vocab_model))
+  dtm_vocab <- if (.optop_is_corpus(dtm)) {
+    .optop_corpus_vocab(dtm)
+  } else {
+    colnames(dtm)
+  }
+  if (!identical(dtm_vocab, vocab_model))
     stop("DTM vocabulary/order differs from model. Use optop_align_dtm_to_models() and recompute partition/baseline.")
   # baseline alignment
   if (!is.null(names(baseline$pi_glob))) {

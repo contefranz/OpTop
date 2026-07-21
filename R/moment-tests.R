@@ -152,25 +152,53 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
   stopifnot(length(models) >= 1)
 
   if (is.null(baseline)) baseline <- optop_make_baseline(dtm_train)
-  prep <- .optop_holdout_prepare(models, dtm_eval, baseline, ...)
+
+  # sharded evaluation corpora stream one shard at a time; the per-document
+  # moment vectors row-bind exactly because every g_j depends on document j
+  # alone once the training objects are fixed
+  eval_shards <- if (.optop_is_corpus(dtm_eval)) {
+    lapply(seq_len(dtm_eval$n_shards),
+           function(s) .optop_corpus_shard(dtm_eval, s))
+  } else {
+    list(dtm_eval)
+  }
+  preps <- lapply(eval_shards, function(sh) {
+    .optop_holdout_prepare(models, sh, baseline, ...)
+  })
+  prep <- preps[[1L]]
   vocab <- prep$vocab_tr
   W <- length(vocab)
+  for (p in preps[-1L]) {
+    if (!identical(p$K, prep$K)) {
+      stop("the model grid changed across evaluation shards")
+    }
+  }
 
-  dtm_train <- methods::as(dtm_train, "CsparseMatrix")
-  if (!identical(colnames(dtm_train), vocab)) {
-    stop(paste("dtm_train vocabulary/order differs from the models;",
-               "align the training dtm first"))
+  if (.optop_is_corpus(dtm_train)) {
+    if (!identical(.optop_corpus_vocab(dtm_train), vocab)) {
+      stop(paste("dtm_train vocabulary/order differs from the models;",
+                 "align the training dtm first"))
+    }
+    f_tr <- numeric(W)
+    for (s in seq_len(dtm_train$n_shards)) {
+      f_tr <- f_tr +
+        as.numeric(Matrix::colSums(.optop_corpus_shard(dtm_train, s)))
+    }
+  } else {
+    dtm_train <- methods::as(dtm_train, "CsparseMatrix")
+    if (!identical(colnames(dtm_train), vocab)) {
+      stop(paste("dtm_train vocabulary/order differs from the models;",
+                 "align the training dtm first"))
+    }
+    f_tr <- as.numeric(Matrix::colSums(dtm_train))
   }
 
   # evaluation residual ingredients: d_j on the training support with
   # L_j restricted to aligned tokens, so sum_w d_jw = 1 and 1' e_j = 0
-  N_ev <- prep$dtm_aligned
-  L_ev <- Matrix::rowSums(N_ev)
-  n_ev <- nrow(N_ev)
+  n_ev <- sum(vapply(preps, function(p) nrow(p$dtm_aligned), numeric(1)))
   if (n_ev < 2L) stop("at least two evaluation documents are required")
 
   # training-frequency instruments are shared across the grid
-  f_tr <- as.numeric(Matrix::colSums(dtm_train))
   Z_fixed <- switch(type,
     contrast = .optop_z_contrast(f_tr, vocab),
     strata = .optop_z_strata(f_tr, vocab, bins),
@@ -197,13 +225,18 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
     }
     if (type == "fit") instruments[[i_mod]] <- Zi
 
-    # g_j = Z d_j - theta_j (phi Z^T): no J x W temporary is formed
+    # g_j = Z d_j - theta_j (phi Z^T): no J x W temporary is formed, and
+    # shards contribute independent blocks of rows
     Zt <- Matrix::t(Zi$Z)
-    A <- as.matrix(N_ev %*% Zt) / L_ev
-    tp <- prep$tp_eval[[i_mod]]
-    phi_tr <- tp$phi[, seq_len(W), drop = FALSE]
-    B <- tp$theta %*% as.matrix(phi_tr %*% Zt)
-    G <- A - B
+    G <- do.call(rbind, lapply(preps, function(p) {
+      N_ev <- p$dtm_aligned
+      L_ev <- Matrix::rowSums(N_ev)
+      A <- as.matrix(N_ev %*% Zt) / L_ev
+      tp <- p$tp_eval[[i_mod]]
+      phi_tr <- tp$phi[, seq_len(W), drop = FALSE]
+      B <- tp$theta %*% as.matrix(phi_tr %*% Zt)
+      A - B
+    }))
 
     q <- ncol(G)
     g_bar <- colMeans(G)
@@ -349,16 +382,27 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
 
   # training word-level deviance index s_K(w), unbinned support: the word
   # kernel needs only the document lengths from the partition object
-  tp <- optop_as_theta_phi(model)
+  tp <- optop_as_theta_phi(.optop_materialize_model(model))
   pi_row <- baseline$pi_glob[vocab]
-  part_stub <- list(L = Matrix::rowSums(dtm_train))
+  if (.optop_is_corpus(dtm_train)) {
+    L_tr <- unlist(lapply(seq_len(dtm_train$n_shards), function(s) {
+      Matrix::rowSums(.optop_corpus_shard(dtm_train, s))
+    }))
+    docfreq <- numeric(W)
+    for (s in seq_len(dtm_train$n_shards)) {
+      docfreq <- docfreq +
+        as.numeric(Matrix::colSums(.optop_corpus_shard(dtm_train, s) > 0))
+    }
+  } else {
+    L_tr <- Matrix::rowSums(dtm_train)
+    docfreq <- as.numeric(Matrix::colSums(dtm_train > 0))
+  }
+  part_stub <- list(L = L_tr)
   eng <- .optop_index_engine(tp$theta, tp$phi, dtm_train, part_stub, pi_row,
                              "deviance", "word", NULL, n_threads,
                              do_model = TRUE, do_null = TRUE)
   d_w <- eng$deviance$model
   d_null <- eng$deviance$null
-
-  docfreq <- as.numeric(Matrix::colSums(dtm_train > 0))
   include <- d_null > 0 & docfreq >= min_doc_freq
   n_inc <- sum(include)
   if (n_inc < strata) {

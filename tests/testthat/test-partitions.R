@@ -179,22 +179,24 @@ test_that("the partition kernels validate their inputs", {
 
   expect_error(
     optop_partition_pass_core(theta, rbind(phi, phi[1, ]), ord, cand_off,
-                              keep, tau, 1L),
+                              keep, tau, 0, 1L),
     "number of topics"
   )
+  # slice semantics: the offsets and tau must cover the document slice
   expect_error(
-    optop_partition_pass_core(theta[-1, ], phi, ord, cand_off, keep, tau, 1L),
-    "one row per document"
+    optop_partition_pass_core(theta, phi, ord, cand_off[1:2], keep, tau,
+                              0, 1L),
+    "cover the document slice"
   )
   expect_error(
-    optop_partition_pass_core(theta, phi, ord, cand_off[-1], keep, tau, 1L),
-    "J \\+ 1"
+    optop_partition_pass_core(theta, phi, ord, cand_off, keep, tau[1:2],
+                              0, 1L),
+    "cover the document slice"
   )
   expect_error(
-    optop_partition_sums_core(theta[-1, ], phi,
-                              as.numeric(c(0, 1, 2, 3)),
-                              as.integer(c(0, 1, 2)), 1L),
-    "one row per document"
+    optop_partition_sums_core(theta, phi, as.numeric(c(0, 1, 2)),
+                              as.integer(c(0, 1)), 0, 1L),
+    "does not cover the document slice"
   )
 
   # thread clamping: a non-positive count equals one thread

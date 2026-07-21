@@ -107,18 +107,23 @@ void optop_partition_pass_core(const arma::mat& theta,
                                const Rcpp::NumericVector& cand_off,
                                Rcpp::RawVector keep,
                                const Rcpp::NumericVector& tau,
+                               double doc_offset,
                                int n_threads)
 {
-    const R_xlen_t J = tau.size();
+    // theta holds the documents [doc_offset, doc_offset + n_rows) of the
+    // global set: corpus shards slice theta while cand_off, keep, and tau
+    // stay global (no flag copies across shards)
+    const R_xlen_t n_slice = static_cast<R_xlen_t>(theta.n_rows);
+    const R_xlen_t j0 = static_cast<R_xlen_t>(doc_offset);
     const arma::uword K = theta.n_cols;
     if (phi.n_rows != K) {
         Rcpp::stop("theta and phi disagree on the number of topics");
     }
-    if (theta.n_rows != static_cast<arma::uword>(J)) {
-        Rcpp::stop("theta must have one row per document");
+    if (j0 < 0 || cand_off.size() < j0 + n_slice + 1) {
+        Rcpp::stop("cand_off must cover the document slice");
     }
-    if (cand_off.size() != J + 1) {
-        Rcpp::stop("cand_off must have J + 1 entries");
+    if (tau.size() < j0 + n_slice) {
+        Rcpp::stop("tau must cover the document slice");
     }
     const int* ord = order.begin();
     const double* offp = cand_off.begin();
@@ -134,14 +139,15 @@ void optop_partition_pass_core(const arma::mat& theta,
 #ifdef _OPENMP
 #pragma omp for schedule(dynamic, 64)
 #endif
-        for (R_xlen_t j = 0; j < J; ++j) {
-            const R_xlen_t o0 = off_at(offp, j);
-            const R_xlen_t o1 = off_at(offp, j + 1);
+        for (R_xlen_t j = 0; j < n_slice; ++j) {
+            const R_xlen_t g = j0 + j;
+            const R_xlen_t o0 = off_at(offp, g);
+            const R_xlen_t o1 = off_at(offp, g + 1);
             if (o0 == o1) continue;
             for (arma::uword k = 0; k < K; ++k) {
                 th[k] = theta.at(static_cast<arma::uword>(j), k);
             }
-            const double tau_j = tp[j];
+            const double tau_j = tp[g];
             for (R_xlen_t t = o0; t < o1; ++t) {
                 if (!kp[t]) continue;
                 const double* ph = phi.colptr(
@@ -226,17 +232,21 @@ Rcpp::NumericVector optop_partition_sums_core(const arma::mat& theta,
                                               const arma::mat& phi,
                                               const Rcpp::NumericVector& nr_off,
                                               const Rcpp::IntegerVector& nr_words,
+                                              double doc_offset,
                                               int n_threads)
 {
-    const R_xlen_t J = nr_off.size() - 1;
+    // theta holds the documents [doc_offset, doc_offset + n_rows) of the
+    // global set; the returned sums cover that slice
+    const R_xlen_t n_slice = static_cast<R_xlen_t>(theta.n_rows);
+    const R_xlen_t j0 = static_cast<R_xlen_t>(doc_offset);
     const arma::uword K = theta.n_cols;
     if (phi.n_rows != K) {
         Rcpp::stop("theta and phi disagree on the number of topics");
     }
-    if (theta.n_rows != static_cast<arma::uword>(J)) {
-        Rcpp::stop("theta must have one row per document");
+    if (j0 < 0 || nr_off.size() < j0 + n_slice + 1) {
+        Rcpp::stop("the partition does not cover the document slice");
     }
-    Rcpp::NumericVector sums(J);
+    Rcpp::NumericVector sums(n_slice);
     const double* offp = nr_off.begin();
     const int* wp = nr_words.begin();
     double* out = sums.begin();
@@ -250,9 +260,10 @@ Rcpp::NumericVector optop_partition_sums_core(const arma::mat& theta,
 #ifdef _OPENMP
 #pragma omp for schedule(dynamic, 64)
 #endif
-        for (R_xlen_t j = 0; j < J; ++j) {
-            const R_xlen_t o0 = off_at(offp, j);
-            const R_xlen_t o1 = off_at(offp, j + 1);
+        for (R_xlen_t j = 0; j < n_slice; ++j) {
+            const R_xlen_t g = j0 + j;
+            const R_xlen_t o0 = off_at(offp, g);
+            const R_xlen_t o1 = off_at(offp, g + 1);
             if (o0 == o1) {
                 out[j] = 0.0;
                 continue;
@@ -316,13 +327,17 @@ Rcpp::NumericVector optop_partition_obsmass_core(const Rcpp::IntegerVector& Nt_p
                                                  const Rcpp::NumericVector& Nt_x,
                                                  const Rcpp::NumericVector& nr_off,
                                                  const Rcpp::IntegerVector& nr_words,
+                                                 double doc_offset,
                                                  int n_threads)
 {
-    const R_xlen_t J = nr_off.size() - 1;
-    if (Nt_p.size() != J + 1) {
+    // the counts cover the documents [doc_offset, doc_offset + n_cols) of
+    // the global partition; the returned sums cover that slice
+    const R_xlen_t n_slice = Nt_p.size() - 1;
+    const R_xlen_t j0 = static_cast<R_xlen_t>(doc_offset);
+    if (j0 < 0 || nr_off.size() < j0 + n_slice + 1) {
         Rcpp::stop("the transposed counts do not match the partition");
     }
-    Rcpp::NumericVector sums(J);
+    Rcpp::NumericVector sums(n_slice);
     const int* pp = Nt_p.begin();
     const int* ip = Nt_i.begin();
     const double* xp = Nt_x.begin();
@@ -334,9 +349,9 @@ Rcpp::NumericVector optop_partition_obsmass_core(const Rcpp::IntegerVector& Nt_p
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < J; ++j) {
-        R_xlen_t a = off_at(offp, j);
-        const R_xlen_t a1 = off_at(offp, j + 1);
+    for (R_xlen_t j = 0; j < n_slice; ++j) {
+        R_xlen_t a = off_at(offp, j0 + j);
+        const R_xlen_t a1 = off_at(offp, j0 + j + 1);
         int b = pp[j];
         const int b1 = pp[j + 1];
         double s = 0.0;
