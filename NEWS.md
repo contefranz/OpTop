@@ -1,3 +1,30 @@
+# OpTop 0.14.3
+
+A large-corpus indexing release.
+
+### Fixes
+
+* **64-bit Armadillo indexing** (`-DARMA_64BIT_WORD` in both Makevars): the
+  compiled cores receive the document-term matrix as an Armadillo sparse
+  matrix, whose constructor requires the documents-by-features shape to be
+  addressable by its integer index type. With the previous 32-bit indices any
+  corpus whose `J * W` exceeded `2^31 - 1` cells failed at the boundary with
+  `SpMat::init(): requested size is too large`, regardless of how sparse the
+  matrix actually was (observed on 3.1 million documents by 57,440 features).
+  All cores now compile with 64-bit indices, which also protects the dense
+  document-topic matrices whose element count passes `2^31` at extreme scale.
+
+### Known limits at very large scale
+
+* A single `dgCMatrix` (and hence a single quanteda dfm) holds at most
+  `2^31 - 1` nonzero entries, an R container limit no compiler flag lifts;
+  corpora beyond it need document sharding, planned for the next minor
+  release together with a zero-copy sparse boundary and a sparse partition
+  representation. Until then `optimal_topic()` is the supported entry point
+  at multi-million-document scale: `optop_make_partition()` and the index
+  family still materialize dense documents-by-features objects internally
+  and remain intended for corpora of moderate size.
+
 # OpTop 0.14.2
 
 A documentation release. The README now states the per-platform build

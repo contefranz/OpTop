@@ -1,2 +1,5 @@
+# 64-bit Armadillo indices: sparse and dense containers whose shape exceeds
+# 2^31 - 1 addressable cells (large J x W corpora) need a 64-bit uword
+PKG_CPPFLAGS = -DARMA_64BIT_WORD
 PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
