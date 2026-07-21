@@ -17,6 +17,25 @@
 #   counts, floored at eps, and log(max(N_min, eps) / E_min).
 # * se: no eps flooring anywhere.
 
+# Dense rare rows from either partition format, for the slow references and
+# the structural assertions: format 2 stores the complement (non-rare word
+# lists), so the mask is TRUE everywhere except at the listed words.
+ref_rare_mask <- function(partition, J, W) {
+  if (!identical(partition$format, 2L)) {
+    return(partition$rare_mask)
+  }
+  mask <- matrix(TRUE, J, W)
+  off <- partition$nonrare_offsets
+  words <- partition$nonrare_words
+  for (j in seq_len(J)) {
+    if (off[j + 1] > off[j]) {
+      mask[j, words[(off[j] + 1):off[j + 1]] + 1L] <- FALSE
+    }
+  }
+  colnames(mask) <- partition$vocab
+  mask
+}
+
 ref_theta_phi <- function(model) {
   if (inherits(model, "optop_theta_phi")) {
     return(list(theta = model$theta, phi = model$phi,
@@ -55,8 +74,9 @@ ref_index_document <- function(model, dtm, partition, baseline,
   D_null <- numeric(J)
   r2_doc <- numeric(J)
 
+  rare_all <- ref_rare_mask(partition, J, ncol(N))
   for (j in seq_len(J)) {
-    rare <- partition$rare_mask[j, ]
+    rare <- rare_all[j, ]
     N_j <- N[j, ]
     E_j <- E[j, ]
     B_j <- L[j] * pi_row
@@ -85,7 +105,9 @@ ref_index_document <- function(model, dtm, partition, baseline,
       min_ok <- if (is.null(partition$chisq_min_ok)) TRUE else
         partition$chisq_min_ok[j]
       if (isTRUE(min_ok)) {
-        E_min <- max(sum(E_f[rare]), eps)
+        # format-2 convention: the min-bin mass is the unfloored sum,
+        # floored ONCE (the pre-0.15.0 kernels summed floored elements)
+        E_min <- max(sum(E_j[rare]), eps)
         B_min <- max(L[j] * sum(pi_row[rare]), eps)
         dK <- dK + (N_min - E_min)^2 / E_min
         dnull <- dnull + (N_min - B_min)^2 / B_min
@@ -402,7 +424,8 @@ ref_holdout <- function(models, dtm_eval, baseline, c = 1,
           dK <- sum((N_j[!r_j] - E_f[!r_j])^2 / E_f[!r_j])
           d0 <- sum((N_j[!r_j] - B_f[!r_j])^2 / B_f[!r_j])
           if (min_ok[j]) {
-            E_m <- max(sum(E_f[r_j]), eps)
+            # format-2 convention: unfloored sum, floored once
+            E_m <- max(sum(E_j[r_j]), eps)
             B_m <- max(L[j] * sum(pi_tr[r_j]), eps)
             dK <- dK + (N_min - E_m)^2 / E_m
             d0 <- d0 + (N_min - B_m)^2 / B_m

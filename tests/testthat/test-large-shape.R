@@ -1,14 +1,14 @@
-# The compiled cores receive the dfm as an Armadillo sparse matrix, whose
-# constructor requires n_rows * n_cols to fit the index type uword. The
-# package compiles with ARMA_64BIT_WORD (src/Makevars), so shapes beyond
-# 2^31 - 1 cells must cross the boundary; under 32-bit indices the call
-# below dies with "SpMat::init(): requested size is too large". The test is
-# cheap by construction: the shape is huge (5e9 cells) but the work is
-# O(nnz + J) because only one word column is evaluated.
+# The corpus crosses the C++ boundary as raw dgCMatrix slot views, so no
+# Armadillo sparse container is ever constructed on the hot paths and the
+# J x W shape is unbounded (only the nonzero count is capped, by R's
+# dgCMatrix at 2^31 - 1). The shape below exceeds 32-bit addressability
+# (5e9 cells); before 0.14.3 this failed at SpMat::init(), and since 0.15.0
+# the container does not exist at all. The test is cheap by construction:
+# the work is O(nnz + J) because only one word column is evaluated.
 
 test_that("the sparse boundary accepts shapes beyond 32-bit indexing", {
   J <- 100000L
-  W <- 50000L   # J * W = 5e9 > 2^32 - 1: fails without ARMA_64BIT_WORD
+  W <- 50000L   # J * W = 5e9 > 2^32 - 1
   set.seed(99)
   nnz <- 1000L
   N <- Matrix::sparseMatrix(i = sample.int(J, nnz, replace = TRUE),
@@ -17,7 +17,7 @@ test_that("the sparse boundary accepts shapes beyond 32-bit indexing", {
                             dims = c(J, W))
   N <- methods::as(N, "CsparseMatrix")
   out <- optop_index_word_core(
-    matrix(0, 0, 0), N, 0L, 1L,
+    matrix(0, 0, 0), matrix(0, 0, 0), N@p, N@i, N@x, 0L, 1L,
     as.numeric(Matrix::rowSums(N)), 0.5, 1e-12,
     FALSE, TRUE,
     TRUE, FALSE, FALSE, 1L

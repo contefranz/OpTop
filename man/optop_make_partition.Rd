@@ -29,9 +29,8 @@ deviance index is the primary measure; \code{c = 5} remains appropriate
 when the Pearson index is of primary interest, and sensitivity to
 \code{c} should be reported.}
 
-\item{block}{Integer; number of terms to process per block when multiplying
-\eqn{\Theta \Phi} to control memory usage for large vocabularies.
-Default: \code{5000}.}
+\item{block}{Ignored since 0.15.0 (the sparse candidate construction
+needs no vocabulary blocking); accepted for call compatibility.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 kernels (default \code{1L}). Results are identical for any value; only
@@ -46,10 +45,15 @@ evaluation corpus for held-out scoring, where the null model must come
 from the training sample.}
 }
 \value{
-A list with:
+A list (the sparse partition, \code{format = 2L}) with:
 \itemize{
-\item \code{rare_mask}: logical matrix \code{J x W}; \code{TRUE} where
-word \code{w} is rare in document \code{j} (belongs to \eqn{C_j^*}).
+\item \code{nonrare_offsets}, \code{nonrare_words}: the complement of
+\eqn{C_j^*} in ragged form. Document \eqn{j}'s non-rare words are the
+\code{nonrare_words} entries (0-based word indices, ascending) between
+offsets \code{j} and \code{j + 1}; every other word is rare. The total
+size is bounded by \eqn{\sum_j L_j / c}{sum_j L_j / c}, so the
+structure scales with the token count rather than with \eqn{J \times W}.
+\item \code{vocab}: the vocabulary the word indices refer to.
 \item \code{L}: numeric vector of length \code{J} with document lengths
 \eqn{L_j = \sum_w N_{jw}}.
 \item \code{chisq_min_ok}: logical vector of length \code{J};
@@ -59,6 +63,10 @@ Pearson inclusion rule (see Details).
 documents whose min-bin is excluded and the mean observed probability
 mass excluded with it.
 \item \code{c}: the threshold constant used.
+\item \code{format}: the partition format tag (\code{2L}). Partitions
+saved by OpTop 0.13.0 to 0.14.3 (dense \code{rare_mask}) are upgraded
+automatically on first use, with an alert; recompute to avoid the
+conversion.
 }
 }
 \description{
@@ -105,14 +113,21 @@ studies only under a common grid and \code{c}.
 }
 \section{Computational notes}{
 
-The compiled kernel forms
-\eqn{\min\bigl(\hat\pi_{\mathrm{glob}}, \min_K \Theta^{(K)} \Phi^{(K)}\bigr)}{min(pi_glob, min_K Theta Phi)}
-one vocabulary block at a time: the baseline seeds the running minimum and
-a single BLAS product per model per block feeds the in-place update, so
-neither the \code{J x W x |K|} tensor nor the full \code{J x W}
-running-minimum matrix is ever materialized. A second blocked pass of the
-same cost class accumulates the rare-set fitted mass per model for the
-Pearson inclusion rule. For large corpora, keep \code{dtm} sparse.
+The construction is candidate-based and exact. Because the null baseline
+belongs to the augmented union, a cell can be non-rare only if
+\eqn{\hat\pi_{\mathrm{glob}}(w) \ge \tau_j}{pi_glob(w) >= tau_j}; sorting
+the vocabulary once by \eqn{\hat\pi_{\mathrm{glob}}}{pi_glob} descending
+makes each document's candidate set a prefix of at most \eqn{L_j / c}
+words, and only candidates are checked against the models. Total cost is
+\eqn{O((\sum_j L_j / c) \cdot \sum_K K)}{O((tokens / c) * sum_K K)}
+instead of the \eqn{O(J W \sum_K K)}{O(J * W * sum_K K)} dense products
+of earlier versions, and no \eqn{J \times W}{J x W} object of any kind is
+materialized. The min-bin masses of the Pearson rule are complements of
+compensated non-rare sums, exact for documents whose support collapses
+entirely into the min-bin and accurate to
+\eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. The
+\code{block} argument of earlier versions is accepted and ignored. For
+large corpora, keep \code{dtm} sparse.
 }
 
 \examples{
@@ -134,7 +149,7 @@ m5  <- LDA(dtm, k = 5,  method = "VEM", control = list(seed = 42))
 m10 <- LDA(dtm, k = 10, method = "VEM", control = list(seed = 42))
 
 part <- optop_make_partition(list(m5, m10), dtm, c = 1)
-str(part$rare_mask)
+str(part$nonrare_offsets)
 }
 
 }

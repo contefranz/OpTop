@@ -324,7 +324,13 @@ optop_index_se <- function(model, dtm, partition, baseline,
 
   D_K <- numeric(J)
   D_null <- numeric(J)
-  rare_mask <- partition$rare_mask
+  # deprecated small-corpus path: reconstruct the dense rare rows per block
+  # from the sparse partition (the only remaining dense-mask consumer)
+  partition <- .optop_partition_upgrade(partition)
+  rare_mask <- matrix(FALSE, J, W)
+  for (j in seq_len(J)) {
+    rare_mask[j, ] <- .optop_partition_rare_row(partition, j, W)
+  }
 
   for (start in seq(1L, J, by = block_size_doc)) {
     end <- min(start + block_size_doc - 1L, J)
@@ -843,30 +849,35 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   n_threads <- as.integer(n_threads)
 
   if (level == "word") {
+    # the document dimension is blocked INSIDE the kernel (a block x w_len
+    # gemm buffer), so the word block size only bounds the phi slice and the
+    # accumulator width; counts cross the boundary as zero-copy CSC slots
     if (is.null(block_size)) {
-      block_size <- max(100L, min(W, floor(5e8 / (J * 8))))
+      block_size <- 4096L
     }
+    theta_in <- if (do_model) theta else matrix(0, 0, 0)
     acc <- matrix(0, W, 6)
     for (start in seq(1L, W, by = block_size)) {
       end <- min(start + block_size - 1L, W)
       w_idx <- start:end
-      E_block <- if (do_model) {
-        (theta %*% phi[, w_idx, drop = FALSE]) * partition$L
+      phi_cols <- if (do_model) {
+        phi[, w_idx, drop = FALSE]
       } else {
         matrix(0, 0, 0)
       }
-      acc[w_idx, ] <- optop_index_word_core(E_block, N, start - 1L,
-                                            length(w_idx), L,
+      acc[w_idx, ] <- optop_index_word_core(theta_in, phi_cols,
+                                            N@p, N@i, N@x,
+                                            start - 1L, length(w_idx), L,
                                             pi_num[w_idx], eps,
                                             do_model, do_null,
                                             do_se, do_chisq, do_dev,
                                             n_threads)
     }
   } else {
-    block_size_doc <- max(100L, min(J, floor(5e8 / (W * 8))))
+    # sparse-partition merge-join: one call over all documents, each at
+    # O(|NR_j| * K + nnz_j); dense-mask partitions are upgraded on entry
+    partition <- .optop_partition_upgrade(partition)
     N_t <- Matrix::t(N)
-    mask_bits <- optop_pack_mask_core(partition$rare_mask)
-    tww <- if (do_model) t(phi) else matrix(0, 0, 0)
     # Pearson min-bin inclusion flags: partitions from OpTop < 0.13.0 lack
     # the field and keep the pre-rule behavior (every min bin included)
     min_ok <- partition$chisq_min_ok
@@ -880,22 +891,15 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
       }
       min_ok <- rep(TRUE, J)
     }
-    acc <- matrix(0, J, 6)
-    for (start in seq(1L, J, by = block_size_doc)) {
-      end <- min(start + block_size_doc - 1L, J)
-      j_idx <- start:end
-      theta_blk <- if (do_model) {
-        theta[j_idx, , drop = FALSE]
-      } else {
-        matrix(0, 0, 0)
-      }
-      acc[j_idx, ] <- optop_index_doc_core(tww, theta_blk, N_t, start - 1L,
-                                           mask_bits, L[j_idx], pi_num,
-                                           min_ok[j_idx], eps,
-                                           do_model, do_null,
-                                           do_se, do_chisq, do_dev,
-                                           n_threads)
-    }
+    theta_in <- if (do_model) theta else matrix(0, 0, 0)
+    phi_in <- if (do_model) phi else matrix(0, 0, 0)
+    acc <- optop_index_doc_core(theta_in, phi_in, N_t@p, N_t@i, N_t@x,
+                                partition$nonrare_offsets,
+                                partition$nonrare_words,
+                                L, pi_num, min_ok, eps,
+                                do_model, do_null,
+                                do_se, do_chisq, do_dev,
+                                n_threads)
   }
   list(se = list(model = acc[, 1], null = acc[, 2]),
        chisq = list(model = acc[, 3], null = acc[, 4]),
@@ -978,9 +982,14 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
     pi_row <- baseline$pi_glob
   }
 
-  # partition alignment
-  if (is.null(colnames(partition$rare_mask)) ||
-      !identical(colnames(partition$rare_mask), vocab_model)) {
+  # partition alignment: sparse partitions carry the vocabulary explicitly,
+  # dense-mask partitions (OpTop < 0.15.0) carry it as mask column names
+  part_vocab <- if (identical(partition$format, 2L)) {
+    partition$vocab
+  } else {
+    colnames(partition$rare_mask)
+  }
+  if (is.null(part_vocab) || !identical(part_vocab, vocab_model)) {
     stop("Partition vocabulary != model vocabulary. Recompute optop_make_partition() on the aligned DTM.")
   }
   pi_row

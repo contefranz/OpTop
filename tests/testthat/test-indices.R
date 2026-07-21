@@ -187,7 +187,7 @@ test_that("misaligned inputs raise the documented errors", {
 
   # partition missing vocabulary labels
   bad_partition <- fx$partition
-  colnames(bad_partition$rare_mask) <- NULL
+  bad_partition$vocab <- NULL
   expect_error(
     optop_index_se(m, fx$dtm, bad_partition, fx$baseline),
     "Partition vocabulary != model vocabulary"
@@ -196,51 +196,56 @@ test_that("misaligned inputs raise the documented errors", {
 
 test_that("the index engine kernels validate their inputs", {
   J <- 3L; W <- 4L
-  N <- Matrix::Matrix(matrix(1, J, W), sparse = TRUE)
+  N <- methods::as(Matrix::Matrix(matrix(1, J, W), sparse = TRUE),
+                   "CsparseMatrix")
   N_t <- Matrix::t(N)
-  E <- matrix(1 / W, J, W)
+  theta <- matrix(1 / 2, J, 2L)
+  phi <- matrix(1 / W, 2L, W)
   L <- rep(4, J)
   pi_w <- rep(1 / W, W)
 
-  # word-level kernel
+  # word-level kernel (zero-copy slots, internal doc blocking)
   expect_error(
-    optop_index_word_core(E[-1, ], N, 0L, W, L, pi_w, 1e-8,
-                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
-    "E_block"
+    optop_index_word_core(theta[-1, ], phi, N@p, N@i, N@x, 0L, W, L, pi_w,
+                          1e-8, TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "one row per document"
   )
   expect_error(
-    optop_index_word_core(E, N, 0L, W, L[-1], pi_w, 1e-8,
-                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
-    "L must have one entry per document"
+    optop_index_word_core(theta, phi[, -1], N@p, N@i, N@x, 0L, W, L, pi_w,
+                          1e-8, TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    "phi_cols"
   )
   expect_error(
-    optop_index_word_core(E, N, 0L, W, L, pi_w[-1], 1e-8,
-                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
+    optop_index_word_core(theta, phi, N@p, N@i, N@x, 0L, W, L, pi_w[-1],
+                          1e-8, TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
     "pi_w"
   )
 
-  # document-level kernel
-  tww <- matrix(1 / W, W, 2L)
-  theta_blk <- matrix(1 / 2, J, 2L)
-  bits <- as.raw(rep(0L, J * W))
+  # document-level kernel (merge-join over the sparse partition)
+  nr_off <- as.numeric(seq(0, J * W, by = W))
+  nr_words <- rep(seq_len(W) - 1L, J)
   ok <- rep(TRUE, J)
   expect_error(
-    optop_index_doc_core(tww[-1, ], theta_blk, N_t, 0L, bits, L, pi_w, ok, 1e-8,
+    optop_index_doc_core(theta[-1, ], phi, N_t@p, N_t@i, N_t@x, nr_off,
+                         nr_words, L, pi_w, ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
-    "one row per feature"
+    "one row per document"
   )
   expect_error(
-    optop_index_doc_core(tww, theta_blk[-1, ], N_t, 0L, bits, L, pi_w, ok, 1e-8,
+    optop_index_doc_core(theta, rbind(phi, phi[1, ]), N_t@p, N_t@i, N_t@x,
+                         nr_off, nr_words, L, pi_w, ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
-    "theta_blk"
+    "number of topics"
   )
   expect_error(
-    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w[-1], ok, 1e-8,
+    optop_index_doc_core(theta, phi, N_t@p, N_t@i, N_t@x, nr_off[-1],
+                         nr_words, L, pi_w, ok, 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
-    "pi_row"
+    "partition does not match"
   )
   expect_error(
-    optop_index_doc_core(tww, theta_blk, N_t, 0L, bits, L, pi_w, ok[-1], 1e-8,
+    optop_index_doc_core(theta, phi, N_t@p, N_t@i, N_t@x, nr_off,
+                         nr_words, L, pi_w, ok[-1], 1e-8,
                          TRUE, TRUE, TRUE, FALSE, FALSE, 1L),
     "chisq_min_ok"
   )

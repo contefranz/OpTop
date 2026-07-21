@@ -1,42 +1,50 @@
 #include <RcppArmadillo.h>
 // [Rcpp::depends(RcppArmadillo)]
 
+#include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <vector>
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
-// Fused engine behind the OpTop discrepancy indices. The R implementation
-// evaluated each metric with a chain of J x W temporaries per model
-// (difference matrices, logical-to-double mask coercions, outer() baselines,
-// masked rowSums); at the scales of the efficiency study those temporaries,
-// not the BLAS product, dominate the runtime and the memory profile. The
-// kernels below reproduce the exact conventions of the R code (see
-// R/discrepancies.R and the naive references in tests/testthat) in a single
-// traversal per document or word, computing every requested metric and, when
-// asked, the model-independent baseline side at the same time:
-// * se: no eps flooring anywhere;
-// * chisq: expected counts floored at eps element-wise before any use; the
-//   collapsed min bin uses the sum of the floored elements, floored again at
-//   eps; the baseline min bin is L_j * sum(pi[rare]) from the unfloored pi,
-//   then floored;
-// * deviance: contributions 2 * n * log(n / max(e, eps)) with the
-//   0 * log(0) = 0 convention; the min bin uses the sum of the unfloored
-//   expected counts, floored at eps. At word level the FITTED deviance is
-//   the Poisson unit deviance 2 * [n log(n/e) - (n - e)]: the linear
-//   correction (unfloored e) makes every summand nonnegative, so the
-//   word-level index never exceeds one. The correction is identically zero
-//   on the null side because sum_j B_jw = sum_j N_jw for the in-sample
-//   corpus baseline, and at document level because the binned fitted and
-//   empirical vectors are both probability vectors on the support.
+// Fused engine behind the OpTop discrepancy indices, format-2 generation.
+// The document-level kernel consumes the sparse harmonized partition (the
+// per-document non-rare word lists of partition_core.cpp) and merge-joins
+// each list with the document's CSC column of the transposed counts, so the
+// per-document cost is O(|NR_j| * K + nnz_j) with no J x W traversal, no
+// packed mask, and no W x block gemm. The corpus and the partition cross
+// the boundary as raw slot views (zero copy, no Armadillo sparse container,
+// no shape limit).
 //
-// Threading contract (as everywhere in the package): each document (or word)
-// is owned by exactly one thread and writes its own output slot; there are
-// no cross-thread floating-point reductions, so results are bit-identical
-// for any n_threads.
+// Per-family conventions (identical to the previous generation on the
+// active support):
+// * se: no eps flooring anywhere;
+// * chisq: expected counts floored at eps element-wise on the ACTIVE
+//   (non-rare) cells before any use;
+// * deviance: contributions 2 * n * log(n / max(e, eps)) with the
+//   0 * log(0) = 0 convention. At word level the FITTED deviance is the
+//   Poisson unit deviance 2 * [n log(n/e) - (n - e)]: the linear correction
+//   (unfloored e) makes every summand nonnegative, so the word-level index
+//   never exceeds one; the correction is identically zero on the null side
+//   and at document level (probability vectors on the support).
+//
+// Min-bin convention (format 2, one deliberate change): every collapsed-bin
+// mass is the complement of a compensated non-rare sum, floored ONCE at eps
+// where a denominator or a logarithm needs it: E_min = L_j * (1 - sum_NR p),
+// B_min = L_j * (1 - sum_NR pi), N_min = the observed mass drained by the
+// merge-join (exact). The previous generation floored the fitted chisq
+// min-bin element-wise before summing (sum of max(e, eps) over rare cells),
+// which cannot be reproduced without enumerating the rare cells; the
+// difference is bounded by W * eps in absolute terms on a bin that enters
+// the Pearson family only when its mass clears c, and the reference
+// implementations follow the same single-floor convention.
+//
+// Threading contract (as everywhere in the package): each document (or
+// word) is owned by exactly one thread and writes its own output slot;
+// there are no cross-thread floating-point reductions, so results are
+// bit-identical for any n_threads.
 //
 // Output layout of both kernels: a 6-column matrix
 // [se, se_null, chisq, chisq_null, dev, dev_null], with columns of metrics
@@ -44,46 +52,44 @@
 
 namespace {
 
-inline bool bit_get(const unsigned char* bits, const std::size_t idx)
+// Neumaier compensated accumulator (see partition_core.cpp)
+struct KahanSum {
+    double s = 0.0;
+    double carry = 0.0;
+    inline void add(const double v) {
+        const double t = s + v;
+        if (std::abs(s) >= std::abs(v)) {
+            carry += (s - t) + v;
+        } else {
+            carry += (v - t) + s;
+        }
+        s = t;
+    }
+    inline double value() const { return s + carry; }
+};
+
+inline R_xlen_t off_at(const double* off, const R_xlen_t j)
 {
-    return (bits[idx >> 3] >> (idx & 7)) & 1u;
+    return static_cast<R_xlen_t>(off[j]);
 }
 
 }  // namespace
 
-// Pack a J x W logical mask into bits indexed by (j * W + w), so that a
-// document's mask is a contiguous bit range. One pass; ~J*W/8 bytes.
+// Word-level kernel: the six accumulators of every word in the requested
+// range, with the document dimension blocked INTERNALLY so that the fitted
+// expectations exist only as a block x w_len gemm buffer (the previous
+// generation received a full J x w_len dense block from R). Counts arrive
+// as the raw CSC slots of the J x W matrix: each requested word is one
+// contiguous column with ascending document indices, walked by a per-word
+// cursor across the document blocks. Documents are accumulated in
+// ascending order per word regardless of the schedule.
 //' @keywords internal
 // [[Rcpp::export]]
-Rcpp::RawVector optop_pack_mask_core(const Rcpp::LogicalMatrix& mask)
-{
-    const std::size_t J = mask.nrow();
-    const std::size_t W = mask.ncol();
-    Rcpp::RawVector out((J * W + 7) / 8);
-    unsigned char* bits = RAW(out);
-    std::memset(bits, 0, out.size());
-
-    const int* m = LOGICAL(mask);
-    for (std::size_t w = 0; w < W; ++w) {
-        const std::size_t col = w * J;
-        for (std::size_t j = 0; j < J; ++j) {
-            if (m[col + j] == 1) {
-                const std::size_t idx = j * W + w;
-                bits[idx >> 3] |= static_cast<unsigned char>(1u << (idx & 7));
-            }
-        }
-    }
-    return out;
-}
-
-// Word-level kernel: one word (one dense column of E, one sparse column of
-// N) per iteration. E_block is the J x wb fitted-count block computed in R
-// by BLAS, unfloored; the per-metric floors are applied here. The harmonized
-// partition plays no role at word level.
-//' @keywords internal
-// [[Rcpp::export]]
-Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
-                                          const arma::sp_mat& N,
+Rcpp::NumericMatrix optop_index_word_core(const arma::mat& theta,
+                                          const arma::mat& phi_cols,
+                                          const Rcpp::IntegerVector& N_p,
+                                          const Rcpp::IntegerVector& N_i,
+                                          const Rcpp::NumericVector& N_x,
                                           int w_start,
                                           int w_len,
                                           const Rcpp::NumericVector& L,
@@ -96,72 +102,96 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
                                           bool do_dev,
                                           int n_threads)
 {
-    const std::size_t J = N.n_rows;
-    if (do_model && (E_block.n_rows != J ||
-                     E_block.n_cols != static_cast<arma::uword>(w_len))) {
-        Rcpp::stop("E_block does not match the requested word range");
-    }
-    if (static_cast<std::size_t>(L.size()) != J) {
-        Rcpp::stop("L must have one entry per document");
+    const R_xlen_t J = L.size();
+    if (do_model) {
+        if (theta.n_rows != static_cast<arma::uword>(J)) {
+            Rcpp::stop("theta must have one row per document");
+        }
+        if (phi_cols.n_rows != theta.n_cols ||
+            phi_cols.n_cols != static_cast<arma::uword>(w_len)) {
+            Rcpp::stop("phi_cols does not match theta or the word range");
+        }
     }
     if (pi_w.size() != w_len) {
         Rcpp::stop("pi_w must cover the requested word range");
+    }
+    if (static_cast<R_xlen_t>(N_p.size()) <
+        static_cast<R_xlen_t>(w_start + w_len) + 1) {
+        Rcpp::stop("the counts do not cover the requested word range");
     }
     if (n_threads < 1) n_threads = 1;
 
     Rcpp::NumericMatrix out(w_len, 6);
     double* o = REAL(out);
-    const double* Lp = &L[0];
-    const double* pip = &pi_w[0];
+    const double* Lp = L.begin();
+    const double* pip = pi_w.begin();
+    const int* pp = N_p.begin();
+    const int* ip = N_i.begin();
+    const double* xp = N_x.begin();
+
+    // per-word accumulators and sparse cursors, shared across blocks; each
+    // word is touched by one thread per block and the blocks are serial
+    std::vector<double> se(w_len, 0.0), se_n(w_len, 0.0);
+    std::vector<double> x2(w_len, 0.0), x2_n(w_len, 0.0);
+    std::vector<double> dv(w_len, 0.0), dv_n(w_len, 0.0);
+    std::vector<double> dv_lin(w_len, 0.0);
+    std::vector<int> cursor(w_len);
+    for (int c = 0; c < w_len; ++c) {
+        cursor[c] = pp[w_start + c];
+    }
+
+    const R_xlen_t block_docs = 8192;
+    arma::mat E_sub;
+
+    for (R_xlen_t j0 = 0; j0 < J; j0 += block_docs) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t j1 = std::min<R_xlen_t>(j0 + block_docs, J);
+
+        if (do_model) {
+            // block x w_len fitted probabilities in one gemm
+            E_sub = theta.rows(static_cast<arma::uword>(j0),
+                               static_cast<arma::uword>(j1 - 1)) * phi_cols;
+        }
 
 #ifdef _OPENMP
-#pragma omp parallel num_threads(n_threads)
-#endif
-    {
-        // thread-local dense scatter of one sparse column
-        std::vector<double> n_dense(J, 0.0);
-        std::vector<arma::uword> touched;
-        touched.reserve(256);
-
-#ifdef _OPENMP
-#pragma omp for schedule(dynamic, 16)
+#pragma omp parallel for schedule(dynamic, 16) num_threads(n_threads)
 #endif
         for (int c = 0; c < w_len; ++c) {
-            const arma::uword w = static_cast<arma::uword>(w_start + c);
-            for (arma::sp_mat::const_col_iterator it = N.begin_col(w);
-                 it != N.end_col(w); ++it) {
-                n_dense[it.row()] = *it;
-                touched.push_back(it.row());
-            }
-
+            const int col_end = pp[w_start + c + 1];
+            int cur = cursor[c];
             const double pw = pip[c];
-            const double* e_col = do_model ? E_block.colptr(c) : nullptr;
+            const double* e_col = do_model ?
+                E_sub.colptr(static_cast<arma::uword>(c)) : nullptr;
 
-            double se = 0.0, se_n = 0.0;
-            double x2 = 0.0, x2_n = 0.0;
-            double dv = 0.0, dv_n = 0.0;
-            double dv_lin = 0.0;
+            double a_se = 0.0, a_se_n = 0.0;
+            double a_x2 = 0.0, a_x2_n = 0.0;
+            double a_dv = 0.0, a_dv_n = 0.0;
+            double a_dv_lin = 0.0;
 
-            for (std::size_t j = 0; j < J; ++j) {
-                const double n = n_dense[j];
+            for (R_xlen_t j = j0; j < j1; ++j) {
+                double n = 0.0;
+                if (cur < col_end && static_cast<R_xlen_t>(ip[cur]) == j) {
+                    n = xp[cur];
+                    ++cur;
+                }
                 if (do_model) {
-                    const double e = e_col[j];
+                    const double e = Lp[j] * e_col[j - j0];
                     if (do_se) {
                         const double d = n - e;
-                        se += d * d;
+                        a_se += d * d;
                     }
                     if (do_chisq) {
                         const double ef = e < eps ? eps : e;
                         const double d = n - ef;
-                        x2 += d * d / ef;
+                        a_x2 += d * d / ef;
                     }
                     if (do_dev) {
                         // Poisson unit deviance: the linear term uses the
                         // unfloored expectation and runs over every document
-                        dv_lin += n - e;
+                        a_dv_lin += n - e;
                         if (n > 0.0) {
                             const double ef = e < eps ? eps : e;
-                            dv += n * (std::log(n) - std::log(ef));
+                            a_dv += n * (std::log(n) - std::log(ef));
                         }
                     }
                 }
@@ -169,52 +199,60 @@ Rcpp::NumericMatrix optop_index_word_core(const arma::mat& E_block,
                     const double b = Lp[j] * pw;
                     if (do_se) {
                         const double d = n - b;
-                        se_n += d * d;
+                        a_se_n += d * d;
                     }
                     if (do_chisq) {
                         const double bf = b < eps ? eps : b;
                         const double d = n - bf;
-                        x2_n += d * d / bf;
+                        a_x2_n += d * d / bf;
                     }
                     if (do_dev && n > 0.0) {
                         const double bf = b < eps ? eps : b;
-                        dv_n += n * (std::log(n) - std::log(bf));
+                        a_dv_n += n * (std::log(n) - std::log(bf));
                     }
                 }
             }
 
-            o[c] = se;
-            o[c + static_cast<std::size_t>(w_len)] = se_n;
-            o[c + 2 * static_cast<std::size_t>(w_len)] = x2;
-            o[c + 3 * static_cast<std::size_t>(w_len)] = x2_n;
-            o[c + 4 * static_cast<std::size_t>(w_len)] = 2.0 * (dv - dv_lin);
-            o[c + 5 * static_cast<std::size_t>(w_len)] = 2.0 * dv_n;
-
-            for (const arma::uword j : touched) {
-                n_dense[j] = 0.0;
-            }
-            touched.clear();
+            se[c] += a_se;
+            se_n[c] += a_se_n;
+            x2[c] += a_x2;
+            x2_n[c] += a_x2_n;
+            dv[c] += a_dv;
+            dv_n[c] += a_dv_n;
+            dv_lin[c] += a_dv_lin;
+            cursor[c] = cur;
         }
+    }
+
+    for (int c = 0; c < w_len; ++c) {
+        o[c] = se[c];
+        o[c + static_cast<std::size_t>(w_len)] = se_n[c];
+        o[c + 2 * static_cast<std::size_t>(w_len)] = x2[c];
+        o[c + 3 * static_cast<std::size_t>(w_len)] = x2_n[c];
+        o[c + 4 * static_cast<std::size_t>(w_len)] = 2.0 * (dv[c] - dv_lin[c]);
+        o[c + 5 * static_cast<std::size_t>(w_len)] = 2.0 * dv_n[c];
     }
     return out;
 }
 
-// Document-level kernel: one document per iteration, on the harmonized
-// support {non-rare terms} U {min}. The fitted probabilities of the block
-// are produced by one gemm inside the kernel (tww is phi transposed, W x K),
-// so a document is a contiguous column; counts arrive as the transposed
-// sparse dfm (documents are CSC columns) and the rare mask as packed bits.
-// The dense pass accumulates the zero-count value of every non-rare term
-// and the collapsed-bin sums; the sparse pass replaces the zero-count value
-// with the observed-count value at the non-rare nonzeros.
+// Document-level kernel on the harmonized support {non-rare terms} U {min}.
+// One merge-join per document: the sorted non-rare list against the
+// document's CSC column of the transposed counts (word indices ascending).
+// Non-rare cells accumulate their per-family terms DIRECTLY, in ascending
+// word order (a zero-count non-rare cell contributes its zero-count value);
+// observed cells outside the list drain into the exact observed min-bin
+// mass N_min; the fitted and baseline min-bin masses follow by compensated
+// complement. Per-document cost O(|NR_j| * K + nnz_j).
 //' @keywords internal
 // [[Rcpp::export]]
-Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
-                                         const arma::mat& theta_blk,
-                                         const arma::sp_mat& N_t,
-                                         int doc_start,
-                                         const Rcpp::RawVector& mask_bits,
-                                         const Rcpp::NumericVector& L_blk,
+Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& theta,
+                                         const arma::mat& phi,
+                                         const Rcpp::IntegerVector& Nt_p,
+                                         const Rcpp::IntegerVector& Nt_i,
+                                         const Rcpp::NumericVector& Nt_x,
+                                         const Rcpp::NumericVector& nr_off,
+                                         const Rcpp::IntegerVector& nr_words,
+                                         const Rcpp::NumericVector& L,
                                          const Rcpp::NumericVector& pi_row,
                                          const Rcpp::LogicalVector& chisq_min_ok,
                                          double eps,
@@ -225,193 +263,194 @@ Rcpp::NumericMatrix optop_index_doc_core(const arma::mat& tww,
                                          bool do_dev,
                                          int n_threads)
 {
-    const std::size_t W = N_t.n_rows;
-    const int b = L_blk.size();
-    if (chisq_min_ok.size() != b) {
-        Rcpp::stop("chisq_min_ok must have one entry per document of the block");
+    const R_xlen_t J = L.size();
+    const arma::uword K = do_model ? theta.n_cols : 0;
+    if (Nt_p.size() != J + 1) {
+        Rcpp::stop("the transposed counts do not match the document set");
+    }
+    if (nr_off.size() != J + 1) {
+        Rcpp::stop("the partition does not match the document set");
+    }
+    if (chisq_min_ok.size() != J) {
+        Rcpp::stop("chisq_min_ok must have one entry per document");
     }
     if (do_model) {
-        if (tww.n_rows != W) {
-            Rcpp::stop("tww must have one row per feature");
+        if (theta.n_rows != static_cast<arma::uword>(J)) {
+            Rcpp::stop("theta must have one row per document");
         }
-        if (theta_blk.n_rows != static_cast<arma::uword>(b) ||
-            theta_blk.n_cols != tww.n_cols) {
-            Rcpp::stop("theta_blk does not match tww or the block length");
+        if (phi.n_rows != K) {
+            Rcpp::stop("theta and phi disagree on the number of topics");
         }
-    }
-    if (static_cast<std::size_t>(pi_row.size()) != W) {
-        Rcpp::stop("pi_row must have one entry per feature");
     }
     if (n_threads < 1) n_threads = 1;
 
-    // one gemm per block: fitted probabilities, one column per document
-    arma::mat I_t;
-    if (do_model) {
-        I_t = tww * theta_blk.t();  // W x b
-    }
-
-    Rcpp::NumericMatrix out(b, 6);
+    Rcpp::NumericMatrix out(J, 6);
     double* o = REAL(out);
-    const double* Lp = &L_blk[0];
-    const double* pip = &pi_row[0];
+    const double* Lp = L.begin();
+    const double* pip = pi_row.begin();
     const int* min_ok = LOGICAL(chisq_min_ok);
-    const unsigned char* bits = RAW(mask_bits);
+    const int* pp = Nt_p.begin();
+    const int* ipv = Nt_i.begin();
+    const double* xpv = Nt_x.begin();
+    const double* offp = nr_off.begin();
+    const int* wp = nr_words.begin();
+
+    // serial macro-chunks keep the loop interruptible; documents inside a
+    // chunk run in parallel, each writing its own row
+    const R_xlen_t chunk = 65536;
+    for (R_xlen_t c0 = 0; c0 < J; c0 += chunk) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(c0 + chunk, J);
 
 #ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic) num_threads(n_threads)
+#pragma omp parallel num_threads(n_threads)
 #endif
-    for (int jj = 0; jj < b; ++jj) {
-        const std::size_t j_global = static_cast<std::size_t>(doc_start + jj);
-        const std::size_t bit0 = j_global * W;
-        const double Lj = Lp[jj];
-        const double* i_col = do_model ? I_t.colptr(jj) : nullptr;
-
-        // dense pass: zero-count values over the non-rare support, plus the
-        // collapsed-bin sums (ascending term order, as in the R rowSums).
-        // Non-rare cells accumulate DIRECTLY rather than as full minus rare:
-        // a rare cell with a large count on an eps-floored expectation would
-        // make both sums huge and their difference catastrophically cancel
-        // (the held-out out-of-support column is exactly that case).
-        double se_nr = 0.0, E_min = 0.0;
-        double x2_nr = 0.0, E_min_f = 0.0;
-        double seN_nr = 0.0;
-        double x2N_nr = 0.0;
-        double pi_rare = 0.0;
-
-        for (std::size_t w = 0; w < W; ++w) {
-            const bool rare = bit_get(bits, bit0 + w);
-            if (do_model) {
-                const double e = i_col[w] * Lj;
-                if (do_se || do_dev) {
-                    if (rare) {
-                        E_min += e;
-                    } else if (do_se) {
-                        se_nr += e * e;
+        {
+            std::vector<double> th(K > 0 ? K : 1);
+#ifdef _OPENMP
+#pragma omp for schedule(dynamic, 64)
+#endif
+            for (R_xlen_t j = c0; j < c1; ++j) {
+                const double Lj = Lp[j];
+                if (do_model) {
+                    for (arma::uword k = 0; k < K; ++k) {
+                        th[k] = theta.at(static_cast<arma::uword>(j), k);
                     }
                 }
-                if (do_chisq) {
-                    const double ef = e < eps ? eps : e;
-                    if (rare) {
-                        E_min_f += ef;
-                    } else {
-                        x2_nr += ef;
+
+                double se_nr = 0.0, seN_nr = 0.0;
+                double x2_nr = 0.0, x2N_nr = 0.0;
+                double dv_nr = 0.0, dvN_nr = 0.0;
+                double N_min = 0.0;
+                KahanSum psum;
+                KahanSum pisum;
+
+                R_xlen_t a = off_at(offp, j);
+                const R_xlen_t a1 = off_at(offp, j + 1);
+                int b = pp[j];
+                const int b1 = pp[j + 1];
+
+                while (a < a1) {
+                    const int w = wp[a];
+                    // rare observed cells before the next non-rare word
+                    while (b < b1 && ipv[b] < w) {
+                        N_min += xpv[b];
+                        ++b;
                     }
+                    double n = 0.0;
+                    if (b < b1 && ipv[b] == w) {
+                        n = xpv[b];
+                        ++b;
+                    }
+
+                    if (do_model) {
+                        double p = 0.0;
+                        const double* ph = phi.colptr(
+                            static_cast<arma::uword>(w));
+                        for (arma::uword k = 0; k < K; ++k) {
+                            p += th[k] * ph[k];
+                        }
+                        psum.add(p);
+                        const double e = Lj * p;
+                        if (do_se) {
+                            const double d = n - e;
+                            se_nr += d * d;
+                        }
+                        if (do_chisq) {
+                            const double ef = e < eps ? eps : e;
+                            const double d = n - ef;
+                            x2_nr += d * d / ef;
+                        }
+                        if (do_dev && n > 0.0) {
+                            const double ef = e < eps ? eps : e;
+                            dv_nr += 2.0 * n * std::log(n / ef);
+                        }
+                    }
+                    if (do_null) {
+                        const double piw = pip[w];
+                        pisum.add(piw);
+                        const double bb = Lj * piw;
+                        if (do_se) {
+                            const double d = n - bb;
+                            seN_nr += d * d;
+                        }
+                        if (do_chisq) {
+                            const double bf = bb < eps ? eps : bb;
+                            const double d = n - bf;
+                            x2N_nr += d * d / bf;
+                        }
+                        if (do_dev && n > 0.0) {
+                            const double bf = bb < eps ? eps : bb;
+                            dvN_nr += 2.0 * n * std::log(n / bf);
+                        }
+                    }
+                    ++a;
                 }
-            }
-            if (do_null) {
-                if (rare) {
-                    pi_rare += pip[w];
-                } else {
-                    const double bb = Lj * pip[w];
+                // remaining observed cells are rare
+                while (b < b1) {
+                    N_min += xpv[b];
+                    ++b;
+                }
+
+                // min-bin masses by compensated complement: exact when the
+                // non-rare list is empty (structural collapse), absolute
+                // error O(L_j * eps_machine) otherwise
+                const double E_min = do_model ?
+                    Lj * std::max(0.0, 1.0 - psum.value()) : 0.0;
+                const double B_min = do_null ?
+                    Lj * std::max(0.0, 1.0 - pisum.value()) : 0.0;
+
+                if (do_model) {
                     if (do_se) {
-                        seN_nr += bb * bb;
+                        const double d = N_min - E_min;
+                        o[j] = se_nr + d * d;
                     }
                     if (do_chisq) {
-                        const double bf = bb < eps ? eps : bb;
-                        x2N_nr += bf;
+                        // Pearson inclusion rule: the min bin enters only
+                        // when the grid-wide flag holds; excluded bins drop
+                        // from BOTH sides
+                        if (min_ok[j] == 1) {
+                            const double em = E_min < eps ? eps : E_min;
+                            const double d = N_min - em;
+                            o[j + 2 * static_cast<std::size_t>(J)] =
+                                x2_nr + d * d / em;
+                        } else {
+                            o[j + 2 * static_cast<std::size_t>(J)] = x2_nr;
+                        }
+                    }
+                    if (do_dev) {
+                        const double em = E_min < eps ? eps : E_min;
+                        const double nm = N_min < eps ? eps : N_min;
+                        const double dev_min = N_min == 0.0 ?
+                            0.0 : 2.0 * N_min * std::log(nm / em);
+                        o[j + 4 * static_cast<std::size_t>(J)] =
+                            dv_nr + dev_min;
                     }
                 }
-            }
-        }
-
-        // sparse pass: replace the zero-count value with the observed one at
-        // the non-rare nonzeros, and collect the observed min-bin mass
-        double N_min = 0.0;
-        double dv_nr = 0.0;
-        double dvN_nr = 0.0;
-
-        for (arma::sp_mat::const_col_iterator it = N_t.begin_col(j_global);
-             it != N_t.end_col(j_global); ++it) {
-            const std::size_t w = it.row();
-            const double n = *it;
-            const bool rare = bit_get(bits, bit0 + w);
-            if (rare) {
-                N_min += n;
-                continue;
-            }
-
-            if (do_model) {
-                const double e = i_col[w] * Lj;
-                if (do_se) {
-                    const double d = n - e;
-                    se_nr += d * d - e * e;
+                if (do_null) {
+                    if (do_se) {
+                        const double d = N_min - B_min;
+                        o[j + static_cast<std::size_t>(J)] = seN_nr + d * d;
+                    }
+                    if (do_chisq) {
+                        if (min_ok[j] == 1) {
+                            const double bm = B_min < eps ? eps : B_min;
+                            const double d = N_min - bm;
+                            o[j + 3 * static_cast<std::size_t>(J)] =
+                                x2N_nr + d * d / bm;
+                        } else {
+                            o[j + 3 * static_cast<std::size_t>(J)] = x2N_nr;
+                        }
+                    }
+                    if (do_dev) {
+                        const double bm = B_min < eps ? eps : B_min;
+                        const double nm = N_min < eps ? eps : N_min;
+                        const double dev_min = N_min == 0.0 ?
+                            0.0 : 2.0 * N_min * std::log(nm / bm);
+                        o[j + 5 * static_cast<std::size_t>(J)] =
+                            dvN_nr + dev_min;
+                    }
                 }
-                if (do_chisq) {
-                    const double ef = e < eps ? eps : e;
-                    const double d = n - ef;
-                    x2_nr += d * d / ef - ef;
-                }
-                if (do_dev && n > 0.0) {
-                    const double ef = e < eps ? eps : e;
-                    dv_nr += 2.0 * n * std::log(n / ef);
-                }
-            }
-            if (do_null) {
-                const double bb = Lj * pip[w];
-                if (do_se) {
-                    const double d = n - bb;
-                    seN_nr += d * d - bb * bb;
-                }
-                if (do_chisq) {
-                    const double bf = bb < eps ? eps : bb;
-                    const double d = n - bf;
-                    x2N_nr += d * d / bf - bf;
-                }
-                if (do_dev && n > 0.0) {
-                    const double bf = bb < eps ? eps : bb;
-                    dvN_nr += 2.0 * n * std::log(n / bf);
-                }
-            }
-        }
-
-        const double B_min_raw = Lj * pi_rare;
-
-        if (do_model) {
-            if (do_se) {
-                const double d = N_min - E_min;
-                o[jj] = se_nr + d * d;
-            }
-            if (do_chisq) {
-                // Pearson inclusion rule: the min bin enters only when the
-                // grid-wide flag holds; excluded bins drop from BOTH sides
-                if (min_ok[jj] == 1) {
-                    const double em = E_min_f < eps ? eps : E_min_f;
-                    const double d = N_min - em;
-                    o[jj + 2 * static_cast<std::size_t>(b)] =
-                        x2_nr + d * d / em;
-                } else {
-                    o[jj + 2 * static_cast<std::size_t>(b)] = x2_nr;
-                }
-            }
-            if (do_dev) {
-                const double em = E_min < eps ? eps : E_min;
-                const double nm = N_min < eps ? eps : N_min;
-                const double dev_min =
-                    N_min == 0.0 ? 0.0 : 2.0 * N_min * std::log(nm / em);
-                o[jj + 4 * static_cast<std::size_t>(b)] = dv_nr + dev_min;
-            }
-        }
-        if (do_null) {
-            if (do_se) {
-                const double d = N_min - B_min_raw;
-                o[jj + static_cast<std::size_t>(b)] = seN_nr + d * d;
-            }
-            if (do_chisq) {
-                if (min_ok[jj] == 1) {
-                    const double bm = B_min_raw < eps ? eps : B_min_raw;
-                    const double d = N_min - bm;
-                    o[jj + 3 * static_cast<std::size_t>(b)] =
-                        x2N_nr + d * d / bm;
-                } else {
-                    o[jj + 3 * static_cast<std::size_t>(b)] = x2N_nr;
-                }
-            }
-            if (do_dev) {
-                const double bm = B_min_raw < eps ? eps : B_min_raw;
-                const double nm = N_min < eps ? eps : N_min;
-                const double dev_min =
-                    N_min == 0.0 ? 0.0 : 2.0 * N_min * std::log(nm / bm);
-                o[jj + 5 * static_cast<std::size_t>(b)] = dvN_nr + dev_min;
             }
         }
     }

@@ -23,9 +23,8 @@
 #'   deviance index is the primary measure; \code{c = 5} remains appropriate
 #'   when the Pearson index is of primary interest, and sensitivity to
 #'   \code{c} should be reported.
-#' @param block Integer; number of terms to process per block when multiplying
-#'   \eqn{\Theta \Phi} to control memory usage for large vocabularies.
-#'   Default: \code{5000}.
+#' @param block Ignored since 0.15.0 (the sparse candidate construction
+#'   needs no vocabulary blocking); accepted for call compatibility.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   kernels (default \code{1L}). Results are identical for any value; only
 #'   wall time changes.
@@ -37,10 +36,15 @@
 #'   evaluation corpus for held-out scoring, where the null model must come
 #'   from the training sample.
 #'
-#' @return A list with:
+#' @return A list (the sparse partition, `format = 2L`) with:
 #' \itemize{
-#'   \item \code{rare_mask}: logical matrix \code{J x W}; \code{TRUE} where
-#'   word \code{w} is rare in document \code{j} (belongs to \eqn{C_j^*}).
+#'   \item \code{nonrare_offsets}, \code{nonrare_words}: the complement of
+#'   \eqn{C_j^*} in ragged form. Document \eqn{j}'s non-rare words are the
+#'   \code{nonrare_words} entries (0-based word indices, ascending) between
+#'   offsets \code{j} and \code{j + 1}; every other word is rare. The total
+#'   size is bounded by \eqn{\sum_j L_j / c}{sum_j L_j / c}, so the
+#'   structure scales with the token count rather than with \eqn{J \times W}.
+#'   \item \code{vocab}: the vocabulary the word indices refer to.
 #'   \item \code{L}: numeric vector of length \code{J} with document lengths
 #'   \eqn{L_j = \sum_w N_{jw}}.
 #'   \item \code{chisq_min_ok}: logical vector of length \code{J};
@@ -50,6 +54,10 @@
 #'   documents whose min-bin is excluded and the mean observed probability
 #'   mass excluded with it.
 #'   \item \code{c}: the threshold constant used.
+#'   \item \code{format}: the partition format tag (\code{2L}). Partitions
+#'   saved by OpTop 0.13.0 to 0.14.3 (dense \code{rare_mask}) are upgraded
+#'   automatically on first use, with an alert; recompute to avoid the
+#'   conversion.
 #' }
 #'
 #' @details
@@ -83,14 +91,21 @@
 #' studies only under a common grid and \code{c}.
 #'
 #' @section Computational notes:
-#' The compiled kernel forms
-#' \eqn{\min\bigl(\hat\pi_{\mathrm{glob}}, \min_K \Theta^{(K)} \Phi^{(K)}\bigr)}{min(pi_glob, min_K Theta Phi)}
-#' one vocabulary block at a time: the baseline seeds the running minimum and
-#' a single BLAS product per model per block feeds the in-place update, so
-#' neither the \code{J x W x |K|} tensor nor the full \code{J x W}
-#' running-minimum matrix is ever materialized. A second blocked pass of the
-#' same cost class accumulates the rare-set fitted mass per model for the
-#' Pearson inclusion rule. For large corpora, keep \code{dtm} sparse.
+#' The construction is candidate-based and exact. Because the null baseline
+#' belongs to the augmented union, a cell can be non-rare only if
+#' \eqn{\hat\pi_{\mathrm{glob}}(w) \ge \tau_j}{pi_glob(w) >= tau_j}; sorting
+#' the vocabulary once by \eqn{\hat\pi_{\mathrm{glob}}}{pi_glob} descending
+#' makes each document's candidate set a prefix of at most \eqn{L_j / c}
+#' words, and only candidates are checked against the models. Total cost is
+#' \eqn{O((\sum_j L_j / c) \cdot \sum_K K)}{O((tokens / c) * sum_K K)}
+#' instead of the \eqn{O(J W \sum_K K)}{O(J * W * sum_K K)} dense products
+#' of earlier versions, and no \eqn{J \times W}{J x W} object of any kind is
+#' materialized. The min-bin masses of the Pearson rule are complements of
+#' compensated non-rare sums, exact for documents whose support collapses
+#' entirely into the min-bin and accurate to
+#' \eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. The
+#' \code{block} argument of earlier versions is accepted and ignored. For
+#' large corpora, keep \code{dtm} sparse.
 #'
 #' @seealso
 #' \code{\link{optop_make_baseline}},
@@ -118,7 +133,7 @@
 #' m10 <- LDA(dtm, k = 10, method = "VEM", control = list(seed = 42))
 #'
 #' part <- optop_make_partition(list(m5, m10), dtm, c = 1)
-#' str(part$rare_mask)
+#' str(part$nonrare_offsets)
 #' }
 #'
 #' @references
@@ -162,50 +177,124 @@ optop_make_partition <- function(models, dtm, c = 1, block = 5000,
     }
   }
 
-  thetas <- lapply(theta_phi, `[[`, "theta")
-  phis <- lapply(theta_phi, `[[`, "phi")
-  rare_mask <- matrix(NA, nrow = J, ncol = W,
-                      dimnames = list(rownames(theta_phi[[1]]$theta),
-                                      colnames(theta_phi[[1]]$phi)))
-  optop_partition_fill_core(rare_mask, thetas, phis,
-                            pi_glob,
-                            as.numeric(tau),
-                            as.integer(block),
-                            as.integer(n_threads))
+  # sparse construction (format 2): the partition stores the COMPLEMENT of
+  # C*_j, the per-document non-rare word lists, bounded in total by
+  # sum_j L_j / c (at most L_j / c words satisfy p_jw >= tau_j = c / L_j).
+  # Candidates: since the null belongs to the augmented union K0, a cell can
+  # be non-rare only if pi_glob(w) >= tau_j, so sorting the vocabulary by
+  # pi_glob descending makes each document's candidate set a prefix
+  ord <- order(pi_glob, decreasing = TRUE)
+  pi_sorted <- pi_glob[ord]
+  order0 <- as.integer(ord - 1L)
+  prefix_len <- optop_partition_candidates_core(pi_sorted, as.numeric(tau),
+                                                as.integer(n_threads))
+  cand_off <- c(0, cumsum(as.numeric(prefix_len)))
+  keep <- as.raw(rep(1L, cand_off[J + 1]))
+
+  # one pass per model: a candidate survives while p^K_jw >= tau_j under
+  # every model of the grid
+  for (tp in theta_phi) {
+    optop_partition_pass_core(tp$theta, tp$phi, order0, cand_off, keep,
+                              as.numeric(tau), as.integer(n_threads))
+  }
+  nr <- optop_partition_compact_core(cand_off, keep, order0,
+                                     as.integer(n_threads))
 
   # Pearson min-bin inclusion rule, decided once for the whole grid: keep
-  # the collapsed bin iff min(min_K E^K_min, B_min) >= c
-  rare_i_sum <- optop_partition_minmass_core(rare_mask, thetas, phis,
-                                             as.integer(block),
-                                             as.integer(n_threads))
-  E_min_min <- L * apply(rare_i_sum, 1, min)
-  B_min <- L * as.numeric(rare_mask %*% pi_glob)
+  # the collapsed bin iff min(min_K E^K_min, B_min) >= c, with the min-bin
+  # masses by compensated complement, E^K_min = L * (1 - sum_NR p^K) and
+  # B_min = L * (1 - sum_NR pi)
+  psum_max <- rep(-Inf, J)
+  for (tp in theta_phi) {
+    s <- optop_partition_sums_core(tp$theta, tp$phi, nr$offsets, nr$words,
+                                   as.integer(n_threads))
+    psum_max <- pmax(psum_max, s)
+  }
+  E_min_min <- L * pmax(0, 1 - psum_max)
+  pisum <- optop_partition_pisum_core(nr$offsets, nr$words, pi_glob,
+                                      as.integer(n_threads))
+  B_min <- L * pmax(0, 1 - pisum)
   chisq_min_ok <- pmin(E_min_min, B_min) >= c
 
   # a document without rare words has no min bin: the rule evaluates FALSE
   # there (so the kernel adds no spurious bin), but nothing is excluded and
   # the report counts only documents whose existing min bin is dropped
-  has_min <- rowSums(rare_mask) > 0
+  nr_count <- diff(nr$offsets)
+  has_min <- nr_count < W
   excluded <- has_min & !chisq_min_ok
   excluded_mass <- NA_real_
   if (any(excluded)) {
-    trip <- Matrix::summary(methods::as(dtm, "CsparseMatrix"))
-    hit <- rare_mask[cbind(trip$i, trip$j)]
-    N_min <- numeric(J)
-    if (any(hit)) {
-      agg <- rowsum(trip$x[hit], trip$i[hit])
-      N_min[as.integer(rownames(agg))] <- agg[, 1]
-    }
+    Nt <- Matrix::t(methods::as(dtm, "CsparseMatrix"))
+    obs_nr <- optop_partition_obsmass_core(Nt@p, Nt@i, Nt@x,
+                                           nr$offsets, nr$words,
+                                           as.integer(n_threads))
+    N_min <- pmax(0, L - obs_nr)
     excluded_mass <- mean(N_min[excluded] / pmax(L[excluded], 1))
   }
 
-  list(rare_mask = rare_mask,
+  list(nonrare_offsets = nr$offsets,
+       nonrare_words = nr$words,
+       vocab = colnames(theta_phi[[1]]$phi),
        L = L,
        chisq_min_ok = chisq_min_ok,
        chisq_min_report = list(n_excluded = sum(excluded),
                                share = mean(excluded),
                                excluded_mass = excluded_mass),
-       c = c)
+       c = c,
+       format = 2L)
+}
+
+#' Upgrade a dense-mask partition to the sparse format
+#'
+#' Partitions built by OpTop 0.13.0 to 0.14.3 carry the dense logical
+#' `rare_mask` (J x W). The sparse format stores the complement, the
+#' per-document non-rare word lists, which the format-2 kernels consume.
+#' The conversion is exact; an alert recommends recomputation because the
+#' dense object itself is the scale bottleneck.
+#'
+#' @param partition A partition from [optop_make_partition()], any format.
+#'
+#' @return A format-2 partition list.
+#'
+#' @keywords internal
+.optop_partition_upgrade <- function(partition) {
+  if (identical(partition$format, 2L)) {
+    return(partition)
+  }
+  if (is.null(partition$rare_mask)) {
+    stop(paste("the partition has neither the sparse fields nor a",
+               "rare_mask; recompute optop_make_partition()"))
+  }
+  cli::cli_alert_info(paste(
+    "upgrading a dense-mask partition (OpTop < 0.15.0) to the sparse",
+    "format; recompute optop_make_partition() to avoid the conversion"
+  ))
+  mask <- partition$rare_mask
+  J <- nrow(mask)
+  nr_list <- vector("list", J)
+  for (j in seq_len(J)) {
+    nr_list[[j]] <- which(!mask[j, ]) - 1L
+  }
+  counts <- lengths(nr_list)
+  partition$nonrare_offsets <- c(0, cumsum(as.numeric(counts)))
+  partition$nonrare_words <- as.integer(unlist(nr_list, use.names = FALSE))
+  partition$vocab <- colnames(mask)
+  partition$rare_mask <- NULL
+  partition$format <- 2L
+  partition
+}
+
+# Reconstruct one document's dense rare row from the sparse partition: the
+# deprecated SE re-optimization path is the only remaining consumer of a
+# dense mask and stays a small-corpus code path.
+.optop_partition_rare_row <- function(partition, j, W) {
+  out <- rep(TRUE, W)
+  o0 <- partition$nonrare_offsets[j]
+  o1 <- partition$nonrare_offsets[j + 1]
+  if (o1 > o0) {
+    out[partition$nonrare_words[(o0 + 1):o1] + 1L] <- FALSE
+  }
+  out
 }
 
 #' Global Corpus Baseline for OpTop Indices
