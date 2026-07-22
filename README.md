@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.20.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.20.0)
+[![release](https://img.shields.io/badge/release-v0.20.0-blue.svg)](https://github.com/contefranz/OpTop/releases)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -76,7 +76,7 @@ within one model grid.
 
   _Assistant Professor of Accounting Analytics and Data Science_  
   Department of Accounting | Bocconi University  
-  Fellow at Bocconi Institute for Data Science and Analytics ([BIDSA](https://www.bidsa.unibocconi.eu/wps/wcm/connect/Site/Bidsa/Home))  
+  Fellow at Bocconi Institute for Data Science and Analytics ([BIDSA](https://bidsa.unibocconi.eu/))  
   Contact: francesco.grossetti@unibocconi.it
 
 - [Craig M. Lewis](https://business.vanderbilt.edu/bio/craig-lewis/)
@@ -96,7 +96,7 @@ Journal of Statistical Software, 40, 1-30.
 3. Blei, D. M., Ng, A. Y., and Jordan, M. I. (2003). 
 [*Latent Dirichlet Allocation*.](https://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf)
 Journal of Machine Learning Research, 3(Jan):993–1022.
-4. Grossetti F. (2026). [*NLPstudio: Tools for Social Science Text Analysis, Corpus Management, and Topic Modeling*](https://contefranz.github.io/NLPstudio). R package version
+4. Grossetti F. (2026). [*NLPstudio: Tools for Social Science Text Analysis, Corpus Management, and Topic Modeling*](https://contefranz.github.io/NLPstudio/). R package version
   1.1.1.
   
 

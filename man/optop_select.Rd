@@ -121,7 +121,7 @@ A \code{data.table} with columns:
 statistic.
 \item \code{pval}: the p-value the selection rules use: asymptotic upper tail for
 \code{calibrate = "none"}, calibrated otherwise.
-\item \code{pval_chisq}: only when \code{calibrate != "none"} — the uncalibrated
+\item \code{pval_chisq}: only when \code{calibrate != "none"}: the uncalibrated
 asymptotic chi-square p-value, for comparison.
 }
 }
@@ -148,7 +148,7 @@ sum over documents (Equation 8 of the paper), asymptotically chi-square
 with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom. The returned \code{OpTop}
 column reports the \emph{standardized} statistic (raw statistic divided by its
 degrees of freedom, the version plotted in the paper's Figure 2), while
-\code{pval} is the p-value the selection rules consume — the upper tail of the
+\code{pval} is the p-value the selection rules consume: the upper tail of the
 raw statistic on its full degrees of freedom by default, or the calibrated
 value when \code{calibrate != "none"}.
 
@@ -157,16 +157,16 @@ probabilities \eqn{I_j = \theta_j^\top \Phi}{I_j = theta_j' Phi}, where
 \eqn{\theta_j}{theta_j} is the document's topic distribution and
 \eqn{\Phi}{Phi} the topic-word matrix. Any implementation that provides
 those two (row-stochastic) matrices is therefore admissible, whatever its
-estimation method — which is what the supported classes listed under
+estimation method; that is what the supported classes listed under
 \code{topic_models} have in common.
 
 \strong{Selection rules.}
 \itemize{
 \item \code{"sequential"} (default): scan \eqn{K} upward and select the smallest
-\eqn{K} the test fails to reject (\code{pval > alpha}) — the classical
+\eqn{K} the test fails to reject (\code{pval > alpha}), the classical
 sequential scheme for model order. If every model is rejected, the rule
 falls back to the global minimum with a warning.
-\item \code{"min"}: select the \eqn{K} with the minimum standardized statistic —
+\item \code{"min"}: select the \eqn{K} with the minimum standardized statistic,
 the rule used in the published case study.
 }
 
@@ -183,7 +183,7 @@ for the \emph{count} statistic, whose scale factor is the document length
 estimated from the same data they are tested against. The practical
 consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
 the thousands the chi-square quantiles are razor-thin and upper-tail
-p-values saturate at 0 or 1 unless the fit is genuinely borderline —
+p-values saturate at 0 or 1 unless the fit is genuinely borderline;
 \code{alpha} is not a true Type-I error rate.
 
 Calibration replaces the chi-square reference with the distribution of the
@@ -199,7 +199,7 @@ data, and the statistic touches the data only through sums over those
 fixed bins;
 \item a multinomial collapsed over bins is multinomial on the collapsed
 probabilities, so the null can be simulated \emph{directly on the}
-\eqn{P_j + 1} \emph{bins} — exactly equivalent to simulating whole documents
+\eqn{P_j + 1} \emph{bins}, exactly equivalent to simulating whole documents
 over the vocabulary, at a tiny fraction of the cost.
 }
 
@@ -223,12 +223,12 @@ documents gives the null mean \eqn{\mu}{mu} and variance
 scaled chi-square \eqn{a\,\chi^2_\nu}{a * chisq(nu)} (Satterthwaite:
 \eqn{a = \sigma^2 / (2\mu)}{a = sigma^2 / (2 mu)},
 \eqn{\nu = 2\mu^2 / \sigma^2}{nu = 2 mu^2 / sigma^2}). Closed form, no
-simulation — a fast approximation that corrects the location and scale of
+simulation: a fast approximation that corrects the location and scale of
 the reference but not its higher moments.
 
 One caveat applies to both: the null holds the estimated
 \eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
-of the model — the "double bootstrap" would be exact but computationally
+of the model; the "double bootstrap" would be exact but computationally
 prohibitive). Calibrated p-values are therefore conditional on the fitted
 parameters and do not account for estimation noise in \eqn{\theta}{theta}
 and \eqn{\phi}{phi}.
@@ -243,7 +243,7 @@ against each model's own document identifiers: documents not present in
 \emph{every} model are dropped (with a warning), and each retained dfm row is
 paired with the corresponding row of \eqn{\theta}{theta} \emph{per model}.
 Neither the row order of \code{weighted_dfm} nor the order in which each model
-saw the documents matters — alignment is always by identifier.
+saw the documents matters: alignment is always by identifier.
 
 \strong{Performance note.} Both hot paths run in C++ compiled code and
 parallelize over documents with OpenMP (see \code{n_threads}): the statistic

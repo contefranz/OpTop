@@ -31,15 +31,15 @@ The toolkit is organized around three questions:
 \item \strong{Which K is optimal?}
 \code{\link[=optop_select]{optop_select()}} evaluates a grid of fitted topic models with the Test 1
 chi-square statistic of the paper (Equation 8) and selects the optimal
-topic count with one of three rules: the sequential adequacy scan
-(default), the global minimum of the standardized statistic (the rule of
-the published case study), or the deprecated pre-0.9.9 \code{"legacy"} rule.
+topic count with one of two rules: the sequential adequacy scan
+(default) or the global minimum of the standardized statistic (the rule
+of the published case study).
 Because the chi-square reference is a yardstick rather than an exact
 null law, p-values can optionally be \strong{calibrated} under the
-fitted-model null — \code{calibrate = "bootstrap"} for the exact parametric
-bootstrap on the collapsed envelope bins, \code{calibrate = "moment"} for the
-closed-form Haldane/Satterthwaite approximation — turning \code{alpha} into a
-genuine Type-I error rate (document lengths are supplied via
+fitted-model null (\code{calibrate = "bootstrap"} for the exact parametric
+bootstrap on the collapsed envelope bins, \code{calibrate = "moment"} for
+the closed-form Haldane/Satterthwaite approximation), turning \code{alpha}
+into a genuine Type-I error rate (document lengths are supplied via
 \code{doc_lengths}).
 \item \strong{How much does a model explain?}
 \code{\link[=optop_index_se]{optop_index_se()}}, \code{\link[=optop_index_chisq]{optop_index_chisq()}} and \code{\link[=optop_index_deviance]{optop_index_deviance()}}

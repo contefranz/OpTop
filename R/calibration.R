@@ -7,15 +7,15 @@
 # fitted probabilities, the cutoff at q, the collapsed min bin) depends only
 # on the model, and a multinomial collapsed over bins is multinomial on the
 # collapsed probabilities, the null distribution of the statistic is fully
-# determined by the per-document bin probabilities exported by the C++ core —
-# no full-vocabulary simulation is ever needed.
+# determined by the per-document bin probabilities exported by the C++
+# core; no full-vocabulary simulation is ever needed.
 #
 # Performance note: since v0.12.0 the bootstrap runs in compiled code
 # (src/calibration_core.cpp), which fuses the multinomial sampling with the
 # Pearson reduction and parallelizes over documents with OpenMP; see
 # .optop_boot_null() for the RNG and thread-invariance contract. The
-# closed-form moment matching below stays in R — it is a single pass over the
-# envelope bins and never shows up in profiles.
+# closed-form moment matching below stays in R: it is a single pass over
+# the envelope bins and never shows up in profiles.
 
 #' Split the flattened envelope into per-document bins
 #'
@@ -42,8 +42,8 @@
 #' Draws `n_boot` replicates of the statistic under the conditional
 #' fitted-model null by simulating counts directly on the collapsed envelope
 #' bins, \eqn{c_j \sim \mathrm{Multinomial}(N_j, p_j)}{c_j ~ Multinomial(N_j,
-#' p_j)} — exact, because a multinomial collapsed over bins is multinomial on
-#' the collapsed probabilities. Each replicate accumulates
+#' p_j)}, which is exact because a multinomial collapsed over bins is
+#' multinomial on the collapsed probabilities. Each replicate accumulates
 #' \eqn{T^\ast = \sum_j k_j \sum_b (c_{jb}/N_j - p_{jb})^2 / p_{jb}}{T* =
 #' sum_j k_j sum_b (c_jb/N_j - p_jb)^2 / p_jb}, where the multiplier
 #' \eqn{k_j} is the number of bins of document \eqn{j}, matching the

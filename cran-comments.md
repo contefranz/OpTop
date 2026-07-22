@@ -18,7 +18,8 @@ This is a new submission (first CRAN release of OpTop).
 
 0 errors | 0 warnings | 1 note
 
-- New submission (first release).
+- New submission (first release). The spell-check flag on "Grossetti" in
+  the DESCRIPTION is an author surname.
 
 ## Notes for the reviewers
 

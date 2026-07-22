@@ -91,7 +91,7 @@ if (getRversion() >= "2.15.1") {
 #' with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom. The returned `OpTop`
 #' column reports the *standardized* statistic (raw statistic divided by its
 #' degrees of freedom, the version plotted in the paper's Figure 2), while
-#' `pval` is the p-value the selection rules consume — the upper tail of the
+#' `pval` is the p-value the selection rules consume: the upper tail of the
 #' raw statistic on its full degrees of freedom by default, or the calibrated
 #' value when `calibrate != "none"`.
 #'
@@ -100,15 +100,15 @@ if (getRversion() >= "2.15.1") {
 #' \eqn{\theta_j}{theta_j} is the document's topic distribution and
 #' \eqn{\Phi}{Phi} the topic-word matrix. Any implementation that provides
 #' those two (row-stochastic) matrices is therefore admissible, whatever its
-#' estimation method — which is what the supported classes listed under
+#' estimation method; that is what the supported classes listed under
 #' `topic_models` have in common.
 #'
 #' **Selection rules.**
 #' - `"sequential"` (default): scan \eqn{K} upward and select the smallest
-#'   \eqn{K} the test fails to reject (`pval > alpha`) — the classical
+#'   \eqn{K} the test fails to reject (`pval > alpha`), the classical
 #'   sequential scheme for model order. If every model is rejected, the rule
 #'   falls back to the global minimum with a warning.
-#' - `"min"`: select the \eqn{K} with the minimum standardized statistic —
+#' - `"min"`: select the \eqn{K} with the minimum standardized statistic,
 #'   the rule used in the published case study.
 #'
 #' The pre-0.9.9 `"legacy"` rule, deprecated since 0.9.9, was removed in
@@ -124,7 +124,7 @@ if (getRversion() >= "2.15.1") {
 #' estimated from the same data they are tested against. The practical
 #' consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
 #' the thousands the chi-square quantiles are razor-thin and upper-tail
-#' p-values saturate at 0 or 1 unless the fit is genuinely borderline —
+#' p-values saturate at 0 or 1 unless the fit is genuinely borderline;
 #' `alpha` is not a true Type-I error rate.
 #'
 #' Calibration replaces the chi-square reference with the distribution of the
@@ -139,7 +139,7 @@ if (getRversion() >= "2.15.1") {
 #'   fixed bins;
 #' - a multinomial collapsed over bins is multinomial on the collapsed
 #'   probabilities, so the null can be simulated *directly on the*
-#'   \eqn{P_j + 1} *bins* — exactly equivalent to simulating whole documents
+#'   \eqn{P_j + 1} *bins*, exactly equivalent to simulating whole documents
 #'   over the vocabulary, at a tiny fraction of the cost.
 #'
 #' `calibrate = "bootstrap"` draws \eqn{B} = `n_boot` null replicates
@@ -162,12 +162,12 @@ if (getRversion() >= "2.15.1") {
 #' scaled chi-square \eqn{a\,\chi^2_\nu}{a * chisq(nu)} (Satterthwaite:
 #' \eqn{a = \sigma^2 / (2\mu)}{a = sigma^2 / (2 mu)},
 #' \eqn{\nu = 2\mu^2 / \sigma^2}{nu = 2 mu^2 / sigma^2}). Closed form, no
-#' simulation — a fast approximation that corrects the location and scale of
+#' simulation: a fast approximation that corrects the location and scale of
 #' the reference but not its higher moments.
 #'
 #' One caveat applies to both: the null holds the estimated
 #' \eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
-#' of the model — the "double bootstrap" would be exact but computationally
+#' of the model; the "double bootstrap" would be exact but computationally
 #' prohibitive). Calibrated p-values are therefore conditional on the fitted
 #' parameters and do not account for estimation noise in \eqn{\theta}{theta}
 #' and \eqn{\phi}{phi}.
@@ -182,7 +182,7 @@ if (getRversion() >= "2.15.1") {
 #' *every* model are dropped (with a warning), and each retained dfm row is
 #' paired with the corresponding row of \eqn{\theta}{theta} *per model*.
 #' Neither the row order of `weighted_dfm` nor the order in which each model
-#' saw the documents matters — alignment is always by identifier.
+#' saw the documents matters: alignment is always by identifier.
 #'
 #' **Performance note.** Both hot paths run in C++ compiled code and
 #' parallelize over documents with OpenMP (see `n_threads`): the statistic
@@ -203,7 +203,7 @@ if (getRversion() >= "2.15.1") {
 #'   statistic.
 #' - `pval`: the p-value the selection rules use: asymptotic upper tail for
 #'   `calibrate = "none"`, calibrated otherwise.
-#' - `pval_chisq`: only when `calibrate != "none"` — the uncalibrated
+#' - `pval_chisq`: only when `calibrate != "none"`: the uncalibrated
 #'   asymptotic chi-square p-value, for comparison.
 #'
 #' @examples

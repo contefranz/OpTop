@@ -12,7 +12,7 @@ Supports every class handled by the internal adapters:
 \code{topicmodels::LDA} (VEM or Gibbs) and \code{topicmodels::CTM}
 fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.}
 
-\item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
+\item{dtm}{A document-term matrix of \strong{counts} with rows = documents and
 columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
 an \code{\link[=optop_corpus]{optop_corpus()}} of count shards streamed one at a time. The rows,
 concatenated in shard order, must align with the models' documents.}

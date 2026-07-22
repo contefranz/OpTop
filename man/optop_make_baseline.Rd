@@ -7,7 +7,7 @@
 optop_make_baseline(dtm, smooth_lambda = 0)
 }
 \arguments{
-\item{dtm}{A document–term matrix of \strong{counts} with rows = documents and
+\item{dtm}{A document-term matrix of \strong{counts} with rows = documents and
 columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
 an \code{\link[=optop_corpus]{optop_corpus()}} of count shards, whose counts are pooled.}
 

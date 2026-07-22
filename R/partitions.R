@@ -15,7 +15,7 @@
 #'   Supports every class handled by the internal adapters:
 #'   \code{topicmodels::LDA} (VEM or Gibbs) and \code{topicmodels::CTM}
 #'   fits, the seededlda models and NLPstudio \code{nlp_topic_fit} objects.
-#' @param dtm A document–term matrix of **counts** with rows = documents and
+#' @param dtm A document-term matrix of **counts** with rows = documents and
 #'   columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
 #'   an [optop_corpus()] of count shards streamed one at a time. The rows,
 #'   concatenated in shard order, must align with the models' documents.
@@ -381,7 +381,7 @@ optop_make_partition <- function(models, dtm, c = 1,
 #' analogue of the intercept-only model in regression: every document follows
 #' the same corpus-level word distribution, scaled by its length.
 #'
-#' @param dtm A document–term matrix of **counts** with rows = documents and
+#' @param dtm A document-term matrix of **counts** with rows = documents and
 #'   columns = vocabulary (recommended class \code{Matrix::dgCMatrix}), or
 #'   an [optop_corpus()] of count shards, whose counts are pooled.
 #' @param smooth_lambda Nonnegative additive smoothing constant:

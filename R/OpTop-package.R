@@ -26,15 +26,15 @@
 #' - **Which K is optimal?**
 #'   [optop_select()] evaluates a grid of fitted topic models with the Test 1
 #'   chi-square statistic of the paper (Equation 8) and selects the optimal
-#'   topic count with one of three rules: the sequential adequacy scan
-#'   (default), the global minimum of the standardized statistic (the rule of
-#'   the published case study), or the deprecated pre-0.9.9 `"legacy"` rule.
+#'   topic count with one of two rules: the sequential adequacy scan
+#'   (default) or the global minimum of the standardized statistic (the rule
+#'   of the published case study).
 #'   Because the chi-square reference is a yardstick rather than an exact
 #'   null law, p-values can optionally be **calibrated** under the
-#'   fitted-model null — `calibrate = "bootstrap"` for the exact parametric
-#'   bootstrap on the collapsed envelope bins, `calibrate = "moment"` for the
-#'   closed-form Haldane/Satterthwaite approximation — turning `alpha` into a
-#'   genuine Type-I error rate (document lengths are supplied via
+#'   fitted-model null (`calibrate = "bootstrap"` for the exact parametric
+#'   bootstrap on the collapsed envelope bins, `calibrate = "moment"` for
+#'   the closed-form Haldane/Satterthwaite approximation), turning `alpha`
+#'   into a genuine Type-I error rate (document lengths are supplied via
 #'   `doc_lengths`).
 #'
 #' - **How much does a model explain?**

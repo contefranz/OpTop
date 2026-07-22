@@ -12,7 +12,7 @@
 #'
 #' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs), or
 #'   a loader function returning one (materialized on demand).
-#' @param dtm A counts document–term matrix (documents × terms). Use `Matrix::dgCMatrix`
+#' @param dtm A counts document-term matrix (documents x terms). Use `Matrix::dgCMatrix`
 #'   or a `quanteda::dfm` that represents raw counts (not weighted), or an
 #'   [optop_corpus()] of count shards for corpora past the size of a single
 #'   matrix (shards stream one at a time; per-document results are
@@ -46,7 +46,8 @@
 #' **Harmonized support.** For each document, rare words (as determined by
 #' [`optop_make_partition()`], whose union includes the no-topics baseline)
 #' are collapsed into a single "min" bin. Document-level indices are then
-#' evaluated on `{non-rare terms} ∪ {min}`, so that changes in the index
+#' evaluated on the union of the non-rare terms and the min bin, so that
+#' changes in the index
 #' across \eqn{K} reflect changes in model fit, not changes in binning.
 #' Because the harmonized set is a union over the whole model grid, the
 #' reported value at any fixed \eqn{K} depends on the pair (grid, `c`):
@@ -70,7 +71,7 @@
 #'
 #' **Alignment requirements.** The following must share the same vocabulary and column
 #' order: the `dtm` passed to the index, the DTM used for `partition` and `baseline`, and the
-#' model's term–topic matrix. If they differ, align with `optop_align_dtm_to_models()` and
+#' model's term-topic matrix. If they differ, align with `optop_align_dtm_to_models()` and
 #' recompute `partition` and `baseline`.
 #'
 #' **Counts only.** SE/chi-square/deviance indices are defined for multinomial counts.
@@ -85,7 +86,7 @@
 #' non-degenerate documents
 #' \eqn{J_+ = \{j : D_j(\mathrm{null}) \ge \mathrm{min\_null}\}}{J+ = {j: D_j(null) >= min_null}}
 #' only, and excluded documents carry an `NA` document-level index. The
-#' Micro–Macro gap is itself diagnostic: it equals the covariance between
+#' Micro-Macro gap is itself diagnostic: it equals the covariance between
 #' document-level fit and baseline discrepancy (normalized by the mean
 #' baseline discrepancy), so a positive gap indicates that fit concentrates
 #' in high-discrepancy (often long or atypical) documents. The returned
@@ -399,7 +400,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param models A non-empty `list` of fitted `topicmodels::LDA` models (VEM or Gibbs),
 #'   typically a grid over different \eqn{K}; elements may be loader
 #'   functions returning a fit, materialized one at a time.
-#' @param dtm A counts document–term matrix (documents × terms). Use
+#' @param dtm A counts document-term matrix (documents x terms). Use
 #'   `Matrix::dgCMatrix` or a `quanteda::dfm` that represents raw counts
 #'   (not weighted), or an [optop_corpus()] of count shards.
 #' @param metrics Character vector selecting which indices to compute. Any subset of

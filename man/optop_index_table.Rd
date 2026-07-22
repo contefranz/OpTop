@@ -23,7 +23,7 @@ optop_index_table(
 typically a grid over different \eqn{K}; elements may be loader
 functions returning a fit, materialized one at a time.}
 
-\item{dtm}{A counts document–term matrix (documents × terms). Use
+\item{dtm}{A counts document-term matrix (documents x terms). Use
 \code{Matrix::dgCMatrix} or a \code{quanteda::dfm} that represents raw counts
 (not weighted), or an \code{\link[=optop_corpus]{optop_corpus()}} of count shards.}
 
