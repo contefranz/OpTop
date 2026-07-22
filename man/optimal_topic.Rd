@@ -16,8 +16,7 @@ optimal_topic(
   seed = NULL,
   n_threads = 1L,
   do_plot = TRUE,
-  verbose = TRUE,
-  lda_models = lifecycle::deprecated()
+  verbose = TRUE
 )
 }
 \arguments{
@@ -93,10 +92,6 @@ progress bar across the model grid) and a selection summary. Regardless
 of \code{verbose}, corrective actions (dropping documents the models never
 saw, reordering models or features, the sequential rule's fallback) are
 always signalled.}
-
-\item{lda_models}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to
-\code{topic_models}, which accepts more than \code{topicmodels::LDA()} fits; the
-old name still works but warns, and will be removed before v1.0.0.}
 }
 \value{
 A \code{data.table} with columns:

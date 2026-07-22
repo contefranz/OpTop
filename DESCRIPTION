@@ -20,7 +20,6 @@ Imports:
     data.table (>= 1.11.0),
     ggplot2 (>= 3.4.0),
     LDATS (>= 0.2.7),
-    lifecycle,
     Matrix,
     methods,
     quanteda (>= 2.0.0),
@@ -31,8 +30,7 @@ Suggests:
     rmarkdown,
     seededlda,
     testthat (>= 3.0.0),
-    text2vec,
-    withr
+    text2vec
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown

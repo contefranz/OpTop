@@ -72,9 +72,6 @@ if (getRversion() >= "2.15.1") {
 #'   of `verbose`, corrective actions (dropping documents the models never
 #'   saw, reordering models or features, the sequential rule's fallback) are
 #'   always signalled.
-#' @param lda_models `r lifecycle::badge("deprecated")` Renamed to
-#'   `topic_models`, which accepts more than `topicmodels::LDA()` fits; the
-#'   old name still works but warns, and will be removed before v1.0.0.
 #'
 #' @details
 #' For each document \eqn{j}, the fitted word probabilities are sorted in
@@ -240,17 +237,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                           selection = c("sequential", "min"),
                           calibrate = c("none", "bootstrap", "moment"),
                           n_boot = 200L, doc_lengths = NULL, seed = NULL,
-                          n_threads = 1L, do_plot = TRUE, verbose = TRUE,
-                          lda_models = lifecycle::deprecated()) {
-
-  if (lifecycle::is_present(lda_models)) {
-    lifecycle::deprecate_warn(when = "0.11.0",
-                              what = "optimal_topic(lda_models)",
-                              with = "optimal_topic(topic_models)")
-    if (missing(topic_models)) {
-      topic_models <- lda_models
-    }
-  }
+                          n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
 
   if (!is.list(topic_models)) {
     stop("topic_models must be a list of fitted topic models")

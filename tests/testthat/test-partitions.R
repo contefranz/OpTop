@@ -79,13 +79,12 @@ test_that("chisq_min_ok equals the naive grid-wide inclusion rule", {
   expect_equal(part$chisq_min_report$share, mean(excluded))
 })
 
-test_that("the deprecated block argument is accepted and inert", {
+test_that("the retired block argument is rejected", {
   fx <- optop_test_fixture()
-  part_small <- optop_make_partition(fx$models, fx$dtm, c = 5, block = 7)
-  expect_equal(part_small$nonrare_offsets, fx$partition$nonrare_offsets)
-  expect_identical(part_small$nonrare_words, fx$partition$nonrare_words)
-  expect_equal(part_small$L, fx$partition$L)
-  expect_identical(part_small$chisq_min_ok, fx$partition$chisq_min_ok)
+  expect_error(
+    optop_make_partition(fx$models, fx$dtm, c = 5, block = 7),
+    "unused argument"
+  )
 })
 
 test_that("larger c marks more words as rare", {

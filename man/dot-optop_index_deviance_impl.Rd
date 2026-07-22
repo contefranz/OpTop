@@ -10,10 +10,8 @@
   partition,
   baseline,
   macro,
-  reopt,
   level,
   block_size,
-  ztest,
   null_disc = NULL,
   n_threads = 1L,
   min_null = 0
@@ -38,10 +36,6 @@ counts DTM used for \code{partition}.}
 \item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Character scalar indicating
-optional re-optimization. The blending is not part of the methodology
-and is scheduled for removal before v1.0.0; use the default \code{"none"}.}
-
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
 document-level indices aggregated across words. \code{"word"} computes word-level indices
 aggregated across documents.}
@@ -51,17 +45,11 @@ during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
 
-\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
-the in-sample Z-test. The methodology reserves inference for held-out
-evaluation, so the in-sample test is scheduled for removal before
-v1.0.0; full-corpus indices are descriptive.}
-
 \item{null_disc}{Optional model-independent baseline discrepancy
 (per-document \eqn{D_{null}}{D_null} when \code{level = "document"}, per-word
 SST when \code{level = "word"}), as computed by \code{.optop_index_null()}, so
 that grid evaluations across \eqn{K} reuse it instead of recomputing it
-for every model. Ignored when \code{reopt != "none"} because the SE
-re-optimization needs the full baseline counts per document.}
+for every model.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only

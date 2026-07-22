@@ -60,7 +60,7 @@ ref_dev_contrib <- function(N, E, eps = 1e-12) {
 # Document-level indices, one slow loop per document.
 ref_index_document <- function(model, dtm, partition, baseline,
                                metric = c("se", "chisq", "deviance"),
-                               reopt = "none", eps = 1e-12, min_null = 0) {
+                               eps = 1e-12, min_null = 0) {
   metric <- match.arg(metric)
   tp <- ref_theta_phi(model)
   vocab <- colnames(tp$phi)
@@ -83,15 +83,6 @@ ref_index_document <- function(model, dtm, partition, baseline,
     N_min <- sum(N_j[rare])
 
     if (metric == "se") {
-      if (identical(reopt, "se")) {
-        # lambda blending of E towards B on the harmonized support
-        num <- sum((N_j[!rare] - B_j[!rare]) * (E_j[!rare] - B_j[!rare])) +
-          (N_min - sum(B_j[rare])) * (sum(E_j[rare]) - sum(B_j[rare]))
-        den <- sum((E_j[!rare] - B_j[!rare])^2) +
-          (sum(E_j[rare]) - sum(B_j[rare]))^2
-        lambda <- if (den <= 0) 0 else max(0, min(1, num / den))
-        E_j <- lambda * E_j + (1 - lambda) * B_j
-      }
       dK <- sum((N_j[!rare] - E_j[!rare])^2) + (N_min - sum(E_j[rare]))^2
       dnull <- sum((N_j[!rare] - B_j[!rare])^2) + (N_min - sum(B_j[rare]))^2
     } else if (metric == "chisq") {
@@ -276,19 +267,6 @@ ref_envelope <- function(model, q = 0.95) {
       X
     }
   })
-}
-
-# Reference for the cross-document Z-test.
-ref_ztest <- function(r2_doc_valid) {
-  J <- length(r2_doc_valid)
-  m <- mean(r2_doc_valid)
-  se <- sqrt(sum((r2_doc_valid - m)^2) / (J - 1)) / sqrt(J)
-  z <- m / se
-  list(z = z,
-       pval = stats::pnorm(z, lower.tail = FALSE),
-       se = se,
-       ci = m + c(-1, 1) * stats::qnorm(0.975) * se,
-       J = J)
 }
 
 # Pure-R oracle for the bootstrap null: the pre-0.12.0 implementation, one

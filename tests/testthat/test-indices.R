@@ -10,13 +10,11 @@ optop_index_fun <- function(metric) {
 }
 
 test_that("document-level indices match the naive reference", {
-  withr::local_options(lifecycle_verbosity = "quiet")
   fx <- optop_test_fixture()
   for (metric in c("se", "chisq", "deviance")) {
     fun <- optop_index_fun(metric)
     for (m in fx$models) {
-      got <- fun(m, fx$dtm, fx$partition, fx$baseline,
-                 macro = TRUE, ztest = TRUE)
+      got <- fun(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE)
       ref <- ref_index_document(m, fx$dtm, fx$partition, fx$baseline, metric)
 
       info <- sprintf("metric=%s K=%d", metric, ref$K)
@@ -25,13 +23,6 @@ test_that("document-level indices match the naive reference", {
       expect_equal(got$r2_doc, ref$r2_doc, tolerance = 1e-10, info = info)
       expect_identical(got$K, ref$K)
       expect_identical(got$metric, metric)
-
-      ref_z <- ref_ztest(ref$r2_doc[ref$D_null > 0])
-      expect_equal(got$ztest$z, ref_z$z, tolerance = 1e-10, info = info)
-      expect_equal(got$ztest$pval, ref_z$pval, tolerance = 1e-10, info = info)
-      expect_equal(got$ztest$se, ref_z$se, tolerance = 1e-10, info = info)
-      expect_equal(got$ztest$ci, ref_z$ci, tolerance = 1e-10, info = info)
-      expect_identical(got$ztest$J, ref_z$J)
     }
   }
 })
@@ -80,52 +71,15 @@ test_that("results are invariant to block_size at both levels", {
   }
 })
 
-test_that("baseline-topic augmentation is inert when reopt = 'none'", {
-  withr::local_options(lifecycle_verbosity = "quiet")
-  fx <- optop_test_fixture()
-  m <- fx$models[[1]]
-  for (metric in c("se", "chisq")) {
-    fun <- optop_index_fun(metric)
-    with_aug <- fun(m, fx$dtm, fx$partition, fx$baseline,
-                    macro = TRUE, add_baseline_topic = TRUE)
-    without_aug <- fun(m, fx$dtm, fx$partition, fx$baseline,
-                       macro = TRUE, add_baseline_topic = FALSE)
-    expect_equal(with_aug$r2, without_aug$r2, tolerance = 1e-12)
-    expect_equal(with_aug$r2_doc, without_aug$r2_doc, tolerance = 1e-12)
-    expect_equal(with_aug$r2_macro, without_aug$r2_macro, tolerance = 1e-12)
-  }
-})
-
-test_that("SE re-optimization matches the reference and bounds R2 below by 0", {
-  withr::local_options(lifecycle_verbosity = "quiet")
-  fx <- optop_test_fixture()
-  for (m in fx$models) {
-    got <- optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                          macro = TRUE, reopt = "se")
-    ref <- ref_index_document(m, fx$dtm, fx$partition, fx$baseline,
-                              metric = "se", reopt = "se")
-    expect_equal(got$r2, ref$r2, tolerance = 1e-10)
-    expect_equal(got$r2_doc, ref$r2_doc, tolerance = 1e-10)
-    expect_equal(got$r2_macro, ref$r2_macro, tolerance = 1e-10)
-    # lambda in [0,1] guarantees per-document non-negativity
-    expect_true(all(got$r2_doc >= -1e-12))
-    expect_gte(got$r2, -1e-12)
-  }
-})
-
-test_that("macro and ztest components are only returned when requested", {
-  withr::local_options(lifecycle_verbosity = "quiet")
+test_that("the macro component is only returned when requested", {
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
   res <- optop_index_se(m, fx$dtm, fx$partition, fx$baseline)
   expect_null(res$r2_macro)
-  expect_null(res$ztest)
 
   res_macro <- optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                              macro = TRUE, ztest = TRUE)
+                              macro = TRUE)
   expect_true(is.numeric(res_macro$r2_macro))
-  expect_named(res_macro$ztest, c("z", "pval", "se", "ci", "J"))
-  expect_true(res_macro$ztest$pval >= 0 && res_macro$ztest$pval <= 1)
 })
 
 test_that("precomputed null discrepancies reproduce the self-computed ones", {
@@ -138,20 +92,15 @@ test_that("precomputed null discrepancies reproduce the self-computed ones", {
 
   for (metric in names(impls)) {
     impl <- impls[[metric]]
-    args_common <- if (metric == "deviance") {
-      list(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE, reopt = "none")
-    } else {
-      list(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE, reopt = "none",
-           add_baseline_topic = TRUE)
-    }
+    args_common <- list(m, fx$dtm, fx$partition, fx$baseline, macro = TRUE)
 
     for (lvl in c("document", "word")) {
       null_disc <- OpTop:::.optop_index_null(fx$dtm, fx$partition, pi_row,
                                              metric = metric, level = lvl)
-      plain <- do.call(impl, c(args_common, list(level = lvl, block_size = NULL,
-                                                 ztest = FALSE)))
-      hoisted <- do.call(impl, c(args_common, list(level = lvl, block_size = NULL,
-                                                   ztest = FALSE,
+      plain <- do.call(impl, c(args_common, list(level = lvl,
+                                                 block_size = NULL)))
+      hoisted <- do.call(impl, c(args_common, list(level = lvl,
+                                                   block_size = NULL,
                                                    null_disc = null_disc)))
       expect_identical(hoisted, plain,
                        info = sprintf("metric=%s level=%s", metric, lvl))

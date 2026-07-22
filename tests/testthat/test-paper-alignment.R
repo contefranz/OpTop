@@ -204,46 +204,32 @@ test_that("partitions from OpTop < 0.13.0 fall back with a warning", {
   expect_no_warning(optop_index_se(m, fx$dtm, old_part, fx$baseline))
 })
 
-test_that("the non-paper features are deprecated", {
+test_that("the non-paper index arguments were removed in 0.16.0", {
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
 
-  lifecycle::expect_deprecated(
-    optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                   macro = TRUE, ztest = TRUE),
-    "ztest"
+  expect_error(
+    optop_index_se(m, fx$dtm, fx$partition, fx$baseline, ztest = TRUE),
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_se(m, fx$dtm, fx$partition, fx$baseline, reopt = "se"),
-    "reopt"
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
-    optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                   add_baseline_topic = TRUE),
-    "add_baseline_topic"
-  )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_chisq(m, fx$dtm, fx$partition, fx$baseline,
-                      macro = TRUE, ztest = TRUE),
-    "ztest"
+                      add_baseline_topic = TRUE),
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
-    optop_index_deviance(m, fx$dtm, fx$partition, fx$baseline,
-                         macro = TRUE, ztest = TRUE),
-    "ztest"
-  )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_table(fx$models[1:2], fx$dtm, metrics = "se",
                       partition = fx$partition, baseline = fx$baseline,
                       ztest = TRUE),
-    "ztest"
+    "unused argument"
   )
 })
 
 test_that("default c is 1 in partition and table", {
   expect_identical(formals(optop_make_partition)$c, 1)
   expect_identical(formals(optop_index_table)$c, 1)
-  expect_identical(formals(optop_index_se)$add_baseline_topic, FALSE)
-  expect_identical(formals(optop_index_chisq)$add_baseline_topic, FALSE)
-  expect_identical(formals(optop_index_table)$add_baseline_topic, FALSE)
 })
