@@ -38,8 +38,16 @@
 // Threading contract (package-wide): each document is owned by exactly one
 // thread and writes its own slots; no cross-thread floating-point
 // reductions, so results are bit-identical for any n_threads.
+//
+// Interruptibility: every kernel iterates its parallel loop inside serial
+// macro-chunks of PARTITION_CHUNK elements with an interrupt check between
+// chunks (the index/calibration kernels' pattern), so multi-minute passes
+// over tens of millions of documents stay responsive to the user. Chunking
+// regroups no arithmetic: per-element results are independent slots.
 
 namespace {
+
+constexpr R_xlen_t PARTITION_CHUNK = 65536;
 
 // Neumaier compensated accumulator: absolute error O(eps_machine) of the
 // total instead of O(n * eps_machine)
@@ -82,15 +90,19 @@ Rcpp::IntegerVector optop_partition_candidates_core(
     int* out = prefix_len.begin();
     if (n_threads < 1) n_threads = 1;
 
+    for (R_xlen_t c0 = 0; c0 < J; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(J, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < J; ++j) {
-        // first position with pi_sorted < tau_j on the descending array
-        const double* it = std::lower_bound(
-            ps, ps + W, tp[j],
-            [](const double a, const double b) { return a >= b; });
-        out[j] = static_cast<int>(it - ps);
+        for (R_xlen_t j = c0; j < c1; ++j) {
+            // first position with pi_sorted < tau_j on the descending array
+            const double* it = std::lower_bound(
+                ps, ps + W, tp[j],
+                [](const double a, const double b) { return a >= b; });
+            out[j] = static_cast<int>(it - ps);
+        }
     }
     return prefix_len;
 }
@@ -131,32 +143,36 @@ void optop_partition_pass_core(const arma::mat& theta,
     unsigned char* kp = RAW(keep);
     if (n_threads < 1) n_threads = 1;
 
+    for (R_xlen_t c0 = 0; c0 < n_slice; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(n_slice, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel num_threads(n_threads)
 #endif
-    {
-        std::vector<double> th(K);
+        {
+            std::vector<double> th(K);
 #ifdef _OPENMP
 #pragma omp for schedule(dynamic, 64)
 #endif
-        for (R_xlen_t j = 0; j < n_slice; ++j) {
-            const R_xlen_t g = j0 + j;
-            const R_xlen_t o0 = off_at(offp, g);
-            const R_xlen_t o1 = off_at(offp, g + 1);
-            if (o0 == o1) continue;
-            for (arma::uword k = 0; k < K; ++k) {
-                th[k] = theta.at(static_cast<arma::uword>(j), k);
-            }
-            const double tau_j = tp[g];
-            for (R_xlen_t t = o0; t < o1; ++t) {
-                if (!kp[t]) continue;
-                const double* ph = phi.colptr(
-                    static_cast<arma::uword>(ord[t - o0]));
-                double p = 0.0;
+            for (R_xlen_t j = c0; j < c1; ++j) {
+                const R_xlen_t g = j0 + j;
+                const R_xlen_t o0 = off_at(offp, g);
+                const R_xlen_t o1 = off_at(offp, g + 1);
+                if (o0 == o1) continue;
                 for (arma::uword k = 0; k < K; ++k) {
-                    p += th[k] * ph[k];
+                    th[k] = theta.at(static_cast<arma::uword>(j), k);
                 }
-                if (p < tau_j) kp[t] = 0;
+                const double tau_j = tp[g];
+                for (R_xlen_t t = o0; t < o1; ++t) {
+                    if (!kp[t]) continue;
+                    const double* ph = phi.colptr(
+                        static_cast<arma::uword>(ord[t - o0]));
+                    double p = 0.0;
+                    for (arma::uword k = 0; k < K; ++k) {
+                        p += th[k] * ph[k];
+                    }
+                    if (p < tau_j) kp[t] = 0;
+                }
             }
         }
     }
@@ -180,15 +196,19 @@ Rcpp::List optop_partition_compact_core(const Rcpp::NumericVector& cand_off,
 
     // pass 1: per-document survivor counts
     std::vector<R_xlen_t> counts(J, 0);
+    for (R_xlen_t c0 = 0; c0 < J; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(J, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < J; ++j) {
-        R_xlen_t n = 0;
-        for (R_xlen_t t = off_at(offp, j); t < off_at(offp, j + 1); ++t) {
-            n += kp[t] ? 1 : 0;
+        for (R_xlen_t j = c0; j < c1; ++j) {
+            R_xlen_t n = 0;
+            for (R_xlen_t t = off_at(offp, j); t < off_at(offp, j + 1); ++t) {
+                n += kp[t] ? 1 : 0;
+            }
+            counts[j] = n;
         }
-        counts[j] = n;
     }
 
     Rcpp::NumericVector nr_off(J + 1);
@@ -203,20 +223,24 @@ Rcpp::List optop_partition_compact_core(const Rcpp::NumericVector& cand_off,
     int* wp = nr_words.begin();
 
     // pass 2: fill and sort ascending per document
+    for (R_xlen_t c0 = 0; c0 < J; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(J, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic, 64) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < J; ++j) {
-        R_xlen_t dst = off_at(no, j);
-        const R_xlen_t first = dst;
-        const R_xlen_t o0 = off_at(offp, j);
-        const R_xlen_t o1 = off_at(offp, j + 1);
-        for (R_xlen_t t = o0; t < o1; ++t) {
-            if (kp[t]) {
-                wp[dst++] = ord[t - o0];
+        for (R_xlen_t j = c0; j < c1; ++j) {
+            R_xlen_t dst = off_at(no, j);
+            const R_xlen_t first = dst;
+            const R_xlen_t o0 = off_at(offp, j);
+            const R_xlen_t o1 = off_at(offp, j + 1);
+            for (R_xlen_t t = o0; t < o1; ++t) {
+                if (kp[t]) {
+                    wp[dst++] = ord[t - o0];
+                }
             }
+            std::sort(wp + first, wp + dst);
         }
-        std::sort(wp + first, wp + dst);
     }
 
     return Rcpp::List::create(Rcpp::Named("offsets") = nr_off,
@@ -252,35 +276,39 @@ Rcpp::NumericVector optop_partition_sums_core(const arma::mat& theta,
     double* out = sums.begin();
     if (n_threads < 1) n_threads = 1;
 
+    for (R_xlen_t c0 = 0; c0 < n_slice; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(n_slice, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel num_threads(n_threads)
 #endif
-    {
-        std::vector<double> th(K);
+        {
+            std::vector<double> th(K);
 #ifdef _OPENMP
 #pragma omp for schedule(dynamic, 64)
 #endif
-        for (R_xlen_t j = 0; j < n_slice; ++j) {
-            const R_xlen_t g = j0 + j;
-            const R_xlen_t o0 = off_at(offp, g);
-            const R_xlen_t o1 = off_at(offp, g + 1);
-            if (o0 == o1) {
-                out[j] = 0.0;
-                continue;
-            }
-            for (arma::uword k = 0; k < K; ++k) {
-                th[k] = theta.at(static_cast<arma::uword>(j), k);
-            }
-            KahanSum acc;
-            for (R_xlen_t t = o0; t < o1; ++t) {
-                const double* ph = phi.colptr(static_cast<arma::uword>(wp[t]));
-                double p = 0.0;
-                for (arma::uword k = 0; k < K; ++k) {
-                    p += th[k] * ph[k];
+            for (R_xlen_t j = c0; j < c1; ++j) {
+                const R_xlen_t g = j0 + j;
+                const R_xlen_t o0 = off_at(offp, g);
+                const R_xlen_t o1 = off_at(offp, g + 1);
+                if (o0 == o1) {
+                    out[j] = 0.0;
+                    continue;
                 }
-                acc.add(p);
+                for (arma::uword k = 0; k < K; ++k) {
+                    th[k] = theta.at(static_cast<arma::uword>(j), k);
+                }
+                KahanSum acc;
+                for (R_xlen_t t = o0; t < o1; ++t) {
+                    const double* ph = phi.colptr(static_cast<arma::uword>(wp[t]));
+                    double p = 0.0;
+                    for (arma::uword k = 0; k < K; ++k) {
+                        p += th[k] * ph[k];
+                    }
+                    acc.add(p);
+                }
+                out[j] = acc.value();
             }
-            out[j] = acc.value();
         }
     }
     return sums;
@@ -303,15 +331,19 @@ Rcpp::NumericVector optop_partition_pisum_core(const Rcpp::NumericVector& nr_off
     double* out = sums.begin();
     if (n_threads < 1) n_threads = 1;
 
+    for (R_xlen_t c0 = 0; c0 < J; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(J, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < J; ++j) {
-        KahanSum acc;
-        for (R_xlen_t t = off_at(offp, j); t < off_at(offp, j + 1); ++t) {
-            acc.add(pip[wp[t]]);
+        for (R_xlen_t j = c0; j < c1; ++j) {
+            KahanSum acc;
+            for (R_xlen_t t = off_at(offp, j); t < off_at(offp, j + 1); ++t) {
+                acc.add(pip[wp[t]]);
+            }
+            out[j] = acc.value();
         }
-        out[j] = acc.value();
     }
     return sums;
 }
@@ -346,29 +378,33 @@ Rcpp::NumericVector optop_partition_obsmass_core(const Rcpp::IntegerVector& Nt_p
     double* out = sums.begin();
     if (n_threads < 1) n_threads = 1;
 
+    for (R_xlen_t c0 = 0; c0 < n_slice; c0 += PARTITION_CHUNK) {
+        Rcpp::checkUserInterrupt();
+        const R_xlen_t c1 = std::min<R_xlen_t>(n_slice, c0 + PARTITION_CHUNK);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
-    for (R_xlen_t j = 0; j < n_slice; ++j) {
-        R_xlen_t a = off_at(offp, j0 + j);
-        const R_xlen_t a1 = off_at(offp, j0 + j + 1);
-        int b = pp[j];
-        const int b1 = pp[j + 1];
-        double s = 0.0;
-        while (a < a1 && b < b1) {
-            const int w_nr = wp[a];
-            const int w_ob = ip[b];
-            if (w_ob < w_nr) {
-                ++b;
-            } else if (w_ob > w_nr) {
-                ++a;
-            } else {
-                s += xp[b];
-                ++a;
-                ++b;
+        for (R_xlen_t j = c0; j < c1; ++j) {
+            R_xlen_t a = off_at(offp, j0 + j);
+            const R_xlen_t a1 = off_at(offp, j0 + j + 1);
+            int b = pp[j];
+            const int b1 = pp[j + 1];
+            double s = 0.0;
+            while (a < a1 && b < b1) {
+                const int w_nr = wp[a];
+                const int w_ob = ip[b];
+                if (w_ob < w_nr) {
+                    ++b;
+                } else if (w_ob > w_nr) {
+                    ++a;
+                } else {
+                    s += xp[b];
+                    ++a;
+                    ++b;
+                }
             }
+            out[j] = s;
         }
-        out[j] = s;
     }
     return sums;
 }
