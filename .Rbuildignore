@@ -3,6 +3,7 @@
 ^test\.R$
 ^\.DS_Store$
 \.Rhistory$
+^cran-comments\.md$
 ^vignettes/.*\.html$
 ^vignettes/.*_files$
 ^vignettes/articles$
@@ -15,3 +16,4 @@
 ^docs$
 ^pkgdown$
 ^LICENSE\.md$
+^Rplots\.pdf$

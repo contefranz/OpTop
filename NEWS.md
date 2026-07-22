@@ -1,3 +1,32 @@
+# OpTop 0.20.0
+
+The CRAN-clean release: no new statistics, every remaining rough edge a
+CRAN reviewer would touch, smoothed. The submission itself is deliberately
+deferred; see `dev/AUDIT.md` for the recorded strategy.
+
+### Documentation
+
+* **Every user-facing reference page now carries a runnable example.**
+  The flagship `optop_select()` example recovers the true K = 3 of a
+  simulated corpus from a grid holding the truth and two random
+  competitors; the index family contrasts the true model with a random
+  one on one harmonized support; partition, baseline, grid table, and
+  in-memory corpus examples execute on the same small fixture. Engine
+  fits (topicmodels VEM) appear only inside `\donttest`, and `\dontrun`
+  survives in exactly one place, the file-backed corpus reader.
+
+### Infrastructure
+
+* The check matrix runs with `--as-cran --run-donttest` permanently and
+  gains a monthly schedule, so dependency and R-devel drift surfaces
+  while the repository is dormant instead of at submission time.
+* Tests follow CRAN's 2-core policy: the standard thread-invariance
+  checks run 2 versus 1 threads, with a deeper 4-thread sweep behind
+  `skip_on_cran()` for CI.
+* DESCRIPTION polish (a real Description of the current package,
+  CRAN-style quoting, `Language: en-US`) and a `cran-comments.md`
+  skeleton, build-ignored.
+
 # OpTop 0.19.0
 
 The cross-fitting release, closing the last statistical gap between the
