@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # monthly drift check while the repo is dormant: upstream dependency
+    # and R-devel breakage should surface here, not at submission time
+    - cron: "0 6 1 * *"
 
 permissions: read-all
 
@@ -45,3 +49,4 @@ jobs:
       - uses: r-lib/actions/check-r-package@v2
         with:
           build_args: 'c("--no-manual")'
+          args: 'c("--no-manual", "--as-cran", "--run-donttest")'
