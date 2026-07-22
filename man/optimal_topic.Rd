@@ -80,7 +80,10 @@ cores (the per-document statistic loop and the bootstrap), default
 deterministic RNG stream and all reductions run in a fixed order, so
 \code{n_threads} only affects wall time. On builds without OpenMP (e.g. the
 default macOS toolchain) the value is ignored and the cores run
-single-threaded.}
+single-threaded. For thread and BLAS configuration on server machines
+(including the \code{mclapply} oversubscription trap), see the package
+website article
+\url{https://contefranz.github.io/OpTop/articles/very-large-corpora.html}.}
 
 \item{do_plot}{Logical; if \code{TRUE}, plot the standardized statistic versus
 topics with vertical and horizontal guides at the selected optimum and a

@@ -1,3 +1,65 @@
+# OpTop 0.17.0
+
+The kernel release: the compiled cores lose their last avoidable
+large-vocabulary costs, every long-running kernel becomes interruptible,
+and the package website gains an operations article for very large
+corpora. One numerical change, documented below.
+
+### Performance
+
+* **The collapsed-tail term of Test 1 no longer scans the vocabulary.**
+  For row-stochastic model weights and row-normalized proportions, the two
+  document totals in the tail term are identically 1, so the tail mass is
+  now the exact complement of the head mass. This removes an O(J x W) pass
+  per model, the dominant non-BLAS cost of `optimal_topic()` at large
+  vocabularies. Together with the boundary change below, the scale
+  benchmark's `optimal_topic()` rows run 2.2x to 2.6x faster than 0.15.0
+  (one million documents by 50k terms: 1617 s down to 739 s; see
+  `dev/benchmark-scale.md`).
+* **Envelope search boundary.** The head selection starts at a fixed 1024
+  candidates instead of a quarter of the vocabulary; the strict total
+  order of the tie-breaking comparator guarantees an identical envelope,
+  found with far less sorting at large W.
+* **Block buffers are allocated once per call**: the fitted-probability
+  block product (about 100 MB per 256-document block at W = 50k) now
+  writes into preallocated memory through no-copy views.
+* Doc-kernel gemv batching was evaluated and rejected: the merge-join
+  kernel runs three orders of magnitude below the pipeline bottleneck and
+  a gemv would only add a gather copy (`dev/benchmark-scale.md`).
+
+### Breaking changes
+
+* **One numerical change**: replacing the summed tail totals with their
+  exact complements shifts results by at most about 1e-12 relative on
+  adversarial fixtures (the exact constant replaces a W-term floating
+  sum, so the new convention is the more accurate one). All reference
+  tolerances hold unchanged; calibrated p-values can move by one
+  bootstrap resolution step when a replicate sits within ulps of the
+  observed statistic. The 0.15.0 Pearson min-bin note set the precedent
+  for this kind of documented bit-level change.
+
+### Robustness
+
+* **Every partition kernel is now interruptible**: the six kernels iterate
+  inside serial macro-chunks with an interrupt check between chunks, the
+  pattern the index and calibration kernels already used, so multi-minute
+  passes over tens of millions of documents can be cancelled from the
+  console. Chunking regroups no arithmetic; results are bit-identical.
+* The bootstrap core now errors explicitly past 2^31 - 1 documents per
+  shard (previously an undiagnosed narrowing), pointing at
+  `optop_corpus()`.
+
+### New features
+
+* `options(optop.cache_mb = )` configures the extracted-weights cache
+  budget of the evaluation loops (default 256 MB, both the plain and the
+  sharded path). Results never depend on the budget, only wall time.
+* New package website article **"OpTop at very large scale"**: sharding
+  with `optop_corpus()`, lazy model loaders, the cache budget, thread and
+  BLAS configuration (including the `mclapply` oversubscription trap), and
+  memory planning with reference timings. The article is website-only and
+  never builds on CRAN.
+
 # OpTop 0.16.0
 
 The teardown release on the road to v1.0.0: every deprecated surface leaves

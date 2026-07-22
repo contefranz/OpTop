@@ -62,7 +62,10 @@ if (getRversion() >= "2.15.1") {
 #'   deterministic RNG stream and all reductions run in a fixed order, so
 #'   `n_threads` only affects wall time. On builds without OpenMP (e.g. the
 #'   default macOS toolchain) the value is ignored and the cores run
-#'   single-threaded.
+#'   single-threaded. For thread and BLAS configuration on server machines
+#'   (including the `mclapply` oversubscription trap), see the package
+#'   website article
+#'   <https://contefranz.github.io/OpTop/articles/very-large-corpora.html>.
 #' @param do_plot Logical; if `TRUE`, plot the standardized statistic versus
 #'   topics with vertical and horizontal guides at the selected optimum and a
 #'   subtitle reporting the selection method, the selected \eqn{K}, and the

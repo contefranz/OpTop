@@ -32,7 +32,8 @@
 #'   memory usage. Only used when `level = "word"`.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   index engine (default `1L`). Results are identical for any value; only
-#'   wall time changes.
+#'   wall time changes. The package website article on very large corpora
+#'   covers thread and BLAS configuration at scale.
 #' @param min_null Nonnegative scalar; the null-discrepancy floor of the
 #'   document-level aggregation. Documents with baseline discrepancy
 #'   \eqn{D_j(\mathrm{null}) < \mathrm{min\_null}}{D_j(null) < min_null}

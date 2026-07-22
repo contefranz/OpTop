@@ -5,6 +5,7 @@
 \.Rhistory$
 ^vignettes/.*\.html$
 ^vignettes/.*_files$
+^vignettes/articles$
 ^\.github$
 ^\.claude$
 ^dev$

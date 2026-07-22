@@ -73,7 +73,8 @@ memory usage. Only used when \code{level = "word"}.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only
-wall time changes.}
+wall time changes. The package website article on very large corpora
+covers thread and BLAS configuration at scale.}
 
 \item{min_null}{Nonnegative scalar; the null-discrepancy floor of the
 document-level aggregation. Documents with baseline discrepancy

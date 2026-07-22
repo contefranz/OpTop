@@ -98,14 +98,31 @@ rows <- rbind(
 print(rows, row.names = FALSE)
 
 md <- c(
-  "# Scale benchmark (0.15.0 architecture)",
+  "# Scale benchmark (sparse-partition architecture)",
   "",
   sprintf("Threads: %d. Synthetic Zipf corpora; two toy models per grid.",
           n_threads),
   "A dense J x W rare mask at the largest size would need 200 GB;",
   "the sparse partition sizes below are the complete objects.",
   "",
-  knitr::kable(rows, format = "markdown")
+  knitr::kable(rows, format = "markdown"),
+  "",
+  "## Standing notes",
+  "",
+  "- 0.17.0 kernel changes: the envelope initial boundary is a fixed 1024",
+  "  and the collapsed-tail term uses exact complements (the former",
+  "  full-vocabulary totals were identically 1), removing the dominant",
+  "  non-BLAS cost of optimal_topic at large W. Against the 0.15.0 numbers",
+  "  (102.6 / 809.4 / 1616.8 s) the 0.17.0 optimal_topic rows measured 2.2x",
+  "  to 2.6x faster (40.0 / 357.2 / 739.4 s); micro_dev and k_pick were",
+  "  unchanged to all printed digits. The remaining cost is the per-model",
+  "  BLAS product over the vocabulary, inherent to the statistic.",
+  "- Doc-kernel gemv batching: evaluated and rejected. The merge-join doc",
+  "  kernel reads contiguous phi columns with a gathered theta row; a per-",
+  "  document gemv would first gather phi(:, NR_j) into a dense buffer,",
+  "  copying the same memory the dot products read, and the kernel runs at",
+  "  ~1 s per million documents, three orders below the pipeline bottleneck",
+  "  (optimal_topic). No batching is warranted."
 )
 writeLines(md, file.path("dev", "benchmark-scale.md"))
 cat("written dev/benchmark-scale.md\n")

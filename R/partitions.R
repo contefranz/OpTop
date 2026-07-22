@@ -27,7 +27,8 @@
 #'   \code{c} should be reported.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   kernels (default \code{1L}). Results are identical for any value; only
-#'   wall time changes.
+#'   wall time changes. The package website article on very large corpora
+#'   covers thread and BLAS configuration at scale.
 #' @param pi_glob Optional numeric vector of baseline word probabilities used
 #'   as the null member of the harmonized union and in the Pearson inclusion
 #'   rule. Default \code{NULL} computes the corpus distribution of
