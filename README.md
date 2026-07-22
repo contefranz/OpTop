@@ -18,7 +18,7 @@ within one model grid.
 ### What It Does
 
 - **Optimal K selection**  
-  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with optional bootstrap or moment-matched calibration of the p-values under the fitted-model null (v0.10.0). The legacy redundant-topic diagnostics (`topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`) are deprecated as of v0.9.8 and scheduled for removal.
+  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with optional bootstrap or moment-matched calibration of the p-values under the fitted-model null (v0.10.0). The pre-0.9.8 redundant-topic diagnostics were removed in v0.16.0 after a long deprecation.
 
 - **Model goodness-of-fit**  
   Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 

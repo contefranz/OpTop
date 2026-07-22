@@ -1,9 +1,6 @@
 if (getRversion() >= "2.15.1") {
-  # docid stays declared: agg_document_stability() (deprecated, untouched)
-  # calls it unqualified without importing it from quanteda
   utils::globalVariables(c("id_doc", "document", "check", "topics", ".",
-                           "pval", "OpTop", "raw", "df", "pval_chisq",
-                           "docid"))
+                           "pval", "OpTop", "raw", "df", "pval_chisq"))
 }
 #' Find the optimal number of topics from a pool of topic models
 #'

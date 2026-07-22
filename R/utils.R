@@ -1,20 +1,5 @@
 # model adapters ----
 
-#' Check for a topicmodels VEM fit
-#'
-#' Input gate used by the deprecated functions and by
-#' `optimal_topic(selection = "legacy")`: `TRUE` when `x` is an
-#' `LDA_VEM` object as returned by `topicmodels::LDA(method = "VEM")`.
-#'
-#' @param x Any object.
-#'
-#' @return A logical scalar.
-#'
-#' @keywords internal
-is.LDA_VEM <- function(x) {
-  "LDA_VEM" %in% class(x)
-}
-
 #' Extract document-topic and topic-word weights from a fitted model
 #'
 #' Adapter generic behind [optimal_topic()] and the discrepancy indices:
@@ -508,17 +493,3 @@ optop_align_dtm_to_models <- function(dtm, models) {
   }
   dtm2
 }
-
-
-# personal ggplot theme shared by the (deprecated) stability plots; not a
-# function, so documented here rather than via roxygen
-font_size <- 10
-theme_OpTop <- ggplot2::theme(
-  title = ggplot2::element_text(face = "bold", size = 8),
-  axis.title.x = ggplot2::element_text(face = "bold", size = font_size),
-  axis.title.y = ggplot2::element_text(face = "bold", size = font_size),
-  axis.text.x = ggplot2::element_text(size = font_size),
-  axis.text.y = ggplot2::element_text(size = font_size),
-  legend.text = ggplot2::element_text(size = 8),
-  legend.position = "bottom"
-)

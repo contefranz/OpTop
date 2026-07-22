@@ -56,13 +56,3 @@ optop_partition_obsmass_core <- function(Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc
     .Call(`_OpTop_optop_partition_obsmass_core`, Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads)
 }
 
-#' @keywords internal
-topic_match_core <- function(lda_models, best_pos, optimal_k, var_correction) {
-    .Call(`_OpTop_topic_match_core`, lda_models, best_pos, optimal_k, var_correction)
-}
-
-#' @keywords internal
-normalize_columns <- function(x) {
-    .Call(`_OpTop_normalize_columns`, x)
-}
-

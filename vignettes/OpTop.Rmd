@@ -1153,12 +1153,9 @@ the reference timings.
 
 ## Notes
 
-- The legacy stability helpers (`topic_stability()`, `agg_topic_stability()`,
-  `agg_document_stability()`, `get_topic_models()`) are deprecated and will
-  be removed in a future release; the discrepancy indices shown here are
-  their replacement.
-- `selection = "legacy"` reproduces the pre-0.9.9 computation exactly for
-  back-compatibility and is also deprecated.
+- The pre-0.9.8 stability helpers and the `selection = "legacy"` rule were
+  removed in 0.16.0 after a long deprecation; the discrepancy indices shown
+  here are their replacement.
 - The chi-square reference for Test 1 is asymptotic rather than exact; the
   calibrated p-values presented above (`calibrate = "bootstrap"` or
   `calibrate = "moment"`) address this, and `?optimal_topic` documents the
