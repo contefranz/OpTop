@@ -94,51 +94,51 @@ test_that("lazy model loaders reproduce in-memory grids", {
   expect_identical(r1$r2_doc, r2$r2_doc)
 })
 
-test_that("optimal_topic is shard-invariant, calibration included", {
+test_that("optop_select is shard-invariant, calibration included", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
   loaders <- lapply(fx$models, function(m) {
     force(m)
     function() m
   })
-  r_ref <- optimal_topic(fx$models, wp$wdfm, do_plot = FALSE,
-                         verbose = FALSE)
+  r_ref <- optop_select(fx$models, wp$wdfm, do_plot = FALSE,
+                        verbose = FALSE)
   corp1 <- optop_corpus(wp$wdfm)
   corp2 <- corpus_split(wp$wdfm, 12)
 
   # the one-shard corpus reproduces the plain path bit for bit
-  r1 <- optimal_topic(fx$models, corp1, do_plot = FALSE, verbose = FALSE)
+  r1 <- optop_select(fx$models, corp1, do_plot = FALSE, verbose = FALSE)
   expect_identical(as.data.frame(r_ref), as.data.frame(r1))
 
-  r2 <- optimal_topic(loaders, corp2, do_plot = FALSE, verbose = FALSE)
+  r2 <- optop_select(loaders, corp2, do_plot = FALSE, verbose = FALSE)
   expect_equal(r_ref$OpTop, r2$OpTop, tolerance = 1e-12)
   expect_identical(r_ref$df, r2$df)
 
   dl <- stats::setNames(as.numeric(Matrix::rowSums(fx$dtm)),
                         rownames(fx$counts))
-  cb_ref <- optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                          n_boot = 40, doc_lengths = dl, seed = 11,
-                          do_plot = FALSE, verbose = FALSE)
-  cb1 <- optimal_topic(fx$models, corp1, calibrate = "bootstrap",
-                       n_boot = 40, doc_lengths = dl, seed = 11,
-                       do_plot = FALSE, verbose = FALSE)
-  cb2 <- optimal_topic(loaders, corp2, calibrate = "bootstrap",
-                       n_boot = 40, doc_lengths = dl, seed = 11,
-                       do_plot = FALSE, verbose = FALSE)
+  cb_ref <- optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                         n_boot = 40, doc_lengths = dl, seed = 11,
+                         do_plot = FALSE, verbose = FALSE)
+  cb1 <- optop_select(fx$models, corp1, calibrate = "bootstrap",
+                      n_boot = 40, doc_lengths = dl, seed = 11,
+                      do_plot = FALSE, verbose = FALSE)
+  cb2 <- optop_select(loaders, corp2, calibrate = "bootstrap",
+                      n_boot = 40, doc_lengths = dl, seed = 11,
+                      do_plot = FALSE, verbose = FALSE)
   expect_identical(cb_ref$pval, cb1$pval)
   expect_equal(cb_ref$pval, cb2$pval, tolerance = 1e-12)
 
-  cm_ref <- optimal_topic(fx$models, wp$wdfm, calibrate = "moment",
-                          doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
-  cm2 <- optimal_topic(loaders, corp2, calibrate = "moment",
-                       doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
+  cm_ref <- optop_select(fx$models, wp$wdfm, calibrate = "moment",
+                         doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
+  cm2 <- optop_select(loaders, corp2, calibrate = "moment",
+                      doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
   expect_equal(cm_ref$OpTop, cm2$OpTop, tolerance = 1e-12)
 
   # corpus calibration requires named doc_lengths
   expect_error(
-    optimal_topic(fx$models, corp2, calibrate = "moment",
-                  doc_lengths = unname(dl), do_plot = FALSE,
-                  verbose = FALSE),
+    optop_select(fx$models, corp2, calibrate = "moment",
+                 doc_lengths = unname(dl), do_plot = FALSE,
+                 verbose = FALSE),
     "named doc_lengths"
   )
 })

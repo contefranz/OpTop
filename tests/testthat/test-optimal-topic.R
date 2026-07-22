@@ -1,4 +1,4 @@
-# Characterization tests for optimal_topic(): the C++ core must agree with the
+# Characterization tests for optop_select(): the C++ core must agree with the
 # naive per-document reference (helper-reference.R) for the Test 1 statistic
 # of Eq. (8) consumed by the "sequential" and "min" rules.
 
@@ -6,7 +6,7 @@
 # the unconditional document-drop alert is muffled where it is not the
 # behavior under test
 run_optimal_topic <- function(...) {
-  suppressMessages(optimal_topic(..., do_plot = FALSE))
+  suppressMessages(optop_select(..., do_plot = FALSE))
 }
 
 expect_matches_reference <- function(got, ref, info = NULL) {
@@ -18,7 +18,7 @@ expect_matches_reference <- function(got, ref, info = NULL) {
   expect_equal(got$pval, ref$pval, tolerance = 1e-10, info = info)
 }
 
-test_that("optimal_topic() matches the naive Eq. (8) reference", {
+test_that("optop_select() matches the naive Eq. (8) reference", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
@@ -57,27 +57,27 @@ test_that("the selection rules pick the expected K", {
   seq_pick <- ref$topic[ref$pval > 0.05][1]
   expect_false(is.na(seq_pick))
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = TRUE),
+    optop_select(fx$models, wp$wdfm, do_plot = FALSE, verbose = TRUE),
     sprintf("Optimal model has %d topics", seq_pick)
   )
 
   # min: global minimum of the standardized statistic
   min_pick <- ref$topic[which.min(ref$OpTop)]
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, selection = "min",
-                  do_plot = FALSE, verbose = TRUE),
+    optop_select(fx$models, wp$wdfm, selection = "min",
+                 do_plot = FALSE, verbose = TRUE),
     sprintf("Optimal model has %d topics", min_pick)
   )
 
   # alpha = 1 makes 'pval > alpha' unsatisfiable: the sequential rule must
   # warn and fall back to the global minimum
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, alpha = 1, do_plot = FALSE),
+    optop_select(fx$models, wp$wdfm, alpha = 1, do_plot = FALSE),
     "falling back to the global minimum"
   )
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, alpha = 1, do_plot = FALSE,
-                  verbose = TRUE),
+    optop_select(fx$models, wp$wdfm, alpha = 1, do_plot = FALSE,
+                 verbose = TRUE),
     sprintf("Optimal model has %d topics", min_pick)
   )
 })
@@ -97,7 +97,7 @@ test_that("documents missing from the models are dropped, order preserved", {
   expect_equal(got$pval, ref$pval, tolerance = 1e-10)
 })
 
-test_that("optimal_topic() is invariant to document order in the dfm", {
+test_that("optop_select() is invariant to document order in the dfm", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
@@ -113,14 +113,14 @@ test_that("optimal_topic() is invariant to document order in the dfm", {
   expect_equal(got$pval, ref$pval, tolerance = 1e-10)
 })
 
-test_that("optimal_topic() is chatty by default and silent with verbose = FALSE", {
+test_that("optop_select() is chatty by default and silent with verbose = FALSE", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_no_message(optimal_topic(fx$models, wp$wdfm, do_plot = FALSE,
+  expect_no_message(optop_select(fx$models, wp$wdfm, do_plot = FALSE,
                                   verbose = FALSE))
   expect_message(
-    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE),
+    optop_select(fx$models, wp$wdfm, do_plot = FALSE),
     "Optimal model has"
   )
 })
@@ -133,8 +133,29 @@ test_that("dropping unmatched documents is signalled even when silent", {
                                      scheme = "prop")
 
   expect_message(
-    optimal_topic(fx$models, wdfm_extra, do_plot = FALSE),
+    optop_select(fx$models, wdfm_extra, do_plot = FALSE),
     "Removed 1 document"
+  )
+})
+
+test_that("optimal_topic() delegates to optop_select() with a one-time note", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+
+  ref <- optop_select(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE)
+
+  # clear the session flag so the note is observable in this test
+  rm(list = ls(OpTop:::.optop_rename_env), envir = OpTop:::.optop_rename_env)
+  expect_message(
+    got <- optimal_topic(fx$models, wp$wdfm, do_plot = FALSE,
+                         verbose = FALSE),
+    "renamed optop_select"
+  )
+  expect_identical(got, ref)
+
+  # the note fires once per session; later calls are silent
+  expect_silent(
+    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE)
   )
 })
 
@@ -155,22 +176,22 @@ test_that("the optop.cache_mb option bounds the cache without changing results",
   expect_error(run_optimal_topic(fx$models, wp$wdfm), "optop.cache_mb")
 })
 
-test_that("optimal_topic() validates its inputs", {
+test_that("optop_select() validates its inputs", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_error(optimal_topic("not a list", wp$wdfm),
+  expect_error(optop_select("not a list", wp$wdfm),
                "must be a list")
-  expect_error(optimal_topic(fx$models[1L], wp$wdfm),
+  expect_error(optop_select(fx$models[1L], wp$wdfm),
                "multiple topic models")
-  expect_error(optimal_topic(list(1, 2), wp$wdfm),
+  expect_error(optop_select(list(1, 2), wp$wdfm),
                "unsupported topic model class")
-  expect_error(optimal_topic(fx$models, fx$counts),
+  expect_error(optop_select(fx$models, fx$counts),
                "must be a dfm")
-  expect_error(optimal_topic(fx$models, wp$wdfm, q = "a"),
+  expect_error(optop_select(fx$models, wp$wdfm, q = "a"),
                "q must be a numeric")
-  expect_error(optimal_topic(fx$models, wp$wdfm, alpha = "a"),
+  expect_error(optop_select(fx$models, wp$wdfm, alpha = "a"),
                "alpha must be a numeric")
-  expect_error(optimal_topic(fx$models, wp$wdfm, selection = "typo"),
+  expect_error(optop_select(fx$models, wp$wdfm, selection = "typo"),
                "should be one of")
 })

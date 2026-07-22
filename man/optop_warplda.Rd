@@ -28,7 +28,7 @@ the document-topic matrix to you, while the model object retains only
 the topic-word distribution. OpTop needs both halves together, so this
 helper bundles the model object and the matrix you kept into one light
 object accepted everywhere a fitted topic model is
-(\code{\link[=optimal_topic]{optimal_topic()}}, \code{\link[=optop_make_partition]{optop_make_partition()}}, the index family,
+(\code{\link[=optop_select]{optop_select()}}, \code{\link[=optop_make_partition]{optop_make_partition()}}, the index family,
 \code{\link[=optop_index_holdout]{optop_index_holdout()}} and \code{\link[=optop_moment_test]{optop_moment_test()}}).
 }
 \details{

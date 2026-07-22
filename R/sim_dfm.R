@@ -49,7 +49,7 @@
 #' sim
 #' quanteda::ntoken(sim)[1:5]
 #'
-#' @seealso [optimal_topic()], [optop_index_table()]
+#' @seealso [optop_select()], [optop_index_table()]
 #'
 #' @references
 #' Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal

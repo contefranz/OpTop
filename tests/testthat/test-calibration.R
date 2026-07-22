@@ -42,9 +42,9 @@ test_that("self-generated data: asymptotic p-values saturate, calibrated ones ar
   dl <- rowSums(fx$counts)
 
   got <- suppressMessages(
-    optimal_topic(fx$models, wdfm_null, calibrate = "bootstrap",
-                  n_boot = 500, doc_lengths = dl, seed = 11,
-                  do_plot = FALSE, verbose = FALSE)
+    optop_select(fx$models, wdfm_null, calibrate = "bootstrap",
+                 n_boot = 500, doc_lengths = dl, seed = 11,
+                 do_plot = FALSE, verbose = FALSE)
   )
 
   expect_identical(names(got),
@@ -67,9 +67,9 @@ test_that("bootstrap calibration is reproducible under a seed", {
 
   run <- function() {
     suppressMessages(
-      optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                    n_boot = 100, doc_lengths = dl, seed = 42,
-                    do_plot = FALSE, verbose = FALSE)
+      optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                   n_boot = 100, doc_lengths = dl, seed = 42,
+                   do_plot = FALSE, verbose = FALSE)
     )
   }
   expect_identical(run(), run())
@@ -100,8 +100,8 @@ test_that("moment calibration tracks the bootstrap on self-generated data", {
   dl <- rowSums(fx$counts)
 
   got_mm <- suppressMessages(
-    optimal_topic(fx$models, wdfm_null, calibrate = "moment",
-                  doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
+    optop_select(fx$models, wdfm_null, calibrate = "moment",
+                 doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
   )
   row_gen <- got_mm[got_mm$topic == gen@k]
   expect_gt(row_gen$pval, 0.001)
@@ -114,31 +114,31 @@ test_that("calibration validates its inputs", {
   dl <- rowSums(fx$counts)
 
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                  do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                 do_plot = FALSE, verbose = FALSE),
     "needs doc_lengths"
   )
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                  doc_lengths = unname(dl)[-1], do_plot = FALSE,
-                  verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                 doc_lengths = unname(dl)[-1], do_plot = FALSE,
+                 verbose = FALSE),
     "one entry per document"
   )
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                  doc_lengths = -dl, do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                 doc_lengths = -dl, do_plot = FALSE, verbose = FALSE),
     "positive"
   )
   dl_bad <- stats::setNames(dl, paste0("x", seq_along(dl)))
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                  doc_lengths = dl_bad, do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                 doc_lengths = dl_bad, do_plot = FALSE, verbose = FALSE),
     "missing entries"
   )
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                  doc_lengths = dl, n_boot = 5, do_plot = FALSE,
-                  verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                 doc_lengths = dl, n_boot = 5, do_plot = FALSE,
+                 verbose = FALSE),
     "n_boot"
   )
 })

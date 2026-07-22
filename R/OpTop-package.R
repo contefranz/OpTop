@@ -24,7 +24,7 @@
 #' The toolkit is organized around three questions:
 #'
 #' - **Which K is optimal?**
-#'   [optimal_topic()] evaluates a grid of fitted topic models with the Test 1
+#'   [optop_select()] evaluates a grid of fitted topic models with the Test 1
 #'   chi-square statistic of the paper (Equation 8) and selects the optimal
 #'   topic count with one of three rules: the sequential adequacy scan
 #'   (default), the global minimum of the standardized statistic (the rule of

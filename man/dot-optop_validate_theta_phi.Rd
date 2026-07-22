@@ -17,7 +17,7 @@ Invisibly \code{TRUE}; called for its side effect of stopping on a
 contract violation.
 }
 \description{
-Contract enforcement behind \code{\link[=optimal_topic]{optimal_topic()}}: checks that an
+Contract enforcement behind \code{\link[=optop_select]{optop_select()}}: checks that an
 \code{optop_as_theta_phi()} result is a coherent
 \code{list(theta, phi, K, docs, terms)} before any statistic is computed, so a
 broken or partial adapter fails with a clear message instead of

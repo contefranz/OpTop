@@ -9,8 +9,8 @@ test_that("the statistic table is bit-identical for any thread count", {
 
   run <- function(threads) {
     suppressMessages(
-      optimal_topic(fx$models, wp$wdfm, n_threads = threads,
-                    do_plot = FALSE, verbose = FALSE)
+      optop_select(fx$models, wp$wdfm, n_threads = threads,
+                   do_plot = FALSE, verbose = FALSE)
     )
   }
   expect_identical(run(4L), run(1L))
@@ -23,9 +23,9 @@ test_that("bootstrap calibration is bit-identical for any thread count", {
 
   run <- function(threads) {
     suppressMessages(
-      optimal_topic(fx$models, wp$wdfm, calibrate = "bootstrap",
-                    n_boot = 100, doc_lengths = dl, seed = 42,
-                    n_threads = threads, do_plot = FALSE, verbose = FALSE)
+      optop_select(fx$models, wp$wdfm, calibrate = "bootstrap",
+                   n_boot = 100, doc_lengths = dl, seed = 42,
+                   n_threads = threads, do_plot = FALSE, verbose = FALSE)
     )
   }
   expect_identical(run(4L), run(1L))
@@ -91,13 +91,13 @@ test_that("n_threads is validated and the OpenMP probe returns a flag", {
   wp <- optop_wprop_fixture(fx)
 
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, n_threads = 0,
-                  do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, n_threads = 0,
+                 do_plot = FALSE, verbose = FALSE),
     "n_threads"
   )
   expect_error(
-    optimal_topic(fx$models, wp$wdfm, n_threads = c(1, 2),
-                  do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wp$wdfm, n_threads = c(1, 2),
+                 do_plot = FALSE, verbose = FALSE),
     "n_threads"
   )
 

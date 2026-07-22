@@ -4,7 +4,7 @@
 # re-running this script regenerates it, but the full-corpus fits are unseeded,
 # so their exact numbers can shift). The held-out training grid below is seeded.
 # Only the small derived tables — plus the captured
-# console output of the optimal_topic() calls, used by the vignette as a
+# console output of the optop_select() calls, used by the vignette as a
 # fallback when the model cache is absent — ship with the package in
 # inst/extdata/optop-vignette-results.rds.
 #
@@ -77,20 +77,20 @@ capture_cli <- function(expr) {
 }
 
 seq_run <- capture_cli(
-  optimal_topic(topic_models = VEM_models,
-                weighted_dfm = weighted_dfm,
-                selection = "sequential",
-                q = 0.95,
-                alpha = alpha,
-                do_plot = FALSE)
+  optop_select(topic_models = VEM_models,
+               weighted_dfm = weighted_dfm,
+               selection = "sequential",
+               q = 0.95,
+               alpha = alpha,
+               do_plot = FALSE)
 )
 min_run <- capture_cli(
-  optimal_topic(topic_models = VEM_models,
-                weighted_dfm = weighted_dfm,
-                selection = "min",
-                q = 0.95,
-                alpha = alpha,
-                do_plot = FALSE)
+  optop_select(topic_models = VEM_models,
+               weighted_dfm = weighted_dfm,
+               selection = "min",
+               q = 0.95,
+               alpha = alpha,
+               do_plot = FALSE)
 )
 
 # calibrated runs: bootstrap (captured for the vignette, seeded so a live
@@ -99,25 +99,25 @@ doc_lens <- quanteda::ntoken(mydfm_sub)
 boot_seed <- 20260703
 cal_time <- system.time(
   cal_run <- capture_cli(
-    optimal_topic(topic_models = VEM_models,
-                  weighted_dfm = weighted_dfm,
-                  q = 0.95,
-                  alpha = alpha,
-                  calibrate = "bootstrap",
-                  n_boot = 200,
-                  doc_lengths = doc_lens,
-                  seed = boot_seed,
-                  do_plot = FALSE)
+    optop_select(topic_models = VEM_models,
+                 weighted_dfm = weighted_dfm,
+                 q = 0.95,
+                 alpha = alpha,
+                 calibrate = "bootstrap",
+                 n_boot = 200,
+                 doc_lengths = doc_lens,
+                 seed = boot_seed,
+                 do_plot = FALSE)
   )
 )
 mm_run <- capture_cli(
-  optimal_topic(topic_models = VEM_models,
-                weighted_dfm = weighted_dfm,
-                q = 0.95,
-                alpha = alpha,
-                calibrate = "moment",
-                doc_lengths = doc_lens,
-                do_plot = FALSE)
+  optop_select(topic_models = VEM_models,
+               weighted_dfm = weighted_dfm,
+               q = 0.95,
+               alpha = alpha,
+               calibrate = "moment",
+               doc_lengths = doc_lens,
+               do_plot = FALSE)
 )
 
 # the returned table does not depend on the selection rule, so one call per q
@@ -132,8 +132,8 @@ pick_min <- function(tab) tab$topic[which.min(tab$OpTop)]
 
 chi_by_q <- lapply(q_sweep, function(q) {
   if (q == 0.95) return(seq_run$value)
-  optimal_topic(VEM_models, weighted_dfm, q = q, alpha = alpha,
-                do_plot = FALSE, verbose = TRUE)
+  optop_select(VEM_models, weighted_dfm, q = q, alpha = alpha,
+               do_plot = FALSE, verbose = TRUE)
 })
 names(chi_by_q) <- sprintf("q%.2f", q_sweep)
 
@@ -270,6 +270,46 @@ m_star_train <- VEM_models_train[[which(K_grid_train == k_diagnostic)]]
 mt <- optop_moment_test(list(m_star_train), dtm_eval, dtm_train,
                         type = "strata", bins = 5)
 
+## Part 1d -- V-fold cross-fitting on the inaugural corpus --------------------
+
+# Coarse grid, V = 5: 25 VEM fits, cached per (fold signature, K) so the
+# bundle regenerates without refitting when folds and grid are unchanged.
+cf_seed <- 20260722
+K_grid_cf <- c(10L, 20L, 30L, 40L, 50L)
+cf_cache_path <- file.path("data-raw", "VEM_models_crossfit.rds")
+cf_cache <- if (file.exists(cf_cache_path)) {
+  readRDS(cf_cache_path)
+} else {
+  list()
+}
+fit_cf <- function(dtm_train, k) {
+  key <- paste(k, nrow(dtm_train), sum(dtm_train), sep = "|")
+  if (is.null(cf_cache[[key]])) {
+    message("  fitting crossfit VEM K = ", k, " on ", nrow(dtm_train),
+            " documents")
+    cf_cache[[key]] <<- topicmodels::LDA(
+      quanteda::convert(quanteda::as.dfm(as.matrix(dtm_train)),
+                        to = "topicmodels"),
+      k = k, method = "VEM", control = list(seed = 3000 + k)
+    )
+  }
+  cf_cache[[key]]
+}
+cf <- optop_crossfit(dtm_counts, K = K_grid_cf, fit_fun = fit_cf, V = 5,
+                     metrics = "deviance", c = 1, seed = cf_seed,
+                     verbose = TRUE)
+saveRDS(cf_cache, cf_cache_path)
+crossfit_demo <- list(
+  summary = cf$summary,
+  gains = cf$gains$deviance$gains,
+  k_hat = cf$gains$deviance$k_hat,
+  epsilon = cf$gains$deviance$epsilon,
+  V = cf$V,
+  K = cf$K,
+  seed = cf_seed,
+  n_docs = length(cf$folds)
+)
+
 ## Part 2 -- simulation with known true K -------------------------------------
 
 set.seed(20260703)
@@ -302,8 +342,8 @@ sim_models <- parallel::mclapply(
 )
 
 sim_weighted <- quanteda::dfm_weight(sim_corpus, scheme = "prop")
-sim_chi <- optimal_topic(sim_models, sim_weighted, q = 0.95, alpha = alpha,
-                         do_plot = FALSE, verbose = TRUE)
+sim_chi <- optop_select(sim_models, sim_weighted, q = 0.95, alpha = alpha,
+                        do_plot = FALSE, verbose = TRUE)
 sim_picks <- data.frame(
   sequential = pick_sequential(sim_chi, alpha),
   min = pick_min(sim_chi)
@@ -349,6 +389,7 @@ bundle <- list(
     word_snapshot = word_snapshot,
     null_floor = null_floor,
     warplda = warplda_demo,
+    crossfit = crossfit_demo,
     holdout = list(
       summary = ho$summary,
       gains = gt$gains,
