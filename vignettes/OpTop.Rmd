@@ -44,7 +44,7 @@ show_console <- function(x) {
 }
 
 # Precomputed results shipped with the package (a few KB): tables derived from
-# the full fitted grid, plus the captured console output of the optimal_topic()
+# the full fitted grid, plus the captured console output of the optop_select()
 # calls below.
 res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
                            package = "OpTop"))
@@ -53,6 +53,7 @@ idx_tab <- res$inaugural$index_table
 word_r2 <- res$inaugural$word_snapshot
 nf <- res$inaugural$null_floor
 warp <- res$inaugural$warplda
+cf_res <- res$inaugural$crossfit
 ho_res <- res$inaugural$holdout
 sim_chi <- res$sim$chi
 sim_picks <- res$sim$picks
@@ -60,7 +61,7 @@ sim_idx_tab <- res$sim$index_table
 
 # The fitted grid itself (~170 MB) cannot ship with the package and lives in
 # data-raw/ on the maintainer's machine. When it is available, every
-# optimal_topic() call below runs live; when it is not (e.g. R CMD check
+# optop_select() call below runs live; when it is not (e.g. R CMD check
 # re-building the vignette from the pruned tarball), the same objects are
 # assigned from the shipped results and the calls' captured console output is
 # replayed, so the rendered document is the same either way.
@@ -95,7 +96,7 @@ true number of topics is known.
 The only step performed offline is the estimation of the LDA models:
 `r length(meta$K_grid)` fits on the full corpus and
 `r length(ho_res$split$K_grid)` fits on the training split of the held-out
-analysis. Everything downstream, from every `optimal_topic()` call to each
+analysis. Everything downstream, from every `optop_select()` call to each
 table, figure, and number quoted in the text, is computed from those fits.
 
 ## Setting Up: Corpus, Grid, Models
@@ -208,7 +209,7 @@ in `df`, and the upper-tail p-value in `pval`.
 
 ## Running the Test
 
-`optimal_topic()` consumes *word proportions* (`weighted_dfm` above),
+`optop_select()` consumes *word proportions* (`weighted_dfm` above),
 while the discrepancy indices of the second part consume the raw *counts*;
 both objects are therefore required. With `verbose = TRUE`, the function
 reports its setup, its progress across the grid, the selected model together
@@ -216,12 +217,12 @@ with the rule that chose it, and the elapsed time:
 
 ```{r optimal-call-seq, eval = have_models}
 # Use the sequential approach
-chi_seq <- optimal_topic(topic_models = VEM_models,
-                         weighted_dfm = weighted_dfm,
-                         selection = "sequential",
-                         q = 0.95,
-                         alpha = 0.01,
-                         do_plot = FALSE)
+chi_seq <- optop_select(topic_models = VEM_models,
+                        weighted_dfm = weighted_dfm,
+                        selection = "sequential",
+                        q = 0.95,
+                        alpha = 0.01,
+                        do_plot = FALSE)
 ```
 
 ```{r optimal-call-seq-replay, eval = !have_models, echo = FALSE}
@@ -230,12 +231,12 @@ show_console(res$inaugural$console_seq)
 
 ```{r optimal-call-min, eval = have_models}
 # Use the global minimum approach
-chi_min <- optimal_topic(topic_models = VEM_models,
-                         weighted_dfm = weighted_dfm,
-                         selection = "min",
-                         q = 0.95,
-                         alpha = 0.01,
-                         do_plot = FALSE)
+chi_min <- optop_select(topic_models = VEM_models,
+                        weighted_dfm = weighted_dfm,
+                        selection = "min",
+                        q = 0.95,
+                        alpha = 0.01,
+                        do_plot = FALSE)
 ```
 
 ```{r optimal-call-min-replay, eval = !have_models, echo = FALSE}
@@ -244,7 +245,7 @@ show_console(res$inaugural$console_min)
 
 ## Reading the Result
 
-`optimal_topic()` returns a `data.table` with one row per model:
+`optop_select()` returns a `data.table` with one row per model:
 
 ```{r table-head}
 head(chi_seq)
@@ -289,7 +290,7 @@ model order: $K$ is increased until the first model the test *fails to
 reject* (`pval > alpha`). The rationale is parsimony: the rule selects the
 smallest $K$ that the data cannot distinguish from adequate. On this corpus
 the sequential rule selects **K = `r seq_pick`**. If every model were
-rejected, `optimal_topic()` would fall back to the global minimum with a
+rejected, `optop_select()` would fall back to the global minimum with a
 warning.
 
 **`selection = "min"`** reproduces the published case study: the optimum is
@@ -324,7 +325,7 @@ of essentially 0, and models at or below 1 receive p-values of essentially
 global minimum with a warning; when several models are accepted, it stops at
 the smallest, which may precede the minimum by a wide margin. This is a
 documented calibration caveat of the chi-square reference (see
-`?optimal_topic`): in saturated regimes the information is carried by the
+`?optop_select`): in saturated regimes the information is carried by the
 *shape* of the `OpTop` curve and by its minimum.
 
 Because the return value is a table, custom figures follow directly:
@@ -384,15 +385,15 @@ lengths $N_j$:
 ```{r optimal-call-cal, eval = have_models}
 doc_lens <- quanteda::ntoken(mydfm_sub)
 
-chi_cal <- optimal_topic(topic_models = VEM_models,
-                         weighted_dfm = weighted_dfm,
-                         q = 0.95,
-                         alpha = 0.01,
-                         calibrate = "bootstrap",
-                         n_boot = 200,
-                         doc_lengths = doc_lens,
-                         seed = 20260703,
-                         do_plot = FALSE)
+chi_cal <- optop_select(topic_models = VEM_models,
+                        weighted_dfm = weighted_dfm,
+                        q = 0.95,
+                        alpha = 0.01,
+                        calibrate = "bootstrap",
+                        n_boot = 200,
+                        doc_lengths = doc_lens,
+                        seed = 20260703,
+                        do_plot = FALSE)
 ```
 
 ```{r optimal-call-cal-replay, eval = !have_models, echo = FALSE}
@@ -460,13 +461,13 @@ that corrects the location and the scale of the reference, although not its
 higher moments:
 
 ```{r optimal-call-mm, eval = have_models}
-chi_cal_mm <- optimal_topic(topic_models = VEM_models,
-                            weighted_dfm = weighted_dfm,
-                            q = 0.95,
-                            alpha = 0.01,
-                            calibrate = "moment",
-                            doc_lengths = doc_lens,
-                            do_plot = FALSE)
+chi_cal_mm <- optop_select(topic_models = VEM_models,
+                           weighted_dfm = weighted_dfm,
+                           q = 0.95,
+                           alpha = 0.01,
+                           calibrate = "moment",
+                           doc_lengths = doc_lens,
+                           do_plot = FALSE)
 ```
 
 ```{r optimal-call-mm-replay, eval = !have_models, echo = FALSE}
@@ -543,7 +544,7 @@ quantify *maximal descriptive fit*. The two questions are distinct.
 
 One caveat applies to both calibrations: they hold the estimated `theta` and
 `phi` fixed, so they do not account for estimation noise in the LDA
-parameters themselves (see `?optimal_topic`).
+parameters themselves (see `?optop_select`).
 
 ## The Role of `q`
 
@@ -561,8 +562,8 @@ check:
 q_grid <- c(0.80, 0.90, 0.95, 0.99)
 
 chi_by_q <- lapply(q_grid, function(q) {
-  optimal_topic(VEM_models, weighted_dfm, q = q, alpha = alpha,
-                do_plot = FALSE)
+  optop_select(VEM_models, weighted_dfm, q = q, alpha = alpha,
+               do_plot = FALSE)
 })
 names(chi_by_q) <- sprintf("q%.2f", q_grid)
 ```
@@ -877,17 +878,61 @@ in probability mass: statistically unambiguous, yet small in practical
 terms. Reading the estimates alongside the p-values in this way separates
 detectable imbalances from practically negligible ones.
 
-Three caveats close the section. First, all confidence statements are
-conditional on the trained models: they quantify variability across
-evaluation documents, not across refits of the grid. Second, selecting K on
-this same evaluation sample, or choosing a diagnostic K from it when the
-adequacy rule does not select one, makes the reported diagnostic descriptive
-and subject to post-selection bias. A study that needs both a data-driven
-choice and clean inference at that choice should select on one evaluation
-sample and report on another, or rotate the roles of the splits. Third, a
-moment test that fails to reject does not certify the model class; it states
-that no systematic residual imbalance is detectable along the chosen
-instruments at the available sample size.
+Three caveats close the discussion of the single split. First, all
+confidence statements are conditional on the trained models: they quantify
+variability across evaluation documents, not across refits of the grid.
+Second, selecting K on this same evaluation sample, or choosing a
+diagnostic K from it when the adequacy rule does not select one, makes the
+reported diagnostic descriptive and subject to post-selection bias. A
+study that needs both a data-driven choice and clean inference at that
+choice should select on one evaluation sample and report on another, or
+rotate the roles of the splits. Third, a moment test that fails to reject
+does not certify the model class; it states that no systematic residual
+imbalance is detectable along the chosen instruments at the available
+sample size. The first two caveats have a standard remedy, and the package
+implements it.
+
+### V-Fold Cross-Fitting
+
+`optop_crossfit()` rotates the roles of the splits systematically
+(Appendix B of the paper): the documents are dealt into $V$
+length-balanced folds, the model grid is refit on each fold's complement
+by a fitting function you supply, and each fold is scored held-out
+through exactly the machinery of the previous subsections. Every document
+is thus evaluated once, by models that never saw it, and no single
+arbitrary split decides the analysis.
+
+```{r crossfit-call, eval = FALSE}
+fit_vem <- function(dtm_train, k) {
+  topicmodels::LDA(quanteda::convert(quanteda::as.dfm(as.matrix(dtm_train)),
+                                     to = "topicmodels"),
+                   k = k, method = "VEM", control = list(seed = 3000 + k))
+}
+cf <- optop_crossfit(dtm_counts, K = c(10, 20, 30, 40, 50),
+                     fit_fun = fit_vem, V = 5,
+                     metrics = "deviance", seed = 20260722)
+plot(cf)
+```
+
+Two things change relative to a single split. Point estimates pool the
+out-of-fold scores of the whole corpus, so no document is spent on
+training only. And the standard errors are **fold-replicate estimates**:
+the $V$ per-fold values of each quantity are treated as exchangeable
+replicates, so the reported uncertainty includes the fold-to-fold
+variation induced by refitting, precisely what the first caveat said a
+single split cannot see. The price is that only $V$ replicates feed each
+standard error, which is why small corpora get a warning about noisy
+fold means.
+
+On the inaugural corpus (`r cf_res$n_docs` speeches, V = `r cf_res$V`,
+coarse grid K = `r paste(cf_res$K, collapse = ", ")`), the cross-fitted
+adequacy rule at epsilon = `r cf_res$epsilon`
+`r if (is.finite(cf_res$k_hat)) sprintf("selects K = %d: the first step out of that grid point has a fold-replicate upper bound below the tolerance", cf_res$k_hat) else "selects no step: every adjacent gain keeps a fold-replicate upper bound above the tolerance on this coarse grid, and the Macro curve remains the working view"`.
+`r {k_show <- if (is.finite(cf_res$k_hat)) cf_res$k_hat else cf_res$summary$K[which.max(cf_res$summary$macro)]; sprintf("At K = %d the pooled Macro deviance index is %.4f with a fold-replicate standard error of %.4f.", k_show, cf_res$summary$macro[cf_res$summary$K == k_show], cf_res$summary$macro_se[cf_res$summary$K == k_show])}`
+The single-split analysis above worked on a finer grid, so the two
+analyses answer slightly different questions; what matters is that the
+cross-fitted result is reproducible under the fold seed and spends every
+document on both sides of the fence exactly once.
 
 ## A Simulation with Known Truth
 
@@ -922,9 +967,9 @@ sim_models <- parallel::mclapply(
   mc.cores = ncores
 )
 
-sim_chi <- optimal_topic(sim_models,
-                         quanteda::dfm_weight(sim_corpus, scheme = "prop"),
-                         q = 0.95, alpha = alpha, verbose = TRUE)
+sim_chi <- optop_select(sim_models,
+                        quanteda::dfm_weight(sim_corpus, scheme = "prop"),
+                        q = 0.95, alpha = alpha, verbose = TRUE)
 ```
 
 ```{r sim-plot}
@@ -1050,7 +1095,7 @@ bres[, config := fcase(
 )]
 ```
 
-Both computational stages of `optimal_topic()` are implemented in compiled
+Both computational stages of `optop_select()` are implemented in compiled
 code and, as of v0.12.0, run in parallel. The same design extends to the
 goodness-of-fit tools presented above, whose partition and index
 computations are evaluated by a fused compiled engine. This section
@@ -1275,7 +1320,7 @@ reference timings of the scale benchmark.
   here are their replacement.
 - The chi-square reference for Test 1 is asymptotic rather than exact; the
   calibrated p-values presented above (`calibrate = "bootstrap"` or
-  `calibrate = "moment"`) address this, and `?optimal_topic` documents the
+  `calibrate = "moment"`) address this, and `?optop_select` documents the
   underlying statistical reasoning.
 
 ## References

@@ -2,14 +2,19 @@ if (getRversion() >= "2.15.1") {
   utils::globalVariables(c("id_doc", "document", "check", "topic", "topics",
                            ".", "pval", "OpTop", "raw", "df", "pval_chisq"))
 }
-#' Find the optimal number of topics from a pool of topic models
+#' Select the optimal number of topics from a pool of topic models
 #'
 #' Identify the number of topics that best describes the corpus with the
 #' Test 1 statistic of Lewis and Grossetti (2022), a Pearson chi-square
 #' goodness-of-fit test on each document's word distribution. The routine
 #' evaluates each model of the grid, optionally calibrates the p-values under
 #' the fitted-model null, and selects the optimal topic count with one of
-#' three rules; see Details.
+#' two rules; see Details.
+#'
+#' `optop_select()` was called `optimal_topic()` before OpTop 0.19.0; the
+#' old name keeps working as an alias that notes the rename once per
+#' session and will not be removed before a 2.0. New code should use
+#' `optop_select()`, which follows the package-wide `optop_` naming.
 #'
 #' @param topic_models A list of fitted topic models spanning the candidate
 #'   values of \eqn{K}, one model per \eqn{K} (an unordered grid is sorted by
@@ -239,11 +244,11 @@ if (getRversion() >= "2.15.1") {
 #' @import data.table
 #' @export
 
-optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
-                          selection = c("sequential", "min"),
-                          calibrate = c("none", "bootstrap", "moment"),
-                          n_boot = 200L, doc_lengths = NULL, seed = NULL,
-                          n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
+optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
+                         selection = c("sequential", "min"),
+                         calibrate = c("none", "bootstrap", "moment"),
+                         n_boot = 200L, doc_lengths = NULL, seed = NULL,
+                         n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
 
   if (!is.list(topic_models)) {
     stop("topic_models must be a list of fitted topic models")
@@ -477,6 +482,39 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   .optop_ot_finish(Chi_K_rows, pval_cal, calibrating,
                    calibrate, n_boot, selection, alpha, do_plot,
                    verbose, tic)
+}
+
+#' @rdname optop_select
+#' @export
+optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
+                          selection = c("sequential", "min"),
+                          calibrate = c("none", "bootstrap", "moment"),
+                          n_boot = 200L, doc_lengths = NULL, seed = NULL,
+                          n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
+  .optop_rename_note()
+  optop_select(topic_models, weighted_dfm, q = q, alpha = alpha,
+               selection = selection, calibrate = calibrate,
+               n_boot = n_boot, doc_lengths = doc_lengths, seed = seed,
+               n_threads = n_threads, do_plot = do_plot, verbose = verbose)
+}
+
+# session-scoped flag so the alias notes the rename exactly once
+.optop_rename_env <- new.env(parent = emptyenv())
+
+#' Note the optimal_topic() rename once per session
+#'
+#' @return `NULL`, invisibly.
+#'
+#' @keywords internal
+.optop_rename_note <- function() {
+  if (is.null(.optop_rename_env$noted)) {
+    .optop_rename_env$noted <- TRUE
+    cli::cli_alert_info(paste(
+      "optimal_topic() was renamed optop_select() in OpTop 0.19.0; the",
+      "old name keeps working as an alias, update calls at your",
+      "convenience"))
+  }
+  invisible(NULL)
 }
 
 #' Resolve the extracted-weights cache budget in bytes

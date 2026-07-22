@@ -34,7 +34,7 @@
 #' is the total number of documents.
 #'
 #' Whether the corpus must hold counts or proportions is decided by the
-#' consumer, exactly as for a single matrix: [optimal_topic()] expects
+#' consumer, exactly as for a single matrix: [optop_select()] expects
 #' proportions, the partition, baseline, and index family expect counts.
 #'
 #' @return An object of class `optop_corpus`.
@@ -57,7 +57,7 @@
 #' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
 #' diagnostics for topic models. Working paper.
 #'
-#' @seealso [optimal_topic()], [optop_make_partition()],
+#' @seealso [optop_select()], [optop_make_partition()],
 #'   [optop_make_baseline()], [optop_index_holdout()]
 #'
 #' @export

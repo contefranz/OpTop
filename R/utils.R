@@ -2,7 +2,7 @@
 
 #' Extract document-topic and topic-word weights from a fitted model
 #'
-#' Adapter generic behind [optimal_topic()] and the discrepancy indices:
+#' Adapter generic behind [optop_select()] and the discrepancy indices:
 #' every supported topic-model class is reduced to the common contract
 #' `list(theta, phi, K, docs, terms)`, with \eqn{\theta}{theta} the
 #' \eqn{J \times K}{J x K} document-topic matrix (rows summing to 1),
@@ -186,7 +186,7 @@ optop_as_theta_phi.optop_theta_phi <- function(model) {
 #' object every OpTop tool accepts. This is the public entry point for
 #' engines the package has no adapter for: estimate the two matrices with
 #' any software, hand them to `optop_model()`, and the result flows through
-#' [optimal_topic()], the discrepancy indices, and the grid summaries like
+#' [optop_select()], the discrepancy indices, and the grid summaries like
 #' any supported fit.
 #'
 #' The contract is validated on construction: `theta` is documents by
@@ -240,7 +240,7 @@ optop_model <- function(theta, phi) {
 #' the topic-word distribution. OpTop needs both halves together, so this
 #' helper bundles the model object and the matrix you kept into one light
 #' object accepted everywhere a fitted topic model is
-#' ([optimal_topic()], [optop_make_partition()], the index family,
+#' ([optop_select()], [optop_make_partition()], the index family,
 #' [optop_index_holdout()] and [optop_moment_test()]).
 #'
 #' In practice the workflow is: fit with text2vec as usual, keep the matrix
@@ -451,7 +451,7 @@ optop_fold_in.optop_theta_phi <- function(model, newdata, ...) {
 
 #' Validate an adapter result
 #'
-#' Contract enforcement behind [optimal_topic()]: checks that an
+#' Contract enforcement behind [optop_select()]: checks that an
 #' `optop_as_theta_phi()` result is a coherent
 #' `list(theta, phi, K, docs, terms)` before any statistic is computed, so a
 #' broken or partial adapter fails with a clear message instead of

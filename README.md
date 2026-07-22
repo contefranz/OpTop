@@ -1,7 +1,7 @@
 [![lifecycle](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/contefranz/OpTop/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/contefranz/OpTop/graph/badge.svg)](https://app.codecov.io/gh/contefranz/OpTop)
-[![release](https://img.shields.io/badge/release-v0.18.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.18.0)
+[![release](https://img.shields.io/badge/release-v0.19.0-blue.svg)](https://github.com/contefranz/OpTop/releases/tag/v0.19.0)
 [![license](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://en.wikipedia.org/wiki/GNU_General_Public_License)
 
 # OpTop
@@ -18,7 +18,7 @@ within one model grid.
 ### What It Does
 
 - **Optimal K selection**  
-  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optimal_topic()`), with optional bootstrap or moment-matched calibration of the p-values under the fitted-model null (v0.10.0). The pre-0.9.8 redundant-topic diagnostics were removed in v0.16.0 after a long deprecation.
+  Fast, parametric tests based on a Pearson-type statistic identify the topic count that best describes the corpus (`optop_select()`), with optional bootstrap or moment-matched calibration of the p-values under the fitted-model null (v0.10.0). The pre-0.9.8 redundant-topic diagnostics were removed in v0.16.0 after a long deprecation.
 
 - **Model goodness-of-fit**  
   Regression-style indices for topic models (e.g., SE, Pearson-$\chi^2$, and deviance), summarized 
@@ -45,10 +45,10 @@ within one model grid.
   bit-identical to an unsharded run), and model grids too large for memory are
   supplied as loader functions materialized one model at a time.
   Core routines are implemented in C/C++ for large vocabularies and model grids. As of
-  v0.9.7, the `optimal_topic()` core works on blocked BLAS matrix products and pairs
+  v0.9.7, the `optop_select()` core works on blocked BLAS matrix products and pairs
   documents with the fitted models by identifier, so the dfm row order no longer matters.
   As of v0.12.0, both the Test 1 statistic and the bootstrap calibration are parallelized
-  with OpenMP, controlled by the `n_threads` argument of `optimal_topic()`. Results are
+  with OpenMP, controlled by the `n_threads` argument of `optop_select()`. Results are
   bit-identical for any thread count and reproducible under a seed; on toolchains without
   OpenMP support the routines run single-threaded. The bootstrap selects its sampling
   algorithm per document (alias-table token draws on wide envelopes, conditional-binomial
@@ -60,7 +60,7 @@ within one model grid.
   for the full simulation study.
 
 - **Current support and extensions**  
-  As of v0.11.0, `optimal_topic()` and the discrepancy indices accept, through the 
+  As of v0.11.0, `optop_select()` and the discrepancy indices accept, through the 
   internal adapter family (`optop_as_theta_phi()`), **topicmodels** fits (LDA with 
   VEM or Gibbs, and `CTM`), all three **seededlda** models (`textmodel_lda()`, 
   `textmodel_seededlda()`, `textmodel_seqlda()`), and **NLPstudio** fits 
@@ -157,13 +157,13 @@ VEM_models <- lapply(
 
 # 3) Choose the optimal K (selection: "sequential" adequacy scan by default,
 #    "min" for the paper's global-minimum rule; verbose = TRUE reports progress)
-res_opt   <- optimal_topic(topic_models = VEM_models, 
-                           weighted_dfm = weighted_dfm,
-                           q = 0.95, 
-                           alpha = 0.05, 
-                           selection = "sequential",
-                           do_plot = TRUE,
-                           verbose = TRUE)
+res_opt   <- optop_select(topic_models = VEM_models, 
+                          weighted_dfm = weighted_dfm,
+                          q = 0.95, 
+                          alpha = 0.05, 
+                          selection = "sequential",
+                          do_plot = TRUE,
+                          verbose = TRUE)
 
 # 4) Goodness-of-fit across K (use counts here)
 part      <- optop_make_partition(models = VEM_models, dtm = dfm_counts, c = 1)
@@ -190,7 +190,7 @@ corp <- optop_corpus(shard_files, reader = function(p) qs2::qs_read(p))
 # grids beyond memory: loader functions, materialized one model at a time
 loaders <- lapply(fit_files, function(f) { force(f); function() qs2::qs_read(f) })
 
-res  <- optimal_topic(loaders, corp_weighted, n_threads = 20)
+res  <- optop_select(loaders, corp_weighted, n_threads = 20)
 part <- optop_make_partition(loaders, corp, c = 1)
 ```
 

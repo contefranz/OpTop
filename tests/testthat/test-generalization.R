@@ -6,7 +6,7 @@
 # pairs.
 
 run_ot <- function(...) {
-  suppressMessages(optimal_topic(..., do_plot = FALSE))
+  suppressMessages(optop_select(..., do_plot = FALSE))
 }
 
 # an NLPstudio-shaped fit built by hand from any topicmodels model, so the
@@ -221,7 +221,7 @@ test_that("documents missing from any model are dropped everywhere", {
   grid <- list(nlp_wrap(fx$models[[1L]]), partial, nlp_wrap(fx$models[[3L]]))
 
   expect_message(
-    optimal_topic(grid, wp$wdfm, do_plot = FALSE, verbose = FALSE),
+    optop_select(grid, wp$wdfm, do_plot = FALSE, verbose = FALSE),
     "Removed 1 document"
   )
 
@@ -257,7 +257,7 @@ test_that("feature order is realigned, other mismatches are errors", {
   perm <- sample(fx$W)
   wdfm_perm <- wp$wdfm[, perm]
   expect_message(
-    optimal_topic(fx$models, wdfm_perm, do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, wdfm_perm, do_plot = FALSE, verbose = FALSE),
     "Reordered the features"
   )
   expect_equal(run_ot(fx$models, wdfm_perm),
@@ -280,7 +280,7 @@ test_that("the grid is sorted by K and duplicated K is an error", {
   wp <- optop_wprop_fixture(fx)
 
   expect_message(
-    optimal_topic(rev(fx$models), wp$wdfm, do_plot = FALSE, verbose = FALSE),
+    optop_select(rev(fx$models), wp$wdfm, do_plot = FALSE, verbose = FALSE),
     "Reordered topic_models"
   )
   got <- run_ot(rev(fx$models), wp$wdfm)
@@ -297,8 +297,8 @@ test_that("a non-proportion dfm is flagged", {
   # selection = "min" keeps the sequential fallback alert out of the way:
   # a counts dfm rejects everywhere, which is exactly the point of the flag
   expect_message(
-    optimal_topic(fx$models, quanteda::as.dfm(fx$counts), selection = "min",
-                  do_plot = FALSE, verbose = FALSE),
+    optop_select(fx$models, quanteda::as.dfm(fx$counts), selection = "min",
+                 do_plot = FALSE, verbose = FALSE),
     "rows do not sum to 1"
   )
 })

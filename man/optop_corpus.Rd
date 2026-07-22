@@ -48,7 +48,7 @@ memory is one shard plus the per-document result vectors, whose length
 is the total number of documents.
 
 Whether the corpus must hold counts or proportions is decided by the
-consumer, exactly as for a single matrix: \code{\link[=optimal_topic]{optimal_topic()}} expects
+consumer, exactly as for a single matrix: \code{\link[=optop_select]{optop_select()}} expects
 proportions, the partition, baseline, and index family expect counts.
 }
 \examples{
@@ -71,6 +71,6 @@ Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
 diagnostics for topic models. Working paper.
 }
 \seealso{
-\code{\link[=optimal_topic]{optimal_topic()}}, \code{\link[=optop_make_partition]{optop_make_partition()}},
+\code{\link[=optop_select]{optop_select()}}, \code{\link[=optop_make_partition]{optop_make_partition()}},
 \code{\link[=optop_make_baseline]{optop_make_baseline()}}, \code{\link[=optop_index_holdout]{optop_index_holdout()}}
 }

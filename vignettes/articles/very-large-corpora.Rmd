@@ -84,9 +84,9 @@ models <- lapply(sprintf("fits/lda-k%02d.qs2", seq(10, 80, by = 10)),
                    function() qs2::qs_read(path)
                  })
 
-test1 <- optimal_topic(models, corpus,
-                       doc_lengths = doc_lengths,  # named, see below
-                       n_threads = 16)
+test1 <- optop_select(models, corpus,
+                      doc_lengths = doc_lengths,  # named, see below
+                      n_threads = 16)
 ```
 
 Extracted weight matrices are cached across shards while the whole grid
@@ -115,10 +115,10 @@ doc_lengths <- unlist(lapply(shard_paths, function(p) {
 }))
 
 wprop <- optop_corpus(weighted_paths, reader = function(p) qs2::qs_read(p))
-test1 <- optimal_topic(models, wprop,
-                       calibrate = "bootstrap", n_boot = 200,
-                       doc_lengths = doc_lengths, seed = 42,
-                       n_threads = 16)
+test1 <- optop_select(models, wprop,
+                      calibrate = "bootstrap", n_boot = 200,
+                      doc_lengths = doc_lengths, seed = 42,
+                      n_threads = 16)
 
 # goodness-of-fit indices on the counts corpus
 counts <- optop_corpus(shard_paths, reader = function(p) qs2::qs_read(p))
@@ -187,7 +187,8 @@ the NEWS entries of 0.15.0 and 0.17.0 for the architecture behind them):
 | 5e+05| 50000| 24990158|         0.6|        226.4|         0.4|           357.2|
 | 1e+06| 50000| 42378862|         0.9|        400.3|         0.8|           739.4|
 
-The `optimal_topic` column is dominated by the per-model BLAS product over
-the full vocabulary, which is inherent to the statistic; the partition and
-the discrepancy indices run in seconds at a million documents because they
-scale with the token count, not with $J \times W$.
+The `optimal_topic_s` column, the runtime of `optop_select()`, is
+dominated by the per-model BLAS product over the full vocabulary, which is
+inherent to the statistic; the partition and the discrepancy indices run
+in seconds at a million documents because they scale with the token count,
+not with $J \times W$.

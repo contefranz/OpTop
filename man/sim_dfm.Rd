@@ -71,5 +71,5 @@ topic model identification. \emph{Journal of Machine Learning Research},
 23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
 }
 \seealso{
-\code{\link[=optimal_topic]{optimal_topic()}}, \code{\link[=optop_index_table]{optop_index_table()}}
+\code{\link[=optop_select]{optop_select()}}, \code{\link[=optop_index_table]{optop_index_table()}}
 }

@@ -25,7 +25,7 @@ Wrap a document-topic matrix and a topic-word matrix into the model
 object every OpTop tool accepts. This is the public entry point for
 engines the package has no adapter for: estimate the two matrices with
 any software, hand them to \code{optop_model()}, and the result flows through
-\code{\link[=optimal_topic]{optimal_topic()}}, the discrepancy indices, and the grid summaries like
+\code{\link[=optop_select]{optop_select()}}, the discrepancy indices, and the grid summaries like
 any supported fit.
 }
 \details{

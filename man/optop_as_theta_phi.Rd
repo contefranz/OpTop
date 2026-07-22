@@ -50,7 +50,7 @@ A list with elements \code{theta}, \code{phi}, \code{K}, \code{docs} and \code{t
 described above.
 }
 \description{
-Adapter generic behind \code{\link[=optimal_topic]{optimal_topic()}} and the discrepancy indices:
+Adapter generic behind \code{\link[=optop_select]{optop_select()}} and the discrepancy indices:
 every supported topic-model class is reduced to the common contract
 \code{list(theta, phi, K, docs, terms)}, with \eqn{\theta}{theta} the
 \eqn{J \times K}{J x K} document-topic matrix (rows summing to 1),

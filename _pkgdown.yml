@@ -31,7 +31,7 @@ reference:
   - title: Optimal number of topics
     desc: Parametric selection of the topic count that best describes the corpus.
     contents:
-      - optimal_topic
+      - optop_select
 
   - title: Goodness-of-fit indices
     desc: Regression-style discrepancy indices and grid summaries for topic-model fits.
@@ -52,6 +52,7 @@ reference:
     contents:
       - optop_index_holdout
       - optop_gain_table
+      - optop_crossfit
       - optop_moment_test
 
   - title: Utilities
@@ -70,3 +71,4 @@ reference:
     contents:
       - optop-print
       - plot.optop_holdout
+      - optop-crossfit-methods

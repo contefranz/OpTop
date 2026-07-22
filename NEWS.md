@@ -1,3 +1,43 @@
+# OpTop 0.19.0
+
+The cross-fitting release, closing the last statistical gap between the
+package and the paper. The API surface is now frozen for 1.0.0.
+
+### Renamed
+
+* **`optimal_topic()` is now `optop_select()`.** The last function outside
+  the package-wide `optop_` naming joins it before the 1.0.0 freeze, so
+  typing `optop_` completes the entire API. The old name keeps working as
+  a delegating alias that notes the rename once per session and will not
+  be removed before a 2.0; scripts need no immediate change.
+
+### New features
+
+* **`optop_crossfit(dtm, K, fit_fun, V = 5, ...)`** implements the V-fold
+  cross-fitted indices of the paper's Appendix B. The documents are dealt
+  into length-balanced folds, the model grid is refit on each fold's
+  complement by a user-supplied fitting function, and every fold is
+  scored held-out through the existing machinery, so each document is
+  evaluated exactly once by models that never saw it. Point estimates
+  pool the out-of-fold discrepancies at the document level under the
+  usual floor and stabilization conventions; standard errors for Macro,
+  Micro, the Micro-Macro gap, and the adjacent gains are fold-replicate
+  (cluster) estimates over the V folds, so the reported uncertainty
+  includes the fold-to-fold variation induced by refitting. The
+  epsilon-adequacy rule runs on the cross-fitted gains with these
+  bounds. Any engine with an adapter and a fold-in path qualifies;
+  sharded corpora are out of scope by design.
+* `print()` and `plot()` methods for the cross-fitted result, sharing
+  the holdout views: the pooled Macro curve with its fold-replicate
+  confidence band and the cross-fitted adjacent-gains view.
+
+### Documentation
+
+* New vignette subsection **"V-Fold Cross-Fitting"** inside the held-out
+  section, picking up exactly the two caveats of the single split (refit
+  variability and split arbitrariness) and demonstrating the remedy on
+  the inaugural corpus with a cached five-fold refit.
+
 # OpTop 0.18.0
 
 The interface release: everything a user touches at the console gets a
