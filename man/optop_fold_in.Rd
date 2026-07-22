@@ -7,6 +7,7 @@
 \alias{optop_fold_in.optop_warplda}
 \alias{optop_fold_in.nlp_topic_fit}
 \alias{optop_fold_in.default}
+\alias{optop_fold_in.optop_theta_phi}
 \title{Fold document-topic weights in for new documents}
 \usage{
 optop_fold_in(model, newdata, ...)
@@ -20,6 +21,8 @@ optop_fold_in(model, newdata, ...)
 \method{optop_fold_in}{nlp_topic_fit}(model, newdata, ...)
 
 \method{optop_fold_in}{default}(model, newdata, ...)
+
+\method{optop_fold_in}{optop_theta_phi}(model, newdata, ...)
 }
 \arguments{
 \item{model}{A fitted topic model supported by \code{\link[=optop_as_theta_phi]{optop_as_theta_phi()}},
@@ -93,6 +96,10 @@ fit stored in \code{model_object}.
 
 \item \code{optop_fold_in(default)}: Unsupported classes fail with the list of
 engines that support fold-in.
+
+\item \code{optop_fold_in(optop_theta_phi)}: Bare containers built by \code{\link[=optop_model]{optop_model()}} carry
+no fitted engine, so new documents cannot be folded in: held-out
+evaluation needs the engine's own object.
 
 }}
 \references{
