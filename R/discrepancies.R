@@ -12,7 +12,7 @@
 #'
 #' @param model A single fitted `topicmodels::LDA` model (VEM or Gibbs), or
 #'   a loader function returning one (materialized on demand).
-#' @param dtm A counts document–term matrix (documents × terms). Use `Matrix::dgCMatrix`
+#' @param dtm A counts document-term matrix (documents x terms). Use `Matrix::dgCMatrix`
 #'   or a `quanteda::dfm` that represents raw counts (not weighted), or an
 #'   [optop_corpus()] of count shards for corpora past the size of a single
 #'   matrix (shards stream one at a time; per-document results are
@@ -46,7 +46,8 @@
 #' **Harmonized support.** For each document, rare words (as determined by
 #' [`optop_make_partition()`], whose union includes the no-topics baseline)
 #' are collapsed into a single "min" bin. Document-level indices are then
-#' evaluated on `{non-rare terms} ∪ {min}`, so that changes in the index
+#' evaluated on the union of the non-rare terms and the min bin, so that
+#' changes in the index
 #' across \eqn{K} reflect changes in model fit, not changes in binning.
 #' Because the harmonized set is a union over the whole model grid, the
 #' reported value at any fixed \eqn{K} depends on the pair (grid, `c`):
@@ -70,7 +71,7 @@
 #'
 #' **Alignment requirements.** The following must share the same vocabulary and column
 #' order: the `dtm` passed to the index, the DTM used for `partition` and `baseline`, and the
-#' model's term–topic matrix. If they differ, align with `optop_align_dtm_to_models()` and
+#' model's term-topic matrix. If they differ, align with `optop_align_dtm_to_models()` and
 #' recompute `partition` and `baseline`.
 #'
 #' **Counts only.** SE/chi-square/deviance indices are defined for multinomial counts.
@@ -85,7 +86,7 @@
 #' non-degenerate documents
 #' \eqn{J_+ = \{j : D_j(\mathrm{null}) \ge \mathrm{min\_null}\}}{J+ = {j: D_j(null) >= min_null}}
 #' only, and excluded documents carry an `NA` document-level index. The
-#' Micro–Macro gap is itself diagnostic: it equals the covariance between
+#' Micro-Macro gap is itself diagnostic: it equals the covariance between
 #' document-level fit and baseline discrepancy (normalized by the mean
 #' baseline discrepancy), so a positive gap indicates that fit concentrates
 #' in high-discrepancy (often long or atypical) documents. The returned
@@ -152,55 +153,48 @@
 #' - `metric`: one of `"se"`, `"chisq"`, `"deviance"`.
 #'
 #' @examples
-#' \dontrun{
-#' 
-#' library(quanteda)
-#' library(OpTop)
-#' 
-#' K_grid = 2:10
-#' 
-#' # Tokenize the corpus
-#' toks <- data_corpus_inaugural %>% 
-#'   tokens(remove_punct = TRUE, 
-#'          remove_symbols = TRUE, 
-#'          remove_numbers = TRUE) %>% 
-#'   tokens_tolower() %>% 
-#'   tokens_remove(stopwords())
-#'   
-#' # Create the document-feature-matrix
-#' mydfm <- dfm(toks)
-#' 
-#' # Estimate topic models via VEM
-#' VEM_models <- lapply(
-#'   K_grid, function(k) {
-#'     topicmodels::LDA(x = mydfm, k = k)
-#'   }
-#' )
-#'
-#' # Same DTM used at fit and evaluation --> no separate alignment here
-#' partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
-#' baseline  <- optop_make_baseline(dtm = mydfm)
-#'
-#' # Choose model with k = 10
-#' # SE
-#' res_se <- optop_index_se(
-#'   model     = VEM_models[[9]],
-#'   dtm       = mydfm,
-#'   partition = partition,
-#'   baseline  = baseline
-#' )
-#' res_se$r2
-#'
-#' # Chi-square
-#' res_x2 <- optop_index_chisq(VEM_models[[9]], mydfm, partition, baseline)
-#'
-#' # Deviance
-#' res_dev <- optop_index_deviance(VEM_models[[9]], mydfm, partition, baseline)
+#' # a corpus with known truth: the true model against a random competitor
+#' rdirich <- function(n, k) {
+#'   g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+#'   g / rowSums(g)
 #' }
+#' set.seed(1)
+#' theta <- rdirich(40, 3)
+#' rownames(theta) <- sprintf("d%02d", 1:40)
+#' phi <- rdirich(3, 60)
+#' colnames(phi) <- sprintf("w%02d", 1:60)
+#' counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+#'
+#' truth <- optop_model(theta, phi)
+#' rand <- local({
+#'   th <- rdirich(40, 3); rownames(th) <- rownames(theta)
+#'   ph <- rdirich(3, 60); colnames(ph) <- colnames(phi)
+#'   optop_model(th, ph)
+#' })
+#'
+#' # the harmonized support is shared by the whole grid
+#' partition <- optop_make_partition(list(truth, rand), counts, c = 1)
+#' baseline <- optop_make_baseline(counts)
+#'
+#' res_truth <- optop_index_deviance(truth, counts, partition, baseline,
+#'                                   macro = TRUE)
+#' res_rand <- optop_index_deviance(rand, counts, partition, baseline,
+#'                                  macro = TRUE)
+#' res_truth
+#' c(truth = res_truth$r2, random = res_rand$r2)
+#'
+#' # the Pearson and squared-error variants share the interface
+#' res_x2 <- optop_index_chisq(truth, counts, partition, baseline)
+#' res_se <- optop_index_se(truth, counts, partition, baseline)
+#'
+#' # word-level diagnostic: which words does the model capture best?
+#' word <- optop_index_deviance(truth, counts, partition, baseline,
+#'                              level = "word")
+#' head(sort(word$r2_word, decreasing = TRUE), 3)
 #'
 #' @seealso
-#' [`optop_make_partition()`], [`optop_make_baseline()`], [`optop_index_table()`];
-#' internal helper: `optop_align_dtm_to_models()`.
+#' [`optop_make_partition()`], [`optop_make_baseline()`],
+#' [`optop_index_table()`], [`optop_align_dtm_to_models()`].
 #'
 #' @references
 #' Lewis, C. M. and Grossetti, F. (2026). Goodness-of-fit indices and
@@ -406,7 +400,7 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param models A non-empty `list` of fitted `topicmodels::LDA` models (VEM or Gibbs),
 #'   typically a grid over different \eqn{K}; elements may be loader
 #'   functions returning a fit, materialized one at a time.
-#' @param dtm A counts document–term matrix (documents × terms). Use
+#' @param dtm A counts document-term matrix (documents x terms). Use
 #'   `Matrix::dgCMatrix` or a `quanteda::dfm` that represents raw counts
 #'   (not weighted), or an [optop_corpus()] of count shards.
 #' @param metrics Character vector selecting which indices to compute. Any subset of
@@ -462,50 +456,36 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #'   and `baseline <- optop_make_baseline(...)` once and pass them in.
 #'
 #' @examples
-#' \dontrun{
-#' library(quanteda)
-#' library(OpTop)
-#' 
-#' K_grid = 2:10
-#' 
-#' # Tokenize the corpus
-#' toks <- data_corpus_inaugural %>% 
-#'   tokens(remove_punct = TRUE, 
-#'          remove_symbols = TRUE, 
-#'          remove_numbers = TRUE) %>% 
-#'   tokens_tolower() %>% 
-#'   tokens_remove(stopwords())
-#'   
-#' # Create the document-feature-matrix
-#' mydfm <- dfm(toks)
-#' 
-#' # Estimate topic models via VEM
-#' VEM_models <- lapply(
-#'   K_grid, function(k) {
-#'     topicmodels::LDA(x = mydfm, k = k)
-#'   }
-#' )
-#'
-#' # 1) Quick run: compute partition/baseline internally
-#' tab <- optop_index_table(
-#'   models   = VEM_models,
-#'   dtm      = mydfm,
-#'   metrics  = c("se","deviance"),
-#'   macro    = TRUE
-#' )
-#'
-#' # 2) Faster repeated runs: precompute and reuse partition/baseline
-#' part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
-#' base <- optop_make_baseline(dtm = mydfm)
-#' tab2 <- optop_index_table(
-#'   models    = VEM_models,
-#'   dtm       = mydfm,
-#'   metrics   = c("se","chisq","deviance"),
-#'   macro     = FALSE,
-#'   partition = part,
-#'   baseline  = base
-#' )
+#' # a small grid over a simulated corpus with known truth at K = 3
+#' rdirich <- function(n, k) {
+#'   g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+#'   g / rowSums(g)
 #' }
+#' set.seed(1)
+#' theta <- rdirich(40, 3)
+#' rownames(theta) <- sprintf("d%02d", 1:40)
+#' phi <- rdirich(3, 60)
+#' colnames(phi) <- sprintf("w%02d", 1:60)
+#' counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+#'
+#' models <- lapply(c(2, 3, 4), function(k) {
+#'   if (k == 3) return(optop_model(theta, phi))
+#'   th <- rdirich(40, k); rownames(th) <- rownames(theta)
+#'   ph <- rdirich(k, 60); colnames(ph) <- colnames(phi)
+#'   optop_model(th, ph)
+#' })
+#'
+#' # 1) quick run: partition and baseline computed internally
+#' tab <- optop_index_table(models, counts, metrics = c("se", "deviance"),
+#'                          macro = TRUE)
+#' tab
+#'
+#' # 2) faster repeated runs: precompute and reuse partition/baseline
+#' part <- optop_make_partition(models, counts, c = 1)
+#' base <- optop_make_baseline(counts)
+#' tab2 <- optop_index_table(models, counts,
+#'                           metrics = c("se", "chisq", "deviance"),
+#'                           partition = part, baseline = base)
 #'
 #' @seealso
 #' [`optop_index()`], [`optop_make_partition()`], [`optop_make_baseline()`]

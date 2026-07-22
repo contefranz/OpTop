@@ -1,16 +1,26 @@
 Package: OpTop
 Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for Topic Models
-Version: 0.19.0
-Authors@R: c( 
-    person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
-    role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
+Version: 0.20.0
+Authors@R: c(
+    person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it",
+    role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")),
     person("Craig", "Lewis", email = "craig.lewis@owen.vanderbilt.edu", role = c("aut", "cph"),
     comment = c(ORCID = "0000-0001-8734-1702")),
     person("Mattia", "Tamellini", email = "mattia.tamellini@gmail.com", role = "ctb"))
-Description: Implements statistical tests, goodness-of-fit diagnostics, and topic-number selection     tools for multiple topic-model implementations, including Latent Dirichlet Allocation and related     estimators. The package follows the optimal topic identification approach of Lewis and Grossetti     (2022) <https://jmlr.org/papers/v23/19-297.html>.
+Description: Statistical tests, goodness-of-fit indices, and held-out
+    validation for topic models. Implements the parametric selection of the
+    number of topics of Lewis and Grossetti (2022)
+    <https://jmlr.org/papers/v23/19-297.html> with bootstrap and
+    moment-matched calibration, harmonized discrepancy indices at the
+    document and word level, held-out and V-fold cross-fitted evaluation
+    with moment-based specification tests, and an engine-agnostic adapter
+    layer covering 'topicmodels', 'seededlda', and 'text2vec' fits, with
+    compiled kernels that scale to corpora of tens of millions of
+    documents.
 License: GPL-3
 Encoding: UTF-8
+Language: en-US
 Roxygen: list(markdown = TRUE)
 URL: https://contefranz.github.io/OpTop/, https://github.com/contefranz/OpTop
 BugReports: https://github.com/contefranz/OpTop/issues

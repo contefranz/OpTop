@@ -531,7 +531,24 @@ accumulate directly (same cost, no cancellation).
 
 ## Roadmap
 
-- Cross-fitting helpers (paper Appendix B): V-fold pooling with fold-aware
-  variance estimators.
+- Cross-fitting helpers (paper Appendix B): shipped in 0.19.0 as
+  `optop_crossfit()` (V-fold pooling, fold-replicate standard errors, the
+  epsilon rule on cross-fitted gains). The statistical roadmap between the
+  package and the papers is closed.
 - The simulation harness of paper Section 5 lives outside the package by
   design (robustness testing of the theory, not package functionality).
+
+## Release strategy toward 1.0.0 (recorded 2026-07-22)
+
+The API froze with 0.19.0 and 0.20.0 made the package CRAN-clean (runnable
+examples everywhere, `--run-donttest` in CI, a monthly scheduled check for
+dependency drift, the 2-core policy in tests, DESCRIPTION polish, and the
+cran-comments skeleton). The CRAN submission itself is deliberately gated
+on the goodness-of-fit paper: 1.0.0 ships when that paper is
+submitted/R&R/accepted, and consists of the citation sync to the final
+venue (inst/CITATION, the @references blocks, the vignette references),
+the lifecycle badge flip to stable, a fresh win-builder/macbuilder pass,
+the v1.0.0 tag (optionally archived for a DOI), and the submission.
+Deferred features (word-subset API for the word-level indices, held-out
+token completion, corpus support inside crossfit, the count-based Pearson
+option) wait for 1.1.0 or later.

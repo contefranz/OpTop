@@ -52,8 +52,8 @@ A numeric vector of length \code{n_boot} with the null replicates
 Draws \code{n_boot} replicates of the statistic under the conditional
 fitted-model null by simulating counts directly on the collapsed envelope
 bins, \eqn{c_j \sim \mathrm{Multinomial}(N_j, p_j)}{c_j ~ Multinomial(N_j,
-p_j)} — exact, because a multinomial collapsed over bins is multinomial on
-the collapsed probabilities. Each replicate accumulates
+p_j)}, which is exact because a multinomial collapsed over bins is
+multinomial on the collapsed probabilities. Each replicate accumulates
 \eqn{T^\ast = \sum_j k_j \sum_b (c_{jb}/N_j - p_{jb})^2 / p_{jb}}{T* =
 sum_j k_j sum_b (c_jb/N_j - p_jb)^2 / p_jb}, where the multiplier
 \eqn{k_j} is the number of bins of document \eqn{j}, matching the

@@ -2,6 +2,10 @@
 # number of threads (deterministic per-document RNG streams + fixed-order
 # reductions), seeds must reproduce, and the compiled bootstrap must target
 # the same null distribution as the pure-R rmultinom() oracle.
+#
+# CRAN policy caps checks at 2 cores, so the standard invariance tests run
+# 2 versus 1 threads; the deeper 4-thread sweep at the bottom is skipped
+# on CRAN and exercised by CI, where NOT_CRAN is set.
 
 test_that("the statistic table is bit-identical for any thread count", {
   fx <- optop_test_fixture()
@@ -13,7 +17,7 @@ test_that("the statistic table is bit-identical for any thread count", {
                    do_plot = FALSE, verbose = FALSE)
     )
   }
-  expect_identical(run(4L), run(1L))
+  expect_identical(run(2L), run(1L))
 })
 
 test_that("bootstrap calibration is bit-identical for any thread count", {
@@ -28,7 +32,7 @@ test_that("bootstrap calibration is bit-identical for any thread count", {
                    n_threads = threads, do_plot = FALSE, verbose = FALSE)
     )
   }
-  expect_identical(run(4L), run(1L))
+  expect_identical(run(2L), run(1L))
 })
 
 test_that("the compiled bootstrap is seed-reproducible, directly and via set.seed", {
@@ -108,10 +112,10 @@ test_that("n_threads is validated and the OpenMP probe returns a flag", {
 test_that("the index engine and partition kernel are thread-invariant", {
   fx <- optop_test_fixture()
 
-  part4 <- optop_make_partition(fx$models, fx$dtm, c = 5, n_threads = 4L)
-  expect_identical(part4$nonrare_offsets, fx$partition$nonrare_offsets)
-  expect_identical(part4$nonrare_words, fx$partition$nonrare_words)
-  expect_identical(part4$chisq_min_ok, fx$partition$chisq_min_ok)
+  part2 <- optop_make_partition(fx$models, fx$dtm, c = 5, n_threads = 2L)
+  expect_identical(part2$nonrare_offsets, fx$partition$nonrare_offsets)
+  expect_identical(part2$nonrare_words, fx$partition$nonrare_words)
+  expect_identical(part2$chisq_min_ok, fx$partition$chisq_min_ok)
 
   tab <- function(threads, lvl) {
     as.data.frame(optop_index_table(fx$models, fx$dtm,
@@ -121,12 +125,42 @@ test_that("the index engine and partition kernel are thread-invariant", {
                                     baseline = fx$baseline,
                                     n_threads = threads))
   }
-  expect_identical(tab(4L, "document"), tab(1L, "document"))
-  expect_identical(tab(4L, "word"), tab(1L, "word"))
+  expect_identical(tab(2L, "document"), tab(1L, "document"))
+  expect_identical(tab(2L, "word"), tab(1L, "word"))
 
   one <- optop_index_deviance(fx$models[[2]], fx$dtm, fx$partition,
-                              fx$baseline, macro = TRUE, n_threads = 4L)
+                              fx$baseline, macro = TRUE, n_threads = 2L)
   ref <- optop_index_deviance(fx$models[[2]], fx$dtm, fx$partition,
                               fx$baseline, macro = TRUE, n_threads = 1L)
   expect_identical(one, ref)
+})
+
+test_that("deep thread-invariance holds at higher thread counts", {
+  skip_on_cran()
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+
+  a <- suppressMessages(
+    optop_select(fx$models, wp$wdfm, n_threads = 4L,
+                 do_plot = FALSE, verbose = FALSE)
+  )
+  b <- suppressMessages(
+    optop_select(fx$models, wp$wdfm, n_threads = 1L,
+                 do_plot = FALSE, verbose = FALSE)
+  )
+  expect_identical(a, b)
+
+  tab <- function(threads) {
+    as.data.frame(optop_index_table(fx$models, fx$dtm,
+                                    metrics = c("se", "chisq", "deviance"),
+                                    macro = TRUE, level = "document",
+                                    partition = fx$partition,
+                                    baseline = fx$baseline,
+                                    n_threads = threads))
+  }
+  expect_identical(tab(4L), tab(1L))
+
+  part4 <- optop_make_partition(fx$models, fx$dtm, c = 5, n_threads = 4L)
+  expect_identical(part4$nonrare_offsets, fx$partition$nonrare_offsets)
+  expect_identical(part4$nonrare_words, fx$partition$nonrare_words)
 })

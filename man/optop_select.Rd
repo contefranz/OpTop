@@ -121,7 +121,7 @@ A \code{data.table} with columns:
 statistic.
 \item \code{pval}: the p-value the selection rules use: asymptotic upper tail for
 \code{calibrate = "none"}, calibrated otherwise.
-\item \code{pval_chisq}: only when \code{calibrate != "none"} — the uncalibrated
+\item \code{pval_chisq}: only when \code{calibrate != "none"}: the uncalibrated
 asymptotic chi-square p-value, for comparison.
 }
 }
@@ -148,7 +148,7 @@ sum over documents (Equation 8 of the paper), asymptotically chi-square
 with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom. The returned \code{OpTop}
 column reports the \emph{standardized} statistic (raw statistic divided by its
 degrees of freedom, the version plotted in the paper's Figure 2), while
-\code{pval} is the p-value the selection rules consume — the upper tail of the
+\code{pval} is the p-value the selection rules consume: the upper tail of the
 raw statistic on its full degrees of freedom by default, or the calibrated
 value when \code{calibrate != "none"}.
 
@@ -157,16 +157,16 @@ probabilities \eqn{I_j = \theta_j^\top \Phi}{I_j = theta_j' Phi}, where
 \eqn{\theta_j}{theta_j} is the document's topic distribution and
 \eqn{\Phi}{Phi} the topic-word matrix. Any implementation that provides
 those two (row-stochastic) matrices is therefore admissible, whatever its
-estimation method — which is what the supported classes listed under
+estimation method; that is what the supported classes listed under
 \code{topic_models} have in common.
 
 \strong{Selection rules.}
 \itemize{
 \item \code{"sequential"} (default): scan \eqn{K} upward and select the smallest
-\eqn{K} the test fails to reject (\code{pval > alpha}) — the classical
+\eqn{K} the test fails to reject (\code{pval > alpha}), the classical
 sequential scheme for model order. If every model is rejected, the rule
 falls back to the global minimum with a warning.
-\item \code{"min"}: select the \eqn{K} with the minimum standardized statistic —
+\item \code{"min"}: select the \eqn{K} with the minimum standardized statistic,
 the rule used in the published case study.
 }
 
@@ -183,7 +183,7 @@ for the \emph{count} statistic, whose scale factor is the document length
 estimated from the same data they are tested against. The practical
 consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
 the thousands the chi-square quantiles are razor-thin and upper-tail
-p-values saturate at 0 or 1 unless the fit is genuinely borderline —
+p-values saturate at 0 or 1 unless the fit is genuinely borderline;
 \code{alpha} is not a true Type-I error rate.
 
 Calibration replaces the chi-square reference with the distribution of the
@@ -199,7 +199,7 @@ data, and the statistic touches the data only through sums over those
 fixed bins;
 \item a multinomial collapsed over bins is multinomial on the collapsed
 probabilities, so the null can be simulated \emph{directly on the}
-\eqn{P_j + 1} \emph{bins} — exactly equivalent to simulating whole documents
+\eqn{P_j + 1} \emph{bins}, exactly equivalent to simulating whole documents
 over the vocabulary, at a tiny fraction of the cost.
 }
 
@@ -223,12 +223,12 @@ documents gives the null mean \eqn{\mu}{mu} and variance
 scaled chi-square \eqn{a\,\chi^2_\nu}{a * chisq(nu)} (Satterthwaite:
 \eqn{a = \sigma^2 / (2\mu)}{a = sigma^2 / (2 mu)},
 \eqn{\nu = 2\mu^2 / \sigma^2}{nu = 2 mu^2 / sigma^2}). Closed form, no
-simulation — a fast approximation that corrects the location and scale of
+simulation: a fast approximation that corrects the location and scale of
 the reference but not its higher moments.
 
 One caveat applies to both: the null holds the estimated
 \eqn{\theta}{theta} and \eqn{\phi}{phi} fixed (no per-replicate re-fitting
-of the model — the "double bootstrap" would be exact but computationally
+of the model; the "double bootstrap" would be exact but computationally
 prohibitive). Calibrated p-values are therefore conditional on the fitted
 parameters and do not account for estimation noise in \eqn{\theta}{theta}
 and \eqn{\phi}{phi}.
@@ -243,7 +243,7 @@ against each model's own document identifiers: documents not present in
 \emph{every} model are dropped (with a warning), and each retained dfm row is
 paired with the corresponding row of \eqn{\theta}{theta} \emph{per model}.
 Neither the row order of \code{weighted_dfm} nor the order in which each model
-saw the documents matters — alignment is always by identifier.
+saw the documents matters: alignment is always by identifier.
 
 \strong{Performance note.} Both hot paths run in C++ compiled code and
 parallelize over documents with OpenMP (see \code{n_threads}): the statistic
@@ -258,21 +258,43 @@ never depend on the budget. See the "Computational efficiency" section
 of the vignette for measurements.
 }
 \examples{
-\dontrun{
-# Asymptotic p-values (Equation 8)
-test1 <- optimal_topic(topic_models = lda_list,
-                       weighted_dfm = weighted_dfm,
-                       q = 0.95,
-                       alpha = 0.05,
-                       selection = "sequential")
+# simulate a corpus whose truth is known, then let Test 1 recover it:
+# the candidate grid holds two random models and the true K = 3 model
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
+}
+set.seed(1)
+theta <- rdirich(40, 3)
+rownames(theta) <- sprintf("d\%02d", 1:40)
+phi <- rdirich(3, 60)
+colnames(phi) <- sprintf("w\%02d", 1:60)
+counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+wprop <- quanteda::dfm_weight(counts, scheme = "prop")
 
-# Bootstrap-calibrated p-values: document lengths come from the counts dfm
-test1_cal <- optimal_topic(topic_models = lda_list,
-                           weighted_dfm = weighted_dfm,
-                           calibrate = "bootstrap",
-                           n_boot = 200,
-                           doc_lengths = quanteda::ntoken(counts_dfm),
-                           seed = 42)
+models <- lapply(c(2, 3, 4), function(k) {
+  if (k == 3) return(optop_model(theta, phi))
+  th <- rdirich(40, k); rownames(th) <- rownames(theta)
+  ph <- rdirich(k, 60); colnames(ph) <- colnames(phi)
+  optop_model(th, ph)
+})
+
+test1 <- optop_select(models, wprop, do_plot = FALSE)
+test1
+
+# bootstrap-calibrated p-values: document lengths come from the counts
+test1_cal <- optop_select(models, wprop,
+                          calibrate = "bootstrap", n_boot = 50,
+                          doc_lengths = quanteda::ntoken(counts),
+                          seed = 42, do_plot = FALSE)
+
+\donttest{
+# the same flow with real engine fits (topicmodels VEM)
+fits <- lapply(2:4, function(k) {
+  topicmodels::LDA(quanteda::convert(counts, to = "topicmodels"),
+                   k = k, method = "VEM", control = list(seed = 500 + k))
+})
+optop_select(fits, wprop, do_plot = FALSE)
 }
 
 }

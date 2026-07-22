@@ -21,7 +21,7 @@
 \item{model}{A single fitted \code{topicmodels::LDA} model (VEM or Gibbs), or
 a loader function returning one (materialized on demand).}
 
-\item{dtm}{A counts document–term matrix (documents × terms). Use \code{Matrix::dgCMatrix}
+\item{dtm}{A counts document-term matrix (documents x terms). Use \code{Matrix::dgCMatrix}
 or a \code{quanteda::dfm} that represents raw counts (not weighted), or an
 \code{\link[=optop_corpus]{optop_corpus()}} of count shards for corpora past the size of a single
 matrix (shards stream one at a time; per-document results are
