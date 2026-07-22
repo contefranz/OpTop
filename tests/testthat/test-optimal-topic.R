@@ -1,7 +1,6 @@
 # Characterization tests for optimal_topic(): the C++ core must agree with the
-# naive per-document references (helper-reference.R) — the calibrated Test 1 of
-# Eq. (8) for the "sequential"/"min" rules and the frozen pre-0.9.9 pipeline
-# for the deprecated "legacy" rule.
+# naive per-document reference (helper-reference.R) for the Test 1 statistic
+# of Eq. (8) consumed by the "sequential" and "min" rules.
 
 # numeric tests run silent (the wprop fixture lives in helper-fixtures.R):
 # the unconditional document-drop alert is muffled where it is not the
@@ -39,17 +38,14 @@ test_that("the returned table does not depend on the selection rule", {
   expect_identical(got_seq, got_min)
 })
 
-test_that("selection = \"legacy\" reproduces the pre-0.9.9 pipeline and warns", {
+test_that("selection = \"legacy\" was removed in 0.16.0", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_warning(
-    got <- run_optimal_topic(fx$models, wp$wdfm, q = 0.80,
-                             selection = "legacy"),
-    class = "lifecycle_warning_deprecated"
+  expect_error(
+    run_optimal_topic(fx$models, wp$wdfm, selection = "legacy"),
+    "should be one of"
   )
-  ref <- ref_optimal_topic_legacy(fx$models, wp$W_prop, q = 0.80)
-  expect_matches_reference(got, ref)
 })
 
 test_that("the selection rules pick the expected K", {

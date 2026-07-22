@@ -13,11 +13,8 @@ optop_index_se(
   partition,
   baseline,
   macro = FALSE,
-  reopt = c("none", "se"),
-  add_baseline_topic = FALSE,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE,
   n_threads = 1L,
   min_null = NULL
 )
@@ -28,11 +25,8 @@ optop_index_chisq(
   partition,
   baseline,
   macro = FALSE,
-  reopt = c("none", "pearson"),
-  add_baseline_topic = FALSE,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE,
   n_threads = 1L,
   min_null = NULL
 )
@@ -43,10 +37,8 @@ optop_index_deviance(
   partition,
   baseline,
   macro = FALSE,
-  reopt = c("none", "deviance"),
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE,
   n_threads = 1L,
   min_null = NULL
 )
@@ -70,17 +62,6 @@ counts DTM used for \code{partition}.}
 \item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Character scalar indicating
-optional re-optimization. The blending is not part of the methodology
-and is scheduled for removal before v1.0.0; use the default \code{"none"}.}
-
-\item{add_baseline_topic}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if
-\code{TRUE}, augment topics with a baseline row to force non-negativity when
-combined with \code{reopt = "se"}. The methodology treats negative indices as
-informative, so the augmentation is scheduled for removal before v1.0.0.
-Default: \code{FALSE} (no effect under \code{reopt = "none"}).
-(Only for \code{optop_index_se()} and \code{optop_index_chisq()}).}
-
 \item{level}{Character; aggregation level for the index. \code{"document"} (default) computes
 document-level indices aggregated across words. \code{"word"} computes word-level indices
 aggregated across documents.}
@@ -89,11 +70,6 @@ aggregated across documents.}
 during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
-
-\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
-the in-sample Z-test. The methodology reserves inference for held-out
-evaluation, so the in-sample test is scheduled for removal before
-v1.0.0; full-corpus indices are descriptive.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine (default \code{1L}). Results are identical for any value; only
@@ -120,7 +96,6 @@ fitted and baseline discrepancies.
 excluded by the null-discrepancy floor.
 \item \code{K}: number of topics in \code{model}.
 \item \code{metric}: one of \code{"se"}, \code{"chisq"}, \code{"deviance"}.
-\item \code{ztest}: (if \code{ztest = TRUE}; deprecated) list with \code{z}, \code{pval}, \code{se}, \code{ci}, \code{J}.
 }
 
 When \code{level = "word"}, a list with:

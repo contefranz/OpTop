@@ -10,13 +10,10 @@ optop_index_table(
   metrics = c("se", "chisq", "deviance"),
   c = 1,
   macro = FALSE,
-  reopt = "none",
-  add_baseline_topic = FALSE,
   partition = NULL,
   baseline = NULL,
   level = c("document", "word"),
   block_size = NULL,
-  ztest = FALSE,
   n_threads = 1L,
   min_null = NULL
 )
@@ -41,14 +38,6 @@ for Pearson-primary work and report sensitivity to \code{c}.}
 \item{macro}{Logical; if \code{TRUE}, also compute macro indices (equal-weight averages of
 per-document indices). Default: \code{FALSE}.}
 
-\item{reopt}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Re-optimization mode
-forwarded to the underlying index; scheduled for removal before v1.0.0.
-Use the default \code{"none"}.}
-
-\item{add_baseline_topic}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical;
-forwarded to the SE and chi-square indices to force non-negativity.
-Scheduled for removal before v1.0.0. Default: \code{FALSE}.}
-
 \item{partition}{Optional precomputed result from \code{\link[=optop_make_partition]{optop_make_partition()}}.
 If \code{NULL}, it is computed internally from \code{models} and \code{dtm}.}
 
@@ -63,10 +52,6 @@ Micro-Word and Macro-Word indices.}
 during word-level computation. Smaller values use less memory but may be slower.
 If \code{NULL} (default), automatically chosen based on corpus size to target ~1.5 GB
 memory usage. Only used when \code{level = "word"}.}
-
-\item{ztest}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Logical; if \code{TRUE}, append
-the in-sample Z-test statistics. The methodology reserves inference for
-held-out evaluation; scheduled for removal before v1.0.0. Default: \code{FALSE}.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 index engine and, when \code{partition} is computed internally, by the
@@ -86,8 +71,6 @@ When \code{level = "document"}, a \code{data.frame} with one row per model and c
 \item \code{K}: number of topics in the model.
 \item \code{R2_SE}, \code{R2_chisq}, \code{R2_dev}: micro indices for the selected metrics.
 \item \code{R2_SE_macro}, \code{R2_chisq_macro}, \code{R2_dev_macro}: macro indices when \code{macro = TRUE}.
-\item \code{Z_SE}, \code{Z_chisq}, \code{Z_dev}, \code{pval_SE}, \code{pval_chisq}, \code{pval_dev}: Z-test
-statistics and p-values when \code{ztest = TRUE}.
 }
 
 When \code{level = "word"}, a \code{data.frame} with columns:
@@ -114,8 +97,6 @@ The function wraps \code{\link[=optop_index_se]{optop_index_se()}}, \code{\link[
 \itemize{
 \item To avoid recomputation, precompute \code{partition <- optop_make_partition(...)}
 and \code{baseline <- optop_make_baseline(...)} once and pass them in.
-\item Large vocabularies benefit from the \code{block} argument inside
-\code{\link[=optop_make_partition]{optop_make_partition()}} (set there, not here).
 }
 }
 

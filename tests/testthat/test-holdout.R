@@ -64,7 +64,9 @@ test_that("evaluation documents without aligned tokens are dropped", {
   ev <- as.matrix(hx$ev)
   ev[3, ] <- 0
   expect_warning(
-    ho <- optop_index_holdout(hx$models, methods::as(ev, "CsparseMatrix"),
+    ho <- optop_index_holdout(hx$models,
+                              methods::as(Matrix::Matrix(ev, sparse = TRUE),
+                                          "CsparseMatrix"),
                               hx$baseline, c = 1, metrics = "deviance"),
     "no token"
   )

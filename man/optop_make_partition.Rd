@@ -4,14 +4,7 @@
 \alias{optop_make_partition}
 \title{Harmonized Rare-word Partition for OpTop indices}
 \usage{
-optop_make_partition(
-  models,
-  dtm,
-  c = 1,
-  block = 5000,
-  n_threads = 1L,
-  pi_glob = NULL
-)
+optop_make_partition(models, dtm, c = 1, n_threads = 1L, pi_glob = NULL)
 }
 \arguments{
 \item{models}{A list of fitted topic models spanning a grid of \eqn{K}.
@@ -30,9 +23,6 @@ Default: \code{1}, the value the paper adopts and recommends when the
 deviance index is the primary measure; \code{c = 5} remains appropriate
 when the Pearson index is of primary interest, and sensitivity to
 \code{c} should be reported.}
-
-\item{block}{Ignored since 0.15.0 (the sparse candidate construction
-needs no vocabulary blocking); accepted for call compatibility.}
 
 \item{n_threads}{Integer; number of OpenMP threads used by the compiled
 kernels (default \code{1L}). Results are identical for any value; only
@@ -127,8 +117,7 @@ of earlier versions, and no \eqn{J \times W}{J x W} object of any kind is
 materialized. The min-bin masses of the Pearson rule are complements of
 compensated non-rare sums, exact for documents whose support collapses
 entirely into the min-bin and accurate to
-\eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. The
-\code{block} argument of earlier versions is accepted and ignored. For
+\eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. For
 large corpora, keep \code{dtm} sparse.
 }
 

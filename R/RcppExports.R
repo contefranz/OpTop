@@ -27,11 +27,6 @@ optimal_topic_core <- function(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, d
 }
 
 #' @keywords internal
-optimal_topic_core_legacy <- function(lda_models, weighted_dfm, q, doc_map) {
-    .Call(`_OpTop_optimal_topic_core_legacy`, lda_models, weighted_dfm, q, doc_map)
-}
-
-#' @keywords internal
 optop_partition_candidates_core <- function(pi_sorted, tau, n_threads) {
     .Call(`_OpTop_optop_partition_candidates_core`, pi_sorted, tau, n_threads)
 }
@@ -59,15 +54,5 @@ optop_partition_pisum_core <- function(nr_off, nr_words, pi_glob, n_threads) {
 #' @keywords internal
 optop_partition_obsmass_core <- function(Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads) {
     .Call(`_OpTop_optop_partition_obsmass_core`, Nt_p, Nt_i, Nt_x, nr_off, nr_words, doc_offset, n_threads)
-}
-
-#' @keywords internal
-topic_match_core <- function(lda_models, best_pos, optimal_k, var_correction) {
-    .Call(`_OpTop_topic_match_core`, lda_models, best_pos, optimal_k, var_correction)
-}
-
-#' @keywords internal
-normalize_columns <- function(x) {
-    .Call(`_OpTop_normalize_columns`, x)
 }
 

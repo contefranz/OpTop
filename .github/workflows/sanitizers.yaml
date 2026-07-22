@@ -1,0 +1,55 @@
+# ASAN/UBSAN pass over the compiled kernels. The OpenMP cores are the
+# package's hot surface, so the release gate includes one sanitizer run:
+# the test suite executes inside the r-hub clang-asan container (R-devel
+# built with AddressSanitizer and UndefinedBehaviorSanitizer) and the job
+# fails on any sanitizer finding, not only on R-level check errors.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/sanitizers.yaml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/sanitizers.yaml'
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+name: sanitizers
+
+permissions: read-all
+
+jobs:
+  clang-asan:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/r-hub/containers/clang-asan:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak", repos = "https://cloud.r-project.org")' \
+                  -e 'pak::pak(c("deps::.", "any::testthat"))'
+
+      - name: Check under ASAN/UBSAN
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1
+          _R_CHECK_FORCE_SUGGESTS_: false
+        run: |
+          R CMD build --no-build-vignettes --no-manual .
+          R CMD check --no-manual --no-vignettes --no-build-vignettes OpTop_*.tar.gz
+
+      - name: Fail on sanitizer findings
+        if: always()
+        run: |
+          if grep -rE "runtime error:|ERROR: AddressSanitizer|SUMMARY: .*Sanitizer" OpTop.Rcheck/ 2>/dev/null; then
+            echo "::error::sanitizer findings detected in the check logs"
+            exit 1
+          fi
+          echo "no sanitizer findings"

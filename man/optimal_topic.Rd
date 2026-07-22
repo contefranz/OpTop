@@ -9,15 +9,14 @@ optimal_topic(
   weighted_dfm,
   q = 0.95,
   alpha = 0.05,
-  selection = c("sequential", "min", "legacy"),
+  selection = c("sequential", "min"),
   calibrate = c("none", "bootstrap", "moment"),
   n_boot = 200L,
   doc_lengths = NULL,
   seed = NULL,
   n_threads = 1L,
   do_plot = TRUE,
-  verbose = TRUE,
-  lda_models = lifecycle::deprecated()
+  verbose = TRUE
 )
 }
 \arguments{
@@ -43,7 +42,7 @@ shards for corpora past the size of a single dfm: shards are evaluated
 one at a time and combine exactly (a one-shard corpus reproduces the
 plain call bit for bit, calibrated p-values included; multi-shard runs
 agree up to floating-point summation order). With a corpus,
-\code{doc_lengths} must be named and \code{selection = "legacy"} is unavailable.}
+\code{doc_lengths} must be named.}
 
 \item{q}{Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 "relatively important" words; the remaining words are collapsed into a
@@ -52,17 +51,16 @@ single bin whose mass stays strictly below \eqn{1 - q}. Equals
 paper's numerical setting \eqn{I^K = 0.05}.}
 
 \item{alpha}{Numeric in \eqn{[0, 1]}. Significance level used by the
-\code{"sequential"} and \code{"legacy"} selection rules (default \code{0.05}); ignored
-by \code{"min"}.}
+\code{"sequential"} selection rule (default \code{0.05}); ignored by \code{"min"}.}
 
 \item{selection}{Character; how the optimal \code{K} is chosen (see Details):
-\code{"sequential"} (default), \code{"min"}, or \code{"legacy"} (deprecated).}
+\code{"sequential"} (default) or \code{"min"}.}
 
 \item{calibrate}{Character; how the p-values are computed (see the
 Calibration part of Details): \code{"none"} (default, the asymptotic
 chi-square of Equation 8), \code{"bootstrap"} (parametric bootstrap under the
 fitted-model null), or \code{"moment"} (exact multinomial moments matched to
-a scaled chi-square). Not available with \code{selection = "legacy"}.}
+a scaled chi-square).}
 
 \item{n_boot}{Integer; number of bootstrap replicates per model when
 \code{calibrate = "bootstrap"} (default \code{200L}, minimum \code{20}).}
@@ -94,10 +92,6 @@ progress bar across the model grid) and a selection summary. Regardless
 of \code{verbose}, corrective actions (dropping documents the models never
 saw, reordering models or features, the sequential rule's fallback) are
 always signalled.}
-
-\item{lda_models}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to
-\code{topic_models}, which accepts more than \code{topicmodels::LDA()} fits; the
-old name still works but warns, and will be removed before v1.0.0.}
 }
 \value{
 A \code{data.table} with columns:
@@ -106,9 +100,8 @@ A \code{data.table} with columns:
 \item \code{OpTop}: standardized Test 1 statistic (raw statistic divided by \code{df}).
 \item \code{df}: degrees of freedom \eqn{\sum_j P_j}{sum_j P_j} of the raw
 statistic.
-\item \code{pval}: the p-value the selection rules use — asymptotic upper tail for
-\code{calibrate = "none"}, calibrated otherwise (legacy: the deprecated
-lower-tail value).
+\item \code{pval}: the p-value the selection rules use: asymptotic upper tail for
+\code{calibrate = "none"}, calibrated otherwise.
 \item \code{pval_chisq}: only when \code{calibrate != "none"} — the uncalibrated
 asymptotic chi-square p-value, for comparison.
 }
@@ -151,11 +144,10 @@ sequential scheme for model order. If every model is rejected, the rule
 falls back to the global minimum with a warning.
 \item \code{"min"}: select the \eqn{K} with the minimum standardized statistic —
 the rule used in the published case study.
-\item \code{"legacy"}: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
-with the crossing word collapsed, \eqn{P_j} scaling, lower-tail p-value
-with 1 degree of freedom, "first \code{pval <= alpha}" rule). Deprecated; it
-only accepts \code{LDA_VEM} fits and will be removed before v1.0.0.
 }
+
+The pre-0.9.9 \code{"legacy"} rule, deprecated since 0.9.9, was removed in
+0.16.0.
 
 \strong{Calibration.}
 The chi-square reference of Equation 8 is a yardstick rather than an exact

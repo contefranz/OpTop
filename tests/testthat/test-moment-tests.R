@@ -139,7 +139,9 @@ test_that("planted contamination is detected with a sane direction", {
   lo_words <- order(f, seq_along(f))[1:12]
   ev <- as.matrix(hx$ev)
   ev[, lo_words] <- ev[, lo_words] + 15L
-  mt <- optop_moment_test(hx$models, methods::as(ev, "CsparseMatrix"),
+  mt <- optop_moment_test(hx$models,
+                          methods::as(Matrix::Matrix(ev, sparse = TRUE),
+                                      "CsparseMatrix"),
                           hx$tr, type = "strata", bins = 4)
   expect_true(all(mt$summary$pval < 0.01))
   # the contaminated (lowest-frequency) stratum is under-predicted:

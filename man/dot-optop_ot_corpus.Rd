@@ -34,8 +34,8 @@ shards under the usual fixed memory budget, so cheap grids avoid
 reloading while very large grids stream one model at a time.
 }
 \details{
-Requirements specific to the sharded path: with calibration,
+One requirement is specific to the sharded path: with calibration,
 \code{doc_lengths} must be named (row order across shards is not a reliable
-identity at this scale), and \code{selection = "legacy"} is not available.
+identity at this scale).
 }
 \keyword{internal}

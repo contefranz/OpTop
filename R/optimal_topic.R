@@ -1,9 +1,6 @@
 if (getRversion() >= "2.15.1") {
-  # docid stays declared: agg_document_stability() (deprecated, untouched)
-  # calls it unqualified without importing it from quanteda
-  utils::globalVariables(c("id_doc", "document", "check", "topics", ".",
-                           "pval", "OpTop", "raw", "df", "pval_chisq",
-                           "docid"))
+  utils::globalVariables(c("id_doc", "document", "check", "topic", "topics",
+                           ".", "pval", "OpTop", "raw", "df", "pval_chisq"))
 }
 #' Find the optimal number of topics from a pool of topic models
 #'
@@ -35,22 +32,21 @@ if (getRversion() >= "2.15.1") {
 #'   one at a time and combine exactly (a one-shard corpus reproduces the
 #'   plain call bit for bit, calibrated p-values included; multi-shard runs
 #'   agree up to floating-point summation order). With a corpus,
-#'   `doc_lengths` must be named and `selection = "legacy"` is unavailable.
+#'   `doc_lengths` must be named.
 #' @param q Numeric in \eqn{(0, 1]}. Cumulative probability mass retained as
 #'   "relatively important" words; the remaining words are collapsed into a
 #'   single bin whose mass stays strictly below \eqn{1 - q}. Equals
 #'   \eqn{1 - I^K} in the paper's notation; the default `0.95` matches the
 #'   paper's numerical setting \eqn{I^K = 0.05}.
 #' @param alpha Numeric in \eqn{[0, 1]}. Significance level used by the
-#'   `"sequential"` and `"legacy"` selection rules (default `0.05`); ignored
-#'   by `"min"`.
+#'   `"sequential"` selection rule (default `0.05`); ignored by `"min"`.
 #' @param selection Character; how the optimal `K` is chosen (see Details):
-#'   `"sequential"` (default), `"min"`, or `"legacy"` (deprecated).
+#'   `"sequential"` (default) or `"min"`.
 #' @param calibrate Character; how the p-values are computed (see the
 #'   Calibration part of Details): `"none"` (default, the asymptotic
 #'   chi-square of Equation 8), `"bootstrap"` (parametric bootstrap under the
 #'   fitted-model null), or `"moment"` (exact multinomial moments matched to
-#'   a scaled chi-square). Not available with `selection = "legacy"`.
+#'   a scaled chi-square).
 #' @param n_boot Integer; number of bootstrap replicates per model when
 #'   `calibrate = "bootstrap"` (default `200L`, minimum `20`).
 #' @param doc_lengths Numeric vector with the length (total token count) of
@@ -76,9 +72,6 @@ if (getRversion() >= "2.15.1") {
 #'   of `verbose`, corrective actions (dropping documents the models never
 #'   saw, reordering models or features, the sequential rule's fallback) are
 #'   always signalled.
-#' @param lda_models `r lifecycle::badge("deprecated")` Renamed to
-#'   `topic_models`, which accepts more than `topicmodels::LDA()` fits; the
-#'   old name still works but warns, and will be removed before v1.0.0.
 #'
 #' @details
 #' For each document \eqn{j}, the fitted word probabilities are sorted in
@@ -109,10 +102,9 @@ if (getRversion() >= "2.15.1") {
 #'   falls back to the global minimum with a warning.
 #' - `"min"`: select the \eqn{K} with the minimum standardized statistic —
 #'   the rule used in the published case study.
-#' - `"legacy"`: reproduce the pre-0.9.9 behavior exactly (rounded cutoff
-#'   with the crossing word collapsed, \eqn{P_j} scaling, lower-tail p-value
-#'   with 1 degree of freedom, "first `pval <= alpha`" rule). Deprecated; it
-#'   only accepts `LDA_VEM` fits and will be removed before v1.0.0.
+#'
+#' The pre-0.9.9 `"legacy"` rule, deprecated since 0.9.9, was removed in
+#' 0.16.0.
 #'
 #' **Calibration.**
 #' The chi-square reference of Equation 8 is a yardstick rather than an exact
@@ -198,9 +190,8 @@ if (getRversion() >= "2.15.1") {
 #' - `OpTop`: standardized Test 1 statistic (raw statistic divided by `df`).
 #' - `df`: degrees of freedom \eqn{\sum_j P_j}{sum_j P_j} of the raw
 #'   statistic.
-#' - `pval`: the p-value the selection rules use — asymptotic upper tail for
-#'   `calibrate = "none"`, calibrated otherwise (legacy: the deprecated
-#'   lower-tail value).
+#' - `pval`: the p-value the selection rules use: asymptotic upper tail for
+#'   `calibrate = "none"`, calibrated otherwise.
 #' - `pval_chisq`: only when `calibrate != "none"` — the uncalibrated
 #'   asymptotic chi-square p-value, for comparison.
 #'
@@ -243,20 +234,10 @@ if (getRversion() >= "2.15.1") {
 #' @export
 
 optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
-                          selection = c("sequential", "min", "legacy"),
+                          selection = c("sequential", "min"),
                           calibrate = c("none", "bootstrap", "moment"),
                           n_boot = 200L, doc_lengths = NULL, seed = NULL,
-                          n_threads = 1L, do_plot = TRUE, verbose = TRUE,
-                          lda_models = lifecycle::deprecated()) {
-
-  if (lifecycle::is_present(lda_models)) {
-    lifecycle::deprecate_warn(when = "0.11.0",
-                              what = "optimal_topic(lda_models)",
-                              with = "optimal_topic(topic_models)")
-    if (missing(topic_models)) {
-      topic_models <- lda_models
-    }
-  }
+                          n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
 
   if (!is.list(topic_models)) {
     stop("topic_models must be a list of fitted topic models")
@@ -286,25 +267,6 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   }
   n_threads <- as.integer(n_threads)
 
-  legacy <- selection == "legacy"
-  if (legacy) {
-    if (calibrate != "none") {
-      stop('calibration is not available with selection = "legacy"')
-    }
-    lifecycle::deprecate_warn(
-      when = "0.9.9",
-      what = I('optimal_topic(selection = "legacy")'),
-      details = paste("The legacy rule (lower-tail p-value with 1 degree of",
-                      "freedom) predates the calibration to the published",
-                      "test and will be removed before v1.0.0.")
-    )
-    if (!all(sapply(topic_models, is.LDA_VEM))) {
-      stop(paste('selection = "legacy" reproduces the pre-0.9.9 pipeline,',
-                 "which supports only LDA_VEM objects as computed by",
-                 "topicmodels::LDA()"))
-    }
-  }
-
   calibrating <- calibrate != "none"
   if (calibrating) {
     if (is.null(doc_lengths)) {
@@ -327,9 +289,6 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cli::cli_h2("Optimal topic selection")
   }
   if (.optop_is_corpus(weighted_dfm)) {
-    if (legacy) {
-      stop('selection = "legacy" does not accept an optop_corpus')
-    }
     return(.optop_ot_corpus(weighted_dfm, topic_models, q, alpha, selection,
                             calibrate, n_boot, doc_lengths, seed, n_threads,
                             do_plot, verbose, tic))
@@ -345,114 +304,93 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                "weighted_dfm, in the same row order"))
   }
 
-  if (legacy) {
-    # frozen pre-0.9.9 semantics: membership is checked against the first
-    # model only and one map is shared by the grid (VEM fits all see the
-    # documents in input order)
-    doc_check <- docs %in% topic_models[[1L]]@documents
-    if (!all(doc_check)) {
-      id_toremove <- which(!doc_check)
-      if (length(id_toremove) < length(doc_check)) {
-        cli::cli_alert_warning(
-          "Removed {length(id_toremove)} document{?s} not present in the models"
-        )
-        weighted_dfm <- weighted_dfm[-id_toremove, ]
-        docs <- docs[-id_toremove]
-      } else {
-        stop("Document matching went really wrong. Check docs in both weighted_dfm and in LDA@documents")
-      }
+  # adapt every model to the common (theta, phi, K, docs, terms) contract.
+  # The extracted weight matrices are kept for the evaluation loop as long
+  # as the whole grid fits a fixed memory budget (typical grids amount to a
+  # few MB); past the budget the remaining models are re-extracted one at a
+  # time inside the loop, so peak memory stays bounded on very large
+  # vocabularies
+  meta <- vector("list", length(topic_models))
+  tp_cache <- vector("list", length(topic_models))
+  cache_bytes <- 0
+  cache_budget <- 256 * 1024^2
+  for (i_mod in seq_along(topic_models)) {
+    tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
+    .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
+    meta[[i_mod]] <- tp[c("K", "docs", "terms")]
+    cache_bytes <- cache_bytes + 8 * (length(tp$theta) + length(tp$phi))
+    if (cache_bytes <= cache_budget) {
+      tp_cache[[i_mod]] <- tp[c("theta", "phi")]
     }
-    doc_map <- match(docs, topic_models[[1L]]@documents) - 1L
-    ks <- vapply(topic_models, function(m) as.integer(m@k), integer(1L))
-  } else {
-    # adapt every model to the common (theta, phi, K, docs, terms) contract.
-    # The extracted weight matrices are kept for the evaluation loop as long
-    # as the whole grid fits a fixed memory budget (typical grids amount to a
-    # few MB); past the budget the remaining models are re-extracted one at a
-    # time inside the loop, so peak memory stays bounded on very large
-    # vocabularies
-    meta <- vector("list", length(topic_models))
-    tp_cache <- vector("list", length(topic_models))
-    cache_bytes <- 0
-    cache_budget <- 256 * 1024^2
-    for (i_mod in seq_along(topic_models)) {
-      tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
-      .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
-      meta[[i_mod]] <- tp[c("K", "docs", "terms")]
-      cache_bytes <- cache_bytes + 8 * (length(tp$theta) + length(tp$phi))
-      if (cache_bytes <= cache_budget) {
-        tp_cache[[i_mod]] <- tp[c("theta", "phi")]
-      }
-    }
-    ks <- vapply(meta, function(m) as.integer(m$K), integer(1L))
-    if (anyDuplicated(ks)) {
-      stop(paste("topic_models contains more than one model with the same",
-                 "number of topics; the grid must have one model per K"))
-    }
-    if (is.unsorted(ks)) {
-      ord <- order(ks)
-      topic_models <- topic_models[ord]
-      meta <- meta[ord]
-      tp_cache <- tp_cache[ord]
-      ks <- ks[ord]
-      cli::cli_alert_warning(
-        "Reordered topic_models by increasing number of topics"
-      )
-    }
+  }
+  ks <- vapply(meta, function(m) as.integer(m$K), integer(1L))
+  if (anyDuplicated(ks)) {
+    stop(paste("topic_models contains more than one model with the same",
+               "number of topics; the grid must have one model per K"))
+  }
+  if (is.unsorted(ks)) {
+    ord <- order(ks)
+    topic_models <- topic_models[ord]
+    meta <- meta[ord]
+    tp_cache <- tp_cache[ord]
+    ks <- ks[ord]
+    cli::cli_alert_warning(
+      "Reordered topic_models by increasing number of topics"
+    )
+  }
 
-    # one common vocabulary across the grid, in one common order
-    ref_terms <- meta[[1L]]$terms
-    same_terms <- vapply(meta[-1L], function(m) identical(m$terms, ref_terms),
-                         logical(1L))
-    if (!all(same_terms)) {
-      stop(paste("all models must share the same vocabulary in the same",
-                 "order; refit the grid on a common dfm"))
-    }
-    feats <- quanteda::featnames(weighted_dfm)
-    if (!identical(feats, ref_terms)) {
-      if (length(feats) == length(ref_terms) && !anyDuplicated(feats) &&
-          setequal(feats, ref_terms)) {
-        # a permutation preserves the row proportions, so it is safe to fix
-        weighted_dfm <- weighted_dfm[, ref_terms]
-        cli::cli_alert_warning(
-          "Reordered the features of weighted_dfm to the models' vocabulary"
-        )
-      } else {
-        stop(paste("the features of weighted_dfm do not match the models'",
-                   "vocabulary. Rebuild the weighted dfm from the counts dfm",
-                   "the models were fitted on, e.g.",
-                   'quanteda::dfm_weight(counts_dfm, scheme = "prop")'))
-      }
-    }
-    row_mass <- Matrix::rowSums(weighted_dfm)
-    if (any(abs(row_mass - 1) > 1e-6)) {
-      cli::cli_alert_warning(paste(
-        "weighted_dfm rows do not sum to 1: expected word proportions as",
-        'produced by quanteda::dfm_weight(scheme = "prop")'
-      ))
-    }
-
-    # keep only the documents every model has seen: identifiers are matched
-    # per model, so the whole grid is evaluated on one fixed document set and
-    # the statistics stay comparable across K (and across engines)
-    keep <- rep(TRUE, length(docs))
-    for (m in meta) {
-      keep <- keep & docs %in% m$docs
-    }
-    if (!all(keep)) {
-      id_toremove <- which(!keep)
-      if (length(id_toremove) == length(docs)) {
-        stop(paste("Document matching went really wrong. Check the document",
-                   "ids of weighted_dfm against those stored in the models"))
-      }
+  # one common vocabulary across the grid, in one common order
+  ref_terms <- meta[[1L]]$terms
+  same_terms <- vapply(meta[-1L], function(m) identical(m$terms, ref_terms),
+                       logical(1L))
+  if (!all(same_terms)) {
+    stop(paste("all models must share the same vocabulary in the same",
+               "order; refit the grid on a common dfm"))
+  }
+  feats <- quanteda::featnames(weighted_dfm)
+  if (!identical(feats, ref_terms)) {
+    if (length(feats) == length(ref_terms) && !anyDuplicated(feats) &&
+        setequal(feats, ref_terms)) {
+      # a permutation preserves the row proportions, so it is safe to fix
+      weighted_dfm <- weighted_dfm[, ref_terms]
       cli::cli_alert_warning(
-        "Removed {length(id_toremove)} document{?s} not present in the models"
+        "Reordered the features of weighted_dfm to the models' vocabulary"
       )
-      weighted_dfm <- weighted_dfm[-id_toremove, ]
-      docs <- docs[-id_toremove]
-      if (calibrating && is.null(names(doc_lengths))) {
-        doc_lengths <- doc_lengths[-id_toremove]
-      }
+    } else {
+      stop(paste("the features of weighted_dfm do not match the models'",
+                 "vocabulary. Rebuild the weighted dfm from the counts dfm",
+                 "the models were fitted on, e.g.",
+                 'quanteda::dfm_weight(counts_dfm, scheme = "prop")'))
+    }
+  }
+  row_mass <- Matrix::rowSums(weighted_dfm)
+  if (any(abs(row_mass - 1) > 1e-6)) {
+    cli::cli_alert_warning(paste(
+      "weighted_dfm rows do not sum to 1: expected word proportions as",
+      'produced by quanteda::dfm_weight(scheme = "prop")'
+    ))
+  }
+
+  # keep only the documents every model has seen: identifiers are matched
+  # per model, so the whole grid is evaluated on one fixed document set and
+  # the statistics stay comparable across K (and across engines)
+  keep <- rep(TRUE, length(docs))
+  for (m in meta) {
+    keep <- keep & docs %in% m$docs
+  }
+  if (!all(keep)) {
+    id_toremove <- which(!keep)
+    if (length(id_toremove) == length(docs)) {
+      stop(paste("Document matching went really wrong. Check the document",
+                 "ids of weighted_dfm against those stored in the models"))
+    }
+    cli::cli_alert_warning(
+      "Removed {length(id_toremove)} document{?s} not present in the models"
+    )
+    weighted_dfm <- weighted_dfm[-id_toremove, ]
+    docs <- docs[-id_toremove]
+    if (calibrating && is.null(names(doc_lengths))) {
+      doc_lengths <- doc_lengths[-id_toremove]
     }
   }
   if (calibrating && !is.null(names(doc_lengths))) {
@@ -489,28 +427,21 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 
   Chi_K_rows <- vector("list", n_models)
   pval_cal <- rep(NA_real_, n_models)
-  if (!legacy) {
-    # transpose once: a document becomes a contiguous sparse column for the
-    # C++ core. The raw CSC slots (@p, @i, @x) cross the boundary as
-    # zero-copy views, so no per-model conversion or copy of the corpus is
-    # ever made and the J x W shape is unbounded
-    dfm_t <- Matrix::t(methods::as(weighted_dfm, "dgCMatrix"))
-    dfm_terms <- nrow(dfm_t)
-  }
+  # transpose once: a document becomes a contiguous sparse column for the
+  # C++ core. The raw CSC slots (@p, @i, @x) cross the boundary as
+  # zero-copy views, so no per-model conversion or copy of the corpus is
+  # ever made and the J x W shape is unbounded
+  dfm_t <- Matrix::t(methods::as(weighted_dfm, "dgCMatrix"))
+  dfm_terms <- nrow(dfm_t)
   for (i_mod in seq_len(n_models)) {
-    if (legacy) {
-      core_out <- optimal_topic_core_legacy(topic_models[i_mod], weighted_dfm,
-                                            q, doc_map)
-    } else {
-      tp <- tp_cache[[i_mod]]
-      if (is.null(tp)) {
-        tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
-      }
-      doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
-      core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
-                                     dfm_t@x, dfm_terms, q, doc_map_i,
-                                     calibrating, n_threads)
+    tp <- tp_cache[[i_mod]]
+    if (is.null(tp)) {
+      tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
     }
+    doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
+    core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
+                                   dfm_t@x, dfm_terms, q, doc_map_i,
+                                   calibrating, n_threads)
     Chi_K_rows[[i_mod]] <- core_out$stat
     if (calibrating) {
       T_obs <- core_out$stat[1L, 2L]
@@ -537,7 +468,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     cli::cli_progress_done()
   }
 
-  .optop_ot_finish(Chi_K_rows, pval_cal, legacy, calibrating,
+  .optop_ot_finish(Chi_K_rows, pval_cal, calibrating,
                    calibrate, n_boot, selection, alpha, do_plot,
                    verbose, tic)
 }
@@ -550,21 +481,16 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 #' the single-matrix and the sharded-corpus evaluation paths.
 #'
 #' @keywords internal
-.optop_ot_finish <- function(Chi_K_rows, pval_cal, legacy, calibrating,
+.optop_ot_finish <- function(Chi_K_rows, pval_cal, calibrating,
                              calibrate, n_boot, selection, alpha, do_plot,
                              verbose, tic) {
   Chi_K <- data.table::as.data.table(do.call(rbind, Chi_K_rows))
   data.table::setnames(Chi_K, old = names(Chi_K), c("topic", "raw", "df"))
   Chi_K[, OpTop := raw / df]
-  if (legacy) {
-    # pre-0.9.9 convention: lower tail of the standardized statistic on 1 df
-    Chi_K[, pval := stats::pchisq(OpTop, df = 1L, lower.tail = TRUE)]
-  } else {
-    # Eq. (8): the raw statistic is chi-square with df = sum_j P_j under
-    # adequacy, and misspecification only inflates it, so the p-value is the
-    # upper tail
-    Chi_K[, pval := stats::pchisq(raw, df = df, lower.tail = FALSE)]
-  }
+  # Eq. (8): the raw statistic is chi-square with df = sum_j P_j under
+  # adequacy, and misspecification only inflates it, so the p-value is the
+  # upper tail
+  Chi_K[, pval := stats::pchisq(raw, df = df, lower.tail = FALSE)]
   Chi_K[, raw := NULL]
   if (calibrating) {
     # the selection rules read pval: the calibrated value takes its place and
@@ -598,21 +524,9 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
       best_topic <- accepted
       rule <- paste0("sequential adequacy scan at alpha = ", alpha)
     }
-  } else if (selection == "min") {
+  } else {
     best_topic <- global_min
     rule <- "global minimum"
-  } else {
-    alpha_min <- Chi_K[pval <= alpha][1L]
-    if (alpha == 0 || all(is.na(alpha_min))) {
-      best_topic <- global_min
-      rule <- "global minimum (legacy)"
-    } else if (global_min$topic > alpha_min$topic) {
-      best_topic <- alpha_min
-      rule <- paste0("legacy significance level of ", alpha)
-    } else {
-      best_topic <- global_min
-      rule <- "global minimum (legacy)"
-    }
   }
   if (verbose) {
     cli::cli_alert_success(
@@ -670,9 +584,9 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 #' shards under the usual fixed memory budget, so cheap grids avoid
 #' reloading while very large grids stream one model at a time.
 #'
-#' Requirements specific to the sharded path: with calibration,
+#' One requirement is specific to the sharded path: with calibration,
 #' `doc_lengths` must be named (row order across shards is not a reliable
-#' identity at this scale), and `selection = "legacy"` is not available.
+#' identity at this scale).
 #'
 #' @keywords internal
 .optop_ot_corpus <- function(corpus, topic_models, q, alpha, selection,
@@ -919,7 +833,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   Chi_K_rows <- lapply(seq_len(n_models), function(i) {
     matrix(c(ks[i], raw_sum[i], df_sum[i]), 1L, 3L)
   })
-  .optop_ot_finish(Chi_K_rows, pval_cal, legacy = FALSE,
+  .optop_ot_finish(Chi_K_rows, pval_cal,
                    calibrating = calibrating, calibrate = calibrate,
                    n_boot = n_boot, selection = selection, alpha = alpha,
                    do_plot = do_plot, verbose = verbose, tic = tic)

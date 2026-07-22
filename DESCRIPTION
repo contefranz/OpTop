@@ -1,7 +1,7 @@
 Package: OpTop
 Type: Package
 Title: Optimal Topic Selection and Goodness-of-Fit for Topic Models
-Version: 0.15.0
+Version: 0.16.0
 Authors@R: c( 
     person("Francesco", "Grossetti", email = "francesco.grossetti@unibocconi.it", 
     role = c("cre", "aut", "cph"), comment = c(ORCID = "0000-0002-5130-7745")), 
@@ -19,11 +19,8 @@ Imports:
     cli (>= 3.6.2),
     data.table (>= 1.11.0),
     ggplot2 (>= 3.4.0),
-    LDATS (>= 0.2.7),
-    lifecycle,
     Matrix,
     methods,
-    patchwork (>= 1.1.1),
     quanteda (>= 2.0.0),
     slam,
     topicmodels
@@ -32,8 +29,7 @@ Suggests:
     rmarkdown,
     seededlda,
     testthat (>= 3.0.0),
-    text2vec,
-    withr
+    text2vec
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown

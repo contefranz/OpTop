@@ -25,8 +25,6 @@
 #'   deviance index is the primary measure; \code{c = 5} remains appropriate
 #'   when the Pearson index is of primary interest, and sensitivity to
 #'   \code{c} should be reported.
-#' @param block Ignored since 0.15.0 (the sparse candidate construction
-#'   needs no vocabulary blocking); accepted for call compatibility.
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
 #'   kernels (default \code{1L}). Results are identical for any value; only
 #'   wall time changes.
@@ -105,8 +103,7 @@
 #' materialized. The min-bin masses of the Pearson rule are complements of
 #' compensated non-rare sums, exact for documents whose support collapses
 #' entirely into the min-bin and accurate to
-#' \eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. The
-#' \code{block} argument of earlier versions is accepted and ignored. For
+#' \eqn{O(L_j\,\epsilon_{mach})}{O(L_j * eps_machine)} otherwise. For
 #' large corpora, keep \code{dtm} sparse.
 #'
 #' @seealso
@@ -147,7 +144,7 @@
 #' 23(58), 1--20. <https://jmlr.org/papers/v23/19-297.html>
 #'
 #' @export
-optop_make_partition <- function(models, dtm, c = 1, block = 5000,
+optop_make_partition <- function(models, dtm, c = 1,
                                  n_threads = 1L, pi_glob = NULL) {
   stopifnot(length(models) >= 1)
   if (!is.numeric(c) || length(c) != 1L || !is.finite(c) || c <= 0) {

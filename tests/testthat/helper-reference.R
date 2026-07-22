@@ -60,7 +60,7 @@ ref_dev_contrib <- function(N, E, eps = 1e-12) {
 # Document-level indices, one slow loop per document.
 ref_index_document <- function(model, dtm, partition, baseline,
                                metric = c("se", "chisq", "deviance"),
-                               reopt = "none", eps = 1e-12, min_null = 0) {
+                               eps = 1e-12, min_null = 0) {
   metric <- match.arg(metric)
   tp <- ref_theta_phi(model)
   vocab <- colnames(tp$phi)
@@ -83,15 +83,6 @@ ref_index_document <- function(model, dtm, partition, baseline,
     N_min <- sum(N_j[rare])
 
     if (metric == "se") {
-      if (identical(reopt, "se")) {
-        # lambda blending of E towards B on the harmonized support
-        num <- sum((N_j[!rare] - B_j[!rare]) * (E_j[!rare] - B_j[!rare])) +
-          (N_min - sum(B_j[rare])) * (sum(E_j[rare]) - sum(B_j[rare]))
-        den <- sum((E_j[!rare] - B_j[!rare])^2) +
-          (sum(E_j[rare]) - sum(B_j[rare]))^2
-        lambda <- if (den <= 0) 0 else max(0, min(1, num / den))
-        E_j <- lambda * E_j + (1 - lambda) * B_j
-      }
       dK <- sum((N_j[!rare] - E_j[!rare])^2) + (N_min - sum(E_j[rare]))^2
       dnull <- sum((N_j[!rare] - B_j[!rare])^2) + (N_min - sum(B_j[rare]))^2
     } else if (metric == "chisq") {
@@ -198,54 +189,6 @@ ref_index_word <- function(model, dtm, partition, baseline,
        K = tp$K, metric = metric)
 }
 
-# Naive LEGACY reference for optimal_topic(selection = "legacy"). Mirrors the
-# pre-0.9.9 semantics verbatim, one explicit loop per document:
-# X_j = gamma_j %*% exp(beta), sorted descending; the envelope is truncated at
-# the first position whose cumulative mass, rounded half-away-from-zero to 4
-# decimals (std::round), exceeds q, with the crossing word collapsed into the
-# tail; chi_j = icut * (sum((o - e)^2 / e) + pooled term). Per model the
-# statistic is sum(chi_j) / sum(icut_j) and the p-value is the LOWER tail of a
-# chi-square with 1 df.
-#
-# `W_prop` is a plain dense matrix of row-wise word proportions whose rows and
-# columns are aligned with the models, exactly as the C++ core assumes.
-ref_optimal_topic_legacy <- function(models, W_prop, q = 0.80) {
-  out <- lapply(models, function(m) {
-    dtw <- m@gamma                 # J x K
-    tww <- t(exp(m@beta))          # W x K
-    J <- nrow(W_prop)
-
-    chi <- numeric(J)
-    icut <- numeric(J)
-    for (j in seq_len(J)) {
-      X <- drop(tww %*% dtw[j, ])
-      o <- W_prop[j, ]
-
-      ord <- order(X, decreasing = TRUE)
-      X <- X[ord]
-      o <- o[ord]
-
-      cum <- cumsum(X)
-      # floor(v * 1e4 + 0.5) reproduces std::round() for the positive values
-      # cum takes; R's round() would use banker's rounding at exact halves.
-      above <- which(floor(cum * 1e4 + 0.5) / 1e4 > q)
-      ic <- if (length(above)) above[1] - 1L else length(X)
-
-      head_idx <- seq_len(ic)
-      o_tail <- sum(o[-head_idx])
-      X_tail <- sum(X[-head_idx])
-      chi[j] <- ic * (sum((o[head_idx] - X[head_idx])^2 / X[head_idx]) +
-                        (o_tail - X_tail)^2 / X_tail)
-      icut[j] <- ic
-    }
-
-    stat <- sum(chi) / sum(icut)
-    c(topic = ncol(dtw), OpTop = stat, df = sum(icut),
-      pval = stats::pchisq(stat, df = 1, lower.tail = TRUE))
-  })
-  as.data.frame(do.call(rbind, out))
-}
-
 # Naive reference for the calibrated Test 1 of Lewis & Grossetti (2022),
 # Eq. (8): per document, the P_j important words are the smallest
 # descending-sorted head whose cumulative mass strictly exceeds q (the
@@ -324,19 +267,6 @@ ref_envelope <- function(model, q = 0.95) {
       X
     }
   })
-}
-
-# Reference for the cross-document Z-test.
-ref_ztest <- function(r2_doc_valid) {
-  J <- length(r2_doc_valid)
-  m <- mean(r2_doc_valid)
-  se <- sqrt(sum((r2_doc_valid - m)^2) / (J - 1)) / sqrt(J)
-  z <- m / se
-  list(z = z,
-       pval = stats::pnorm(z, lower.tail = FALSE),
-       se = se,
-       ci = m + c(-1, 1) * stats::qnorm(0.975) * se,
-       J = J)
 }
 
 # Pure-R oracle for the bootstrap null: the pre-0.12.0 implementation, one

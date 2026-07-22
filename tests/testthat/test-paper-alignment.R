@@ -26,7 +26,8 @@ toy_corpus_baseline_rare <- function() {
                   c(7L, 7L, 6L, 0L),
                   c(7L, 7L, 6L, 0L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   models <- list(toy_model(c(0.25, 0.25, 0.25, 0.25), docs, vocab),
                  toy_model(c(0.30, 0.30, 0.20, 0.20), docs, vocab))
   list(dtm = dtm, counts = counts, models = models,
@@ -97,7 +98,8 @@ test_that("the inclusion rule keeps a min bin with enough grid-wide mass", {
                   c(31L, 32L, 33L, 2L, 2L),
                   c(31L, 31L, 34L, 2L, 2L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   phi_row <- c(0.40, 0.30, 0.284, 0.008, 0.008)
   models <- list(toy_model(phi_row, docs, vocab))
 
@@ -126,7 +128,8 @@ test_that("degenerate documents are excluded from the Micro index", {
                   c(2L, 7L, 6L, 5L),
                   c(2L, 3L, 4L, 1L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   models <- list(toy_model(c(0.25, 0.25, 0.25, 0.25), docs, vocab),
                  toy_model(c(0.30, 0.30, 0.20, 0.20), docs, vocab))
   part <- optop_make_partition(models, dtm, c = 1)
@@ -204,46 +207,32 @@ test_that("partitions from OpTop < 0.13.0 fall back with a warning", {
   expect_no_warning(optop_index_se(m, fx$dtm, old_part, fx$baseline))
 })
 
-test_that("the non-paper features are deprecated", {
+test_that("the non-paper index arguments were removed in 0.16.0", {
   fx <- optop_test_fixture()
   m <- fx$models[[1]]
 
-  lifecycle::expect_deprecated(
-    optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                   macro = TRUE, ztest = TRUE),
-    "ztest"
+  expect_error(
+    optop_index_se(m, fx$dtm, fx$partition, fx$baseline, ztest = TRUE),
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_se(m, fx$dtm, fx$partition, fx$baseline, reopt = "se"),
-    "reopt"
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
-    optop_index_se(m, fx$dtm, fx$partition, fx$baseline,
-                   add_baseline_topic = TRUE),
-    "add_baseline_topic"
-  )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_chisq(m, fx$dtm, fx$partition, fx$baseline,
-                      macro = TRUE, ztest = TRUE),
-    "ztest"
+                      add_baseline_topic = TRUE),
+    "unused argument"
   )
-  lifecycle::expect_deprecated(
-    optop_index_deviance(m, fx$dtm, fx$partition, fx$baseline,
-                         macro = TRUE, ztest = TRUE),
-    "ztest"
-  )
-  lifecycle::expect_deprecated(
+  expect_error(
     optop_index_table(fx$models[1:2], fx$dtm, metrics = "se",
                       partition = fx$partition, baseline = fx$baseline,
                       ztest = TRUE),
-    "ztest"
+    "unused argument"
   )
 })
 
 test_that("default c is 1 in partition and table", {
   expect_identical(formals(optop_make_partition)$c, 1)
   expect_identical(formals(optop_index_table)$c, 1)
-  expect_identical(formals(optop_index_se)$add_baseline_topic, FALSE)
-  expect_identical(formals(optop_index_chisq)$add_baseline_topic, FALSE)
-  expect_identical(formals(optop_index_table)$add_baseline_topic, FALSE)
 })

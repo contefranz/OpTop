@@ -7,7 +7,6 @@
 .optop_ot_finish(
   Chi_K_rows,
   pval_cal,
-  legacy,
   calibrating,
   calibrate,
   n_boot,

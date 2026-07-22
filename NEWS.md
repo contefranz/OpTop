@@ -1,3 +1,51 @@
+# OpTop 0.16.0
+
+The teardown release on the road to v1.0.0: every deprecated surface leaves
+the package, three hard dependencies retire, and the compiled kernels gain
+a sanitizer gate in continuous integration. No statistical behavior of the
+surviving paths changes.
+
+### Breaking changes
+
+* **The pre-0.9.8 stability API is removed** after its long deprecation:
+  `topic_stability()`, `agg_topic_stability()`, `agg_document_stability()`,
+  `get_topic_models()`, and the internal `topic_match()` are gone, together
+  with their compiled cores (`topic_match_core.cpp`, `normalize_columns`).
+  The discrepancy indices and the held-out tools are their replacement.
+* **`selection = "legacy"` is removed** from `optimal_topic()` (deprecated
+  since 0.9.9). The argument now admits `"sequential"` and `"min"`; the
+  frozen pre-0.9.9 translation unit is deleted, retiring the package's last
+  `arma::sp_mat` crossing and the lower-tail p-value convention.
+* **The 0.13.0-deprecated index arguments are removed**: `ztest`, `reopt`,
+  and `add_baseline_topic` leave `optop_index_se()`, `optop_index_chisq()`,
+  `optop_index_deviance()`, and `optop_index_table()`, together with the SE
+  re-optimization path and the in-sample Z-test helper. The methodology
+  reserves inference for held-out evaluation (`optop_index_holdout()`,
+  `optop_moment_test()`).
+* **`optimal_topic(lda_models = )` is removed** (renamed to `topic_models`
+  in 0.11.0), and `optop_make_partition()` drops the `block` argument that
+  had been inert since 0.15.0.
+* **`sim_dfm()` is self-contained**: the generator now draws the LDA
+  Dirichlet-multinomial corpus inside OpTop instead of delegating to
+  LDATS. The simulated distribution is unchanged, but the draws for a
+  given `seed` differ from earlier versions.
+
+### Dependencies
+
+* `LDATS`, `patchwork`, and `lifecycle` leave `Imports`, and `withr`
+  leaves `Suggests`; each had lost its last caller with the removals
+  above. No new dependency enters.
+
+### Infrastructure
+
+* New `sanitizers` workflow in continuous integration: the test suite runs
+  under AddressSanitizer and UndefinedBehaviorSanitizer (r-hub clang-asan
+  container) on kernel-touching changes and weekly, failing on any
+  sanitizer finding.
+* Build hygiene: stray `.Rhistory` files and rendered vignette artifacts
+  are excluded from the build, and `sim_dfm()` gains a dedicated test file
+  plus the package's first runnable example.
+
 # OpTop 0.15.0
 
 The scale release: the package now evaluates corpora of tens of millions of

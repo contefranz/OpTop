@@ -842,9 +842,9 @@ In empirical corpora the true number of topics is unknown. Following the
 paper, we therefore validate the procedure through a simulation study in
 which the ground truth is known: one corpus is simulated from the LDA
 generative process itself, with `r meta$J_sim` documents over
-`r meta$W_sim` words drawn from **`r meta$true_K` topics**, using
-`sim_dfm()` (a thin wrapper around `LDATS::sim_LDA_data()`), and a grid of
-models is re-estimated around the truth.
+`r meta$W_sim` words drawn from **`r meta$true_K` topics**, using the
+package's own `sim_dfm()` generator, and a grid of models is re-estimated
+around the truth.
 
 ```{r sim-call, eval = FALSE}
 rdirichlet <- function(n, alpha) {
@@ -1153,12 +1153,9 @@ the reference timings.
 
 ## Notes
 
-- The legacy stability helpers (`topic_stability()`, `agg_topic_stability()`,
-  `agg_document_stability()`, `get_topic_models()`) are deprecated and will
-  be removed in a future release; the discrepancy indices shown here are
-  their replacement.
-- `selection = "legacy"` reproduces the pre-0.9.9 computation exactly for
-  back-compatibility and is also deprecated.
+- The pre-0.9.8 stability helpers and the `selection = "legacy"` rule were
+  removed in 0.16.0 after a long deprecation; the discrepancy indices shown
+  here are their replacement.
 - The chi-square reference for Test 1 is asymptotic rather than exact; the
   calibrated p-values presented above (`calibrate = "bootstrap"` or
   `calibrate = "moment"`) address this, and `?optimal_topic` documents the

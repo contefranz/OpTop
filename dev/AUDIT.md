@@ -266,10 +266,6 @@ the macro average.
   a different statistic than the published Eq. (8), so an alternative
   alongside it, not a replacement.
 
-- **text2vec (WarpLDA) adapter**: the `LDA_t2v` stub still fails
-  informatively; mapping `doc_topic_distr`/`topic_word_distribution` to the
-  contract needs a verified normalization convention.
-
 ## Vignette build design (CRAN-ready)
 
 The vignette's `optimal_topic()` calls evaluate **live** when the local model

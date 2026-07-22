@@ -303,16 +303,14 @@ test_that("a non-proportion dfm is flagged", {
   )
 })
 
-test_that("the deprecated lda_models argument still works and warns", {
+test_that("the retired lda_models argument is rejected", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_warning(
-    got <- run_ot(lda_models = fx$models, weighted_dfm = wp$wdfm),
-    class = "lifecycle_warning_deprecated"
+  expect_error(
+    run_ot(lda_models = fx$models, weighted_dfm = wp$wdfm),
+    "unused argument"
   )
-  ref <- run_ot(topic_models = fx$models, weighted_dfm = wp$wdfm)
-  expect_identical(got, ref)
 })
 
 test_that("calibration runs on non-VEM engines", {
