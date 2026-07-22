@@ -141,12 +141,4 @@ test_that("calibration validates its inputs", {
                   verbose = FALSE),
     "n_boot"
   )
-  expect_error(
-    suppressWarnings(
-      optimal_topic(fx$models, wp$wdfm, selection = "legacy",
-                    calibrate = "bootstrap", doc_lengths = dl,
-                    do_plot = FALSE, verbose = FALSE)
-    ),
-    "not available"
-  )
 })

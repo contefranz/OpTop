@@ -27,11 +27,6 @@ optimal_topic_core <- function(theta, phi, dfm_p, dfm_i, dfm_x, n_terms_in, q, d
 }
 
 #' @keywords internal
-optimal_topic_core_legacy <- function(lda_models, weighted_dfm, q, doc_map) {
-    .Call(`_OpTop_optimal_topic_core_legacy`, lda_models, weighted_dfm, q, doc_map)
-}
-
-#' @keywords internal
 optop_partition_candidates_core <- function(pi_sorted, tau, n_threads) {
     .Call(`_OpTop_optop_partition_candidates_core`, pi_sorted, tau, n_threads)
 }

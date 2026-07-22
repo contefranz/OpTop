@@ -111,20 +111,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// optimal_topic_core_legacy
-Rcpp::List optimal_topic_core_legacy(const Rcpp::List& lda_models, const arma::sp_mat& weighted_dfm, double q, const arma::uvec& doc_map);
-RcppExport SEXP _OpTop_optimal_topic_core_legacy(SEXP lda_modelsSEXP, SEXP weighted_dfmSEXP, SEXP qSEXP, SEXP doc_mapSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type lda_models(lda_modelsSEXP);
-    Rcpp::traits::input_parameter< const arma::sp_mat& >::type weighted_dfm(weighted_dfmSEXP);
-    Rcpp::traits::input_parameter< double >::type q(qSEXP);
-    Rcpp::traits::input_parameter< const arma::uvec& >::type doc_map(doc_mapSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimal_topic_core_legacy(lda_models, weighted_dfm, q, doc_map));
-    return rcpp_result_gen;
-END_RCPP
-}
 // optop_partition_candidates_core
 Rcpp::IntegerVector optop_partition_candidates_core(const Rcpp::NumericVector& pi_sorted, const Rcpp::NumericVector& tau, int n_threads);
 RcppExport SEXP _OpTop_optop_partition_candidates_core(SEXP pi_sortedSEXP, SEXP tauSEXP, SEXP n_threadsSEXP) {
@@ -248,7 +234,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_OpTop_optop_index_word_core", (DL_FUNC) &_OpTop_optop_index_word_core, 16},
     {"_OpTop_optop_index_doc_core", (DL_FUNC) &_OpTop_optop_index_doc_core, 17},
     {"_OpTop_optimal_topic_core", (DL_FUNC) &_OpTop_optimal_topic_core, 10},
-    {"_OpTop_optimal_topic_core_legacy", (DL_FUNC) &_OpTop_optimal_topic_core_legacy, 4},
     {"_OpTop_optop_partition_candidates_core", (DL_FUNC) &_OpTop_optop_partition_candidates_core, 3},
     {"_OpTop_optop_partition_pass_core", (DL_FUNC) &_OpTop_optop_partition_pass_core, 8},
     {"_OpTop_optop_partition_compact_core", (DL_FUNC) &_OpTop_optop_partition_compact_core, 4},

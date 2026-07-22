@@ -198,54 +198,6 @@ ref_index_word <- function(model, dtm, partition, baseline,
        K = tp$K, metric = metric)
 }
 
-# Naive LEGACY reference for optimal_topic(selection = "legacy"). Mirrors the
-# pre-0.9.9 semantics verbatim, one explicit loop per document:
-# X_j = gamma_j %*% exp(beta), sorted descending; the envelope is truncated at
-# the first position whose cumulative mass, rounded half-away-from-zero to 4
-# decimals (std::round), exceeds q, with the crossing word collapsed into the
-# tail; chi_j = icut * (sum((o - e)^2 / e) + pooled term). Per model the
-# statistic is sum(chi_j) / sum(icut_j) and the p-value is the LOWER tail of a
-# chi-square with 1 df.
-#
-# `W_prop` is a plain dense matrix of row-wise word proportions whose rows and
-# columns are aligned with the models, exactly as the C++ core assumes.
-ref_optimal_topic_legacy <- function(models, W_prop, q = 0.80) {
-  out <- lapply(models, function(m) {
-    dtw <- m@gamma                 # J x K
-    tww <- t(exp(m@beta))          # W x K
-    J <- nrow(W_prop)
-
-    chi <- numeric(J)
-    icut <- numeric(J)
-    for (j in seq_len(J)) {
-      X <- drop(tww %*% dtw[j, ])
-      o <- W_prop[j, ]
-
-      ord <- order(X, decreasing = TRUE)
-      X <- X[ord]
-      o <- o[ord]
-
-      cum <- cumsum(X)
-      # floor(v * 1e4 + 0.5) reproduces std::round() for the positive values
-      # cum takes; R's round() would use banker's rounding at exact halves.
-      above <- which(floor(cum * 1e4 + 0.5) / 1e4 > q)
-      ic <- if (length(above)) above[1] - 1L else length(X)
-
-      head_idx <- seq_len(ic)
-      o_tail <- sum(o[-head_idx])
-      X_tail <- sum(X[-head_idx])
-      chi[j] <- ic * (sum((o[head_idx] - X[head_idx])^2 / X[head_idx]) +
-                        (o_tail - X_tail)^2 / X_tail)
-      icut[j] <- ic
-    }
-
-    stat <- sum(chi) / sum(icut)
-    c(topic = ncol(dtw), OpTop = stat, df = sum(icut),
-      pval = stats::pchisq(stat, df = 1, lower.tail = TRUE))
-  })
-  as.data.frame(do.call(rbind, out))
-}
-
 # Naive reference for the calibrated Test 1 of Lewis & Grossetti (2022),
 # Eq. (8): per document, the P_j important words are the smallest
 # descending-sorted head whose cumulative mass strictly exceeds q (the
