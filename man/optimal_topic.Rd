@@ -31,8 +31,8 @@ the same corpus and vocabulary; the test consumes the models only
 through their fitted word probabilities (see Details). Elements may
 also be loader functions returning a fit: each is materialized on
 demand and released, so very large grids never sit in memory at once
-(extracted weights are still cached under a fixed budget when they
-fit).}
+(extracted weights are still cached while the grid fits a budget of
+256 MB by default, configurable via \code{options(optop.cache_mb = )}).}
 
 \item{weighted_dfm}{A weighted \code{quanteda::dfm} containing word proportions
 for each document, built from the same counts dfm the models were
@@ -227,8 +227,11 @@ evaluates each block of documents with one BLAS product and sorts the
 fitted probabilities per document, and the bootstrap draws the null
 replicates directly on the collapsed bins, fused with the Pearson
 reduction, at about \eqn{B \times \mathrm{df}}{B x df} floating-point
-operations per model. See the "Computational efficiency" section of the
-vignette for measurements.
+operations per model. Extracted model weights are cached across the
+evaluation while the grid fits \code{options(optop.cache_mb = )} (default
+256): raising it on large servers keeps big grids resident, and results
+never depend on the budget. See the "Computational efficiency" section
+of the vignette for measurements.
 }
 \examples{
 \dontrun{

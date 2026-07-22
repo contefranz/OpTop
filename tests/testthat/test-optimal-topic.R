@@ -138,6 +138,23 @@ test_that("dropping unmatched documents is signalled even when silent", {
   )
 })
 
+test_that("the optop.cache_mb option bounds the cache without changing results", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+
+  ref <- run_optimal_topic(fx$models, wp$wdfm)
+
+  # a zero budget disables caching: every model is re-extracted, results
+  # are identical because extraction is deterministic
+  old <- options(optop.cache_mb = 0)
+  on.exit(options(old), add = TRUE)
+  got <- run_optimal_topic(fx$models, wp$wdfm)
+  expect_identical(got, ref)
+
+  options(optop.cache_mb = "big")
+  expect_error(run_optimal_topic(fx$models, wp$wdfm), "optop.cache_mb")
+})
+
 test_that("optimal_topic() validates its inputs", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)

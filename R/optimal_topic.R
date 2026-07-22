@@ -22,8 +22,8 @@ if (getRversion() >= "2.15.1") {
 #'   through their fitted word probabilities (see Details). Elements may
 #'   also be loader functions returning a fit: each is materialized on
 #'   demand and released, so very large grids never sit in memory at once
-#'   (extracted weights are still cached under a fixed budget when they
-#'   fit).
+#'   (extracted weights are still cached while the grid fits a budget of
+#'   256 MB by default, configurable via `options(optop.cache_mb = )`).
 #' @param weighted_dfm A weighted `quanteda::dfm` containing word proportions
 #'   for each document, built from the same counts dfm the models were
 #'   fitted on; it is recommended that document ids are available via
@@ -182,8 +182,11 @@ if (getRversion() >= "2.15.1") {
 #' fitted probabilities per document, and the bootstrap draws the null
 #' replicates directly on the collapsed bins, fused with the Pearson
 #' reduction, at about \eqn{B \times \mathrm{df}}{B x df} floating-point
-#' operations per model. See the "Computational efficiency" section of the
-#' vignette for measurements.
+#' operations per model. Extracted model weights are cached across the
+#' evaluation while the grid fits `options(optop.cache_mb = )` (default
+#' 256): raising it on large servers keeps big grids resident, and results
+#' never depend on the budget. See the "Computational efficiency" section
+#' of the vignette for measurements.
 #'
 #' @return A `data.table` with columns:
 #' - `topic`: integer number of topics (\eqn{K}).
@@ -313,7 +316,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   meta <- vector("list", length(topic_models))
   tp_cache <- vector("list", length(topic_models))
   cache_bytes <- 0
-  cache_budget <- 256 * 1024^2
+  cache_budget <- .optop_cache_budget()
   for (i_mod in seq_along(topic_models)) {
     tp <- optop_as_theta_phi(.optop_materialize_model(topic_models[[i_mod]]))
     .optop_validate_theta_phi(tp, class(topic_models[[i_mod]]))
@@ -471,6 +474,26 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   .optop_ot_finish(Chi_K_rows, pval_cal, calibrating,
                    calibrate, n_boot, selection, alpha, do_plot,
                    verbose, tic)
+}
+
+#' Resolve the extracted-weights cache budget in bytes
+#'
+#' The evaluation loops keep extracted (theta, phi) pairs as long as the
+#' whole grid fits a memory budget; past it, models are re-extracted one at
+#' a time so peak memory stays bounded. The budget is 256 MB by default and
+#' is configurable through `options(optop.cache_mb = )`: raise it on large
+#' servers to keep big grids resident, or set `0` to disable caching
+#' entirely. Results never depend on the budget, only wall time does.
+#'
+#' @return The budget in bytes, a single nonnegative number.
+#'
+#' @keywords internal
+.optop_cache_budget <- function() {
+  mb <- getOption("optop.cache_mb", 256)
+  if (!is.numeric(mb) || length(mb) != 1L || !is.finite(mb) || mb < 0) {
+    stop("options(optop.cache_mb = ) must be a single nonnegative number")
+  }
+  mb * 1024^2
 }
 
 #' Shared assembly, selection, and reporting tail of optimal_topic()
@@ -640,7 +663,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 
   # extracted weight matrices are cached across shards under the fixed
   # budget; past it, models are re-materialized per shard
-  cache_budget <- 256 * 1024^2
+  cache_budget <- .optop_cache_budget()
   tp_cache <- vector("list", n_models)
   cache_bytes <- 0
   tp_get <- function(i) {
