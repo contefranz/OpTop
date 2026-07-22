@@ -47,13 +47,18 @@ the baseline on the \emph{training} corpus and pass it to
 baseline probability unless \code{smooth_lambda > 0}.
 }
 \examples{
-\dontrun{
-library(Matrix)
 set.seed(1)
-dtm <- rsparsematrix(100, 5000, density = 0.002, rand.x = function(n) rpois(n, 2))
+counts <- matrix(rpois(40 * 60, 3), 40, 60,
+                 dimnames = list(sprintf("d\%02d", 1:40),
+                                 sprintf("w\%02d", 1:60)))
+dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                   "CsparseMatrix")
 base <- optop_make_baseline(dtm)
-sum(base$pi_glob)  # ~ 1
-}
+sum(base$pi_glob)  # exactly 1
+
+# Laplace-style smoothing pulls the baseline toward uniform
+base_s <- optop_make_baseline(dtm, smooth_lambda = 0.5)
+range(base_s$pi_glob / base$pi_glob)
 
 }
 \references{

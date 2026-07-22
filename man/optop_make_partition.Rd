@@ -123,26 +123,25 @@ large corpora, keep \code{dtm} sparse.
 }
 
 \examples{
-\dontrun{
-library(Matrix)
-library(topicmodels)
-
-# toy sparse DTM (J=50, W=1000)
-set.seed(1)
-ij <- cbind(
-  sample(50, 5000, TRUE),
-  sample(1000, 5000, TRUE)
-)
-x  <- sample(1:3, 5000, TRUE)
-dtm <- sparseMatrix(i = ij[,1], j = ij[,2], x = x, dims = c(50, 1000))
-
-# fit a small grid of LDA models
-m5  <- LDA(dtm, k = 5,  method = "VEM", control = list(seed = 42))
-m10 <- LDA(dtm, k = 10, method = "VEM", control = list(seed = 42))
-
-part <- optop_make_partition(list(m5, m10), dtm, c = 1)
-str(part$nonrare_offsets)
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
 }
+set.seed(1)
+theta <- rdirich(40, 3)
+rownames(theta) <- sprintf("d\%02d", 1:40)
+phi <- rdirich(3, 60)
+colnames(phi) <- sprintf("w\%02d", 1:60)
+counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+models <- list(optop_model(theta, phi))
+
+part <- optop_make_partition(models, counts, c = 1)
+part
+
+# a stricter threshold marks more words as rare per document
+part5 <- optop_make_partition(models, counts, c = 5)
+c(entries_c1 = length(part$nonrare_words),
+  entries_c5 = length(part5$nonrare_words))
 
 }
 \references{

@@ -40,17 +40,31 @@
 #' @return An object of class `optop_corpus`.
 #'
 #' @examples
-#' \dontrun{
-#' # split an existing dfm into four shards
-#' idx <- parallel::splitIndices(quanteda::ndoc(dfm_counts), 4)
-#' corp <- optop_corpus(lapply(idx, function(i) dfm_counts[i, ]))
+#' # shard a small corpus in memory: results match the unsharded matrix
+#' rdirich <- function(n, k) {
+#'   g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+#'   g / rowSums(g)
+#' }
+#' set.seed(1)
+#' theta <- rdirich(40, 3)
+#' rownames(theta) <- sprintf("d%02d", 1:40)
+#' phi <- rdirich(3, 60)
+#' colnames(phi) <- sprintf("w%02d", 1:60)
+#' counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+#' models <- list(optop_model(theta, phi))
 #'
-#' # or point at per-shard files written upstream
+#' corp <- optop_corpus(list(counts[1:25, ], counts[26:40, ]))
+#' corp
+#'
+#' part_sharded <- optop_make_partition(models, corp, c = 1)
+#' part_plain <- optop_make_partition(models, counts, c = 1)
+#' identical(part_sharded$nonrare_words, part_plain$nonrare_words)
+#'
+#' \dontrun{
+#' # at real scale, point at per-shard files written upstream: only one
+#' # shard is ever in memory
 #' corp <- optop_corpus(list.files("shards", full.names = TRUE),
 #'                      reader = function(p) qs2::qs_read(p))
-#'
-#' part <- optop_make_partition(models, corp, c = 1)
-#' base <- optop_make_baseline(corp)
 #' }
 #'
 #' @references

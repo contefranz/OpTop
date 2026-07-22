@@ -101,50 +101,36 @@ and \code{baseline <- optop_make_baseline(...)} once and pass them in.
 }
 
 \examples{
-\dontrun{
-library(quanteda)
-library(OpTop)
-
-K_grid = 2:10
-
-# Tokenize the corpus
-toks <- data_corpus_inaugural \%>\% 
-  tokens(remove_punct = TRUE, 
-         remove_symbols = TRUE, 
-         remove_numbers = TRUE) \%>\% 
-  tokens_tolower() \%>\% 
-  tokens_remove(stopwords())
-  
-# Create the document-feature-matrix
-mydfm <- dfm(toks)
-
-# Estimate topic models via VEM
-VEM_models <- lapply(
-  K_grid, function(k) {
-    topicmodels::LDA(x = mydfm, k = k)
-  }
-)
-
-# 1) Quick run: compute partition/baseline internally
-tab <- optop_index_table(
-  models   = VEM_models,
-  dtm      = mydfm,
-  metrics  = c("se","deviance"),
-  macro    = TRUE
-)
-
-# 2) Faster repeated runs: precompute and reuse partition/baseline
-part <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
-base <- optop_make_baseline(dtm = mydfm)
-tab2 <- optop_index_table(
-  models    = VEM_models,
-  dtm       = mydfm,
-  metrics   = c("se","chisq","deviance"),
-  macro     = FALSE,
-  partition = part,
-  baseline  = base
-)
+# a small grid over a simulated corpus with known truth at K = 3
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
 }
+set.seed(1)
+theta <- rdirich(40, 3)
+rownames(theta) <- sprintf("d\%02d", 1:40)
+phi <- rdirich(3, 60)
+colnames(phi) <- sprintf("w\%02d", 1:60)
+counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+
+models <- lapply(c(2, 3, 4), function(k) {
+  if (k == 3) return(optop_model(theta, phi))
+  th <- rdirich(40, k); rownames(th) <- rownames(theta)
+  ph <- rdirich(k, 60); colnames(ph) <- colnames(phi)
+  optop_model(th, ph)
+})
+
+# 1) quick run: partition and baseline computed internally
+tab <- optop_index_table(models, counts, metrics = c("se", "deviance"),
+                         macro = TRUE)
+tab
+
+# 2) faster repeated runs: precompute and reuse partition/baseline
+part <- optop_make_partition(models, counts, c = 1)
+base <- optop_make_baseline(counts)
+tab2 <- optop_index_table(models, counts,
+                          metrics = c("se", "chisq", "deviance"),
+                          partition = part, baseline = base)
 
 }
 \references{

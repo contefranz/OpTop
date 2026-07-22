@@ -258,21 +258,43 @@ never depend on the budget. See the "Computational efficiency" section
 of the vignette for measurements.
 }
 \examples{
-\dontrun{
-# Asymptotic p-values (Equation 8)
-test1 <- optimal_topic(topic_models = lda_list,
-                       weighted_dfm = weighted_dfm,
-                       q = 0.95,
-                       alpha = 0.05,
-                       selection = "sequential")
+# simulate a corpus whose truth is known, then let Test 1 recover it:
+# the candidate grid holds two random models and the true K = 3 model
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
+}
+set.seed(1)
+theta <- rdirich(40, 3)
+rownames(theta) <- sprintf("d\%02d", 1:40)
+phi <- rdirich(3, 60)
+colnames(phi) <- sprintf("w\%02d", 1:60)
+counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+wprop <- quanteda::dfm_weight(counts, scheme = "prop")
 
-# Bootstrap-calibrated p-values: document lengths come from the counts dfm
-test1_cal <- optimal_topic(topic_models = lda_list,
-                           weighted_dfm = weighted_dfm,
-                           calibrate = "bootstrap",
-                           n_boot = 200,
-                           doc_lengths = quanteda::ntoken(counts_dfm),
-                           seed = 42)
+models <- lapply(c(2, 3, 4), function(k) {
+  if (k == 3) return(optop_model(theta, phi))
+  th <- rdirich(40, k); rownames(th) <- rownames(theta)
+  ph <- rdirich(k, 60); colnames(ph) <- colnames(phi)
+  optop_model(th, ph)
+})
+
+test1 <- optop_select(models, wprop, do_plot = FALSE)
+test1
+
+# bootstrap-calibrated p-values: document lengths come from the counts
+test1_cal <- optop_select(models, wprop,
+                          calibrate = "bootstrap", n_boot = 50,
+                          doc_lengths = quanteda::ntoken(counts),
+                          seed = 42, do_plot = FALSE)
+
+\donttest{
+# the same flow with real engine fits (topicmodels VEM)
+fits <- lapply(2:4, function(k) {
+  topicmodels::LDA(quanteda::convert(counts, to = "topicmodels"),
+                   k = k, method = "VEM", control = list(seed = 500 + k))
+})
+optop_select(fits, wprop, do_plot = FALSE)
 }
 
 }

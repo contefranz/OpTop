@@ -225,51 +225,44 @@ guarantee that does not extend to approximate inference.
 
 }}
 \examples{
-\dontrun{
-
-library(quanteda)
-library(OpTop)
-
-K_grid = 2:10
-
-# Tokenize the corpus
-toks <- data_corpus_inaugural \%>\% 
-  tokens(remove_punct = TRUE, 
-         remove_symbols = TRUE, 
-         remove_numbers = TRUE) \%>\% 
-  tokens_tolower() \%>\% 
-  tokens_remove(stopwords())
-  
-# Create the document-feature-matrix
-mydfm <- dfm(toks)
-
-# Estimate topic models via VEM
-VEM_models <- lapply(
-  K_grid, function(k) {
-    topicmodels::LDA(x = mydfm, k = k)
-  }
-)
-
-# Same DTM used at fit and evaluation --> no separate alignment here
-partition <- optop_make_partition(models = VEM_models, dtm = mydfm, c = 1)
-baseline  <- optop_make_baseline(dtm = mydfm)
-
-# Choose model with k = 10
-# SE
-res_se <- optop_index_se(
-  model     = VEM_models[[9]],
-  dtm       = mydfm,
-  partition = partition,
-  baseline  = baseline
-)
-res_se$r2
-
-# Chi-square
-res_x2 <- optop_index_chisq(VEM_models[[9]], mydfm, partition, baseline)
-
-# Deviance
-res_dev <- optop_index_deviance(VEM_models[[9]], mydfm, partition, baseline)
+# a corpus with known truth: the true model against a random competitor
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
 }
+set.seed(1)
+theta <- rdirich(40, 3)
+rownames(theta) <- sprintf("d\%02d", 1:40)
+phi <- rdirich(3, 60)
+colnames(phi) <- sprintf("w\%02d", 1:60)
+counts <- sim_dfm(theta, phi, doc_length = 400, seed = 2)
+
+truth <- optop_model(theta, phi)
+rand <- local({
+  th <- rdirich(40, 3); rownames(th) <- rownames(theta)
+  ph <- rdirich(3, 60); colnames(ph) <- colnames(phi)
+  optop_model(th, ph)
+})
+
+# the harmonized support is shared by the whole grid
+partition <- optop_make_partition(list(truth, rand), counts, c = 1)
+baseline <- optop_make_baseline(counts)
+
+res_truth <- optop_index_deviance(truth, counts, partition, baseline,
+                                  macro = TRUE)
+res_rand <- optop_index_deviance(rand, counts, partition, baseline,
+                                 macro = TRUE)
+res_truth
+c(truth = res_truth$r2, random = res_rand$r2)
+
+# the Pearson and squared-error variants share the interface
+res_x2 <- optop_index_chisq(truth, counts, partition, baseline)
+res_se <- optop_index_se(truth, counts, partition, baseline)
+
+# word-level diagnostic: which words does the model capture best?
+word <- optop_index_deviance(truth, counts, partition, baseline,
+                             level = "word")
+head(sort(word$r2_word, decreasing = TRUE), 3)
 
 }
 \references{
@@ -284,6 +277,6 @@ Agresti, A. (1996). \emph{An Introduction to Categorical Data Analysis}.
 Wiley, New York.
 }
 \seealso{
-\code{\link[=optop_make_partition]{optop_make_partition()}}, \code{\link[=optop_make_baseline]{optop_make_baseline()}}, \code{\link[=optop_index_table]{optop_index_table()}};
-internal helper: \code{optop_align_dtm_to_models()}.
+\code{\link[=optop_make_partition]{optop_make_partition()}}, \code{\link[=optop_make_baseline]{optop_make_baseline()}},
+\code{\link[=optop_index_table]{optop_index_table()}}, \code{\link[=optop_align_dtm_to_models]{optop_align_dtm_to_models()}}.
 }
