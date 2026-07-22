@@ -277,16 +277,14 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                 std::size_t n_bins = p_j;
                 double tail_x = 0.0;
                 if (n_tail > 0) {
-                    // tail sums via the document totals: O(W) once instead
-                    // of a second pass over the unsorted remainder
-                    double total_x = 0.0;
-                    double total_o = 0.0;
-                    for (arma::uword w = 0; w < n_terms; ++w) {
-                        total_x += x[w];
-                        total_o += o[w];
-                    }
-                    tail_x = total_x - head_x;
-                    const double tail_diff = (total_o - head_o) - tail_x;
+                    // both document totals are identically 1: the fitted
+                    // probabilities are a mixture of row-stochastic phi rows
+                    // and the caller enforces row-normalized observed
+                    // proportions, so the collapsed tail is the complement
+                    // of the head mass and no pass over the vocabulary is
+                    // needed. tail_diff = (1 - head_o) - (1 - head_x)
+                    tail_x = 1.0 - head_x;
+                    const double tail_diff = head_x - head_o;
                     pearson += tail_diff * tail_diff / tail_x;
                     n_bins += 1;
                 }
