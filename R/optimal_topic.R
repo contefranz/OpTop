@@ -1,6 +1,6 @@
 if (getRversion() >= "2.15.1") {
-  utils::globalVariables(c("id_doc", "document", "check", "topics", ".",
-                           "pval", "OpTop", "raw", "df", "pval_chisq"))
+  utils::globalVariables(c("id_doc", "document", "check", "topic", "topics",
+                           ".", "pval", "OpTop", "raw", "df", "pval_chisq"))
 }
 #' Find the optimal number of topics from a pool of topic models
 #'

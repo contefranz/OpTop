@@ -77,7 +77,10 @@ optop_test_fixture <- function() {
                      control = list(seed = 1000 + k))
   })
 
-  dtm <- methods::as(counts, "CsparseMatrix")
+  # route through Matrix() so the coercion works without Matrix attached
+  # (the direct base-matrix method is only visible with Matrix on the
+  # search path)
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE), "CsparseMatrix")
 
   partition <- optop_make_partition(models, dtm, c = 5)
   baseline <- optop_make_baseline(dtm)

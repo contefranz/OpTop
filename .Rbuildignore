@@ -2,6 +2,9 @@
 ^\.Rproj\.user$
 ^test\.R$
 ^\.DS_Store$
+\.Rhistory$
+^vignettes/.*\.html$
+^vignettes/.*_files$
 ^\.github$
 ^\.claude$
 ^dev$

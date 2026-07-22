@@ -26,7 +26,8 @@ toy_corpus_baseline_rare <- function() {
                   c(7L, 7L, 6L, 0L),
                   c(7L, 7L, 6L, 0L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   models <- list(toy_model(c(0.25, 0.25, 0.25, 0.25), docs, vocab),
                  toy_model(c(0.30, 0.30, 0.20, 0.20), docs, vocab))
   list(dtm = dtm, counts = counts, models = models,
@@ -97,7 +98,8 @@ test_that("the inclusion rule keeps a min bin with enough grid-wide mass", {
                   c(31L, 32L, 33L, 2L, 2L),
                   c(31L, 31L, 34L, 2L, 2L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   phi_row <- c(0.40, 0.30, 0.284, 0.008, 0.008)
   models <- list(toy_model(phi_row, docs, vocab))
 
@@ -126,7 +128,8 @@ test_that("degenerate documents are excluded from the Micro index", {
                   c(2L, 7L, 6L, 5L),
                   c(2L, 3L, 4L, 1L))
   dimnames(counts) <- list(docs, vocab)
-  dtm <- methods::as(counts, "CsparseMatrix")
+  dtm <- methods::as(Matrix::Matrix(counts, sparse = TRUE),
+                     "CsparseMatrix")
   models <- list(toy_model(c(0.25, 0.25, 0.25, 0.25), docs, vocab),
                  toy_model(c(0.30, 0.30, 0.20, 0.20), docs, vocab))
   part <- optop_make_partition(models, dtm, c = 1)
