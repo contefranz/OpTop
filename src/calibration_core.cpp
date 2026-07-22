@@ -1,4 +1,5 @@
 #include <Rcpp.h>
+#include <climits>
 #include <cstdint>
 #include <random>
 #include <vector>
@@ -97,7 +98,14 @@ Rcpp::NumericVector optop_boot_null_core(const Rcpp::NumericVector& bin_probs,
                                          int n_threads,
                                          double doc_offset = 0)
 {
-    const int n_docs = bin_counts.size();
+    // the only R_xlen_t -> int narrowing in the package not backed by a
+    // CSC or vocabulary bound: make the per-shard document cap explicit
+    // rather than silent (a dgCMatrix shard cannot exceed it anyway)
+    if (bin_counts.size() > static_cast<R_xlen_t>(INT_MAX)) {
+        Rcpp::stop("the calibration shard holds more than 2^31 - 1 documents; "
+                   "evaluate through optop_corpus() shards");
+    }
+    const int n_docs = static_cast<int>(bin_counts.size());
     if (doc_lengths.size() != n_docs) {
         Rcpp::stop("doc_lengths must have one entry per document");
     }

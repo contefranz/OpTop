@@ -1,0 +1,193 @@
+---
+title: "OpTop at very large scale"
+output: rmarkdown::html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, collapse = TRUE, comment = "#>")
+```
+
+This article is the operations manual for running OpTop on corpora that
+outgrow a single sparse matrix: millions to tens of millions of documents,
+vocabularies in the tens of thousands, evaluated on server machines. Nothing
+here changes the statistics. Every tool below computes exactly what the
+in-memory workflow computes, and for ordinary corpora (up to a few million
+documents that fit comfortably in memory) you do not need any of it: pass
+your dfm or dgCMatrix directly and stop reading.
+
+The article covers, in order: why a single matrix eventually fails, sharding
+with `optop_corpus()`, lazy model loaders and the cache budget, the sharded
+end-to-end pipeline, thread and BLAS configuration, and memory planning with
+reference timings.
+
+## Why a single matrix eventually fails
+
+R's sparse matrix container (`dgCMatrix`) stores nonzero positions in a
+32-bit index, so one matrix holds at most $2^{31} - 1$ nonzero cells. An
+accounting corpus of 14 million filings with a few hundred distinct terms
+each crosses that bound. Memory follows close behind: the counts, their
+transpose, and the per-model fitted quantities all scale with the token
+count.
+
+OpTop's compiled kernels have no shape limit of their own (the boundary is
+zero-copy over the sparse slots, and all index arithmetic is 64-bit). The
+container is the bound, and sharding removes it.
+
+## Sharding with optop_corpus()
+
+`optop_corpus()` wraps an ordered collection of document shards, each a
+matrix small enough for the container. Three forms are accepted:
+
+```{r corpus-forms}
+library(OpTop)
+
+# 1) a single matrix: a corpus with one shard, exactly equivalent to
+#    passing the matrix itself
+corpus <- optop_corpus(dtm)
+
+# 2) an in-memory list of shards: documents split by rows, all shards
+#    sharing the same vocabulary in the same order
+corpus <- optop_corpus(list(dtm_2015, dtm_2016, dtm_2017))
+
+# 3) file-backed shards with a reader: nothing is loaded until a shard is
+#    evaluated, and only one shard is in memory at a time
+corpus <- optop_corpus(
+  sprintf("shards/counts-%02d.qs2", 1:24),
+  reader = function(path) qs2::qs_read(path)
+)
+```
+
+Shards must carry unique, globally disjoint document names and identical
+column names. The constructor validates what it can see immediately and
+defers file-backed validation to first use.
+
+The exactness contract is worth stating precisely. Per-document quantities
+(statistic terms, discrepancies, calibration draws) are bit-identical to an
+unsharded evaluation: every document owns a deterministic random stream
+keyed by its global position, and per-document arithmetic does not depend on
+which shard holds the document. Corpus-level sums group floating-point
+additions by shard, so totals agree with the unsharded run to summation
+order, a few units in the last place. A one-shard corpus reproduces the
+plain call bit for bit, calibrated p-values included.
+
+## Lazy model loaders and the cache budget
+
+A grid of fitted models for a large corpus can itself exhaust memory: theta
+alone is $J \times K$ doubles per model. Wherever a list of models is
+accepted, elements may be loader functions returning a fit; each is
+materialized on demand and released:
+
+```{r loaders}
+models <- lapply(sprintf("fits/lda-k%02d.qs2", seq(10, 80, by = 10)),
+                 function(path) {
+                   force(path)
+                   function() qs2::qs_read(path)
+                 })
+
+test1 <- optimal_topic(models, corpus,
+                       doc_lengths = doc_lengths,  # named, see below
+                       n_threads = 16)
+```
+
+Extracted weight matrices are cached across shards while the whole grid
+fits a budget, 256 MB by default. On a large server, raise it so the grid
+stays resident across shard passes:
+
+```{r cache}
+options(optop.cache_mb = 4096)
+```
+
+Results never depend on the budget; only wall time does.
+
+## The sharded pipeline end to end
+
+Every stage accepts the corpus where it accepts a matrix. Two details
+change relative to the in-memory workflow: `doc_lengths` must be a named
+vector when calibrating (row order across shards is not a reliable
+identity at this scale), and the counts corpus and the weighted corpus
+must shard the documents identically.
+
+```{r pipeline}
+# Test 1 with bootstrap calibration
+doc_lengths <- unlist(lapply(shard_paths, function(p) {
+  m <- qs2::qs_read(p)
+  stats::setNames(Matrix::rowSums(m), rownames(m))
+}))
+
+wprop <- optop_corpus(weighted_paths, reader = function(p) qs2::qs_read(p))
+test1 <- optimal_topic(models, wprop,
+                       calibrate = "bootstrap", n_boot = 200,
+                       doc_lengths = doc_lengths, seed = 42,
+                       n_threads = 16)
+
+# goodness-of-fit indices on the counts corpus
+counts <- optop_corpus(shard_paths, reader = function(p) qs2::qs_read(p))
+partition <- optop_make_partition(models, counts, c = 1, n_threads = 16)
+baseline <- optop_make_baseline(counts)
+tab <- optop_index_table(models, counts,
+                         metrics = c("se", "chisq", "deviance"),
+                         macro = TRUE,
+                         partition = partition, baseline = baseline,
+                         n_threads = 16)
+```
+
+Held-out evaluation (`optop_index_holdout()`, `optop_moment_test()`)
+accepts an `optop_corpus` for the evaluation documents as well; the
+training-side objects (baseline, instruments) are ordinary vectors and
+never large.
+
+All long-running kernels check for user interrupts between work chunks, so
+a mistaken launch on a 14-million-document corpus can be cancelled from the
+console rather than killed.
+
+## Threads and BLAS
+
+`n_threads` controls the OpenMP parallelism of the compiled kernels. The
+contract is strict: results are bit-identical for any value, because every
+document owns its result slot and all reductions run in a fixed order.
+Choose it freely; on builds without OpenMP (the default macOS toolchain)
+the value is ignored and the kernels run single-threaded.
+
+Two thread pools can interact, and one configuration deserves care. The
+per-block fitted-probability product runs through your R installation's
+BLAS. Inside a single OpTop call there is no nesting: the BLAS product runs
+in serial code, outside the OpenMP regions. But a common server pattern
+wraps model fitting or per-period evaluations in `parallel::mclapply()`,
+and if the linked BLAS is itself multithreaded (OpenBLAS, MKL, Apple
+Accelerate), every forked worker spawns its own BLAS pool and the machine
+oversubscribes. Cap the BLAS pool in that pattern:
+
+```{r blas}
+# either an environment variable before starting R
+#   OPENBLAS_NUM_THREADS=1  (or MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS)
+# or at runtime
+RhpcBLASctl::blas_set_num_threads(1)
+```
+
+As a rule: give threads either to OpTop (`n_threads`) or to the outer
+`mclapply()`, not both, and keep the BLAS pool at one thread whenever the
+outer level forks.
+
+## Memory planning and reference timings
+
+The partition is the object to size in advance. It stores the complement
+of the rare set, bounded by one entry per `c` tokens: at one billion tokens
+and `c = 1` that is at most $10^9$ 32-bit word indices, about 4 GB, and
+proportionally less for larger `c`. No dense $J \times W$ object of any
+kind is materialized anywhere; the pre-0.15.0 dense mask at the largest
+benchmark size below would have needed 200 GB.
+
+Reference timings from the development benchmark (synthetic Zipf corpora,
+two toy models per grid, `dev/benchmark-scale.md` in the repository; see
+the NEWS entries of 0.15.0 and 0.17.0 for the architecture behind them):
+
+|     J|     W|      nnz| partition_s| partition_mb| doc_index_s| optimal_topic_s|
+|-----:|-----:|--------:|-----------:|------------:|-----------:|---------------:|
+| 1e+05| 30000|  4928396|         0.1|         51.2|         0.1|            40.0|
+| 5e+05| 50000| 24990158|         0.6|        226.4|         0.4|           357.2|
+| 1e+06| 50000| 42378862|         0.9|        400.3|         0.8|           739.4|
+
+The `optimal_topic` column is dominated by the per-model BLAS product over
+the full vocabulary, which is inherent to the statistic; the partition and
+the discrepancy indices run in seconds at a million documents because they
+scale with the token count, not with $J \times W$.

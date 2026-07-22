@@ -1148,8 +1148,11 @@ entry point accepts; shards are streamed one at a time, per-document
 results are bit-identical to an unsharded run, and the calibration
 bootstrap keys each document's random stream by its global index. Model
 grids too large for memory are supplied as loader functions, materialized
-one model at a time. The scale benchmark in the development folder records
-the reference timings.
+one model at a time. The package website article
+[OpTop at very large scale](https://contefranz.github.io/OpTop/articles/very-large-corpora.html)
+is the operations manual for this regime: sharding, loaders, the cache
+budget, thread and BLAS configuration, and memory planning with the
+reference timings of the scale benchmark.
 
 ## Notes
 

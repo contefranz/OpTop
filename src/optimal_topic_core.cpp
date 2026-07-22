@@ -37,7 +37,12 @@
 // boundary that doubles until the head mass crosses q; each widening sorts
 // only the new slice (the partition property guarantees slices are already
 // ordered relative to each other), for an overall cost of
-// O(W · widenings + P_j log P_j) instead of O(W log W).
+// O(W · widenings + P_j log P_j) instead of O(W log W). The initial
+// boundary is a fixed 1024 (clamped to W): starting at a fraction of W
+// would sort thousands of entries per document at large vocabularies when
+// the typical P_j is tens to hundreds, and because the comparator is a
+// strict total order the boundary trajectory cannot change the selected
+// envelope, only the work done to find it.
 
 namespace {
 
@@ -141,7 +146,14 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
     std::vector<double> df_slot(block_size);
     std::vector<std::vector<double>> env_slot(return_envelope ? block_size : 0);
 
+    // block buffers allocated once: at large W the fitted-probability block
+    // is on the order of 100 MB, so a fresh allocation per block would put
+    // the allocator on the hot path. The ragged final block writes and
+    // reads only its first block_len columns; stale columns are never
+    // touched.
     arma::mat dfm_block(n_terms, block_size);
+    arma::mat X_block(n_terms, block_size);
+    arma::mat theta_t_blk(current_k, block_size);
 
     for (arma::uword block_start = 0; block_start < n_docs; block_start += block_size)
     {
@@ -150,8 +162,25 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
         const arma::uword block_end = std::min(block_start + block_size, n_docs) - 1;
         const int block_len = static_cast<int>(block_end - block_start + 1);
 
-        const arma::uvec theta_rows = doc_map.subvec(block_start, block_end);
-        const arma::mat X_block = tww * arma::mat(theta.rows(theta_rows)).t();
+        // gather the block's theta rows transposed (K x block_len), then one
+        // gemm straight into the preallocated block through no-copy views:
+        // no per-block gather, transpose, or product temporaries
+        for (int j_col = 0; j_col < block_len; ++j_col) {
+            const arma::uword r = doc_map[block_start + static_cast<arma::uword>(j_col)];
+            double* dst = theta_t_blk.colptr(j_col);
+            for (arma::uword k = 0; k < current_k; ++k) {
+                dst[k] = theta.at(r, k);
+            }
+        }
+        {
+            const arma::uword bl = static_cast<arma::uword>(block_len);
+            arma::mat X_view(X_block.memptr(), n_terms, bl, false, true);
+            const arma::mat T_view(theta_t_blk.memptr(), current_k, bl,
+                                   false, true);
+            // no operand aliases the destination, so Armadillo evaluates
+            // the product directly into the external memory
+            X_view = tww * T_view;
+        }
 
         // densify the block, one sparse column per document, in parallel
 #ifdef _OPENMP
@@ -196,8 +225,7 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                 // cf. footnote 5 of the paper): widen a selection boundary
                 // until the head mass crosses q, sorting only new slices
                 arma::uword sorted_upto = 0;
-                arma::uword boundary = std::min<arma::uword>(
-                    n_terms, std::max<arma::uword>(256, n_terms / 4));
+                arma::uword boundary = std::min<arma::uword>(n_terms, 1024);
                 double cum = 0.0;
                 arma::uword p_j = 0;
                 bool crossed = false;
@@ -249,16 +277,14 @@ Rcpp::List optimal_topic_core(const arma::mat& theta,
                 std::size_t n_bins = p_j;
                 double tail_x = 0.0;
                 if (n_tail > 0) {
-                    // tail sums via the document totals: O(W) once instead
-                    // of a second pass over the unsorted remainder
-                    double total_x = 0.0;
-                    double total_o = 0.0;
-                    for (arma::uword w = 0; w < n_terms; ++w) {
-                        total_x += x[w];
-                        total_o += o[w];
-                    }
-                    tail_x = total_x - head_x;
-                    const double tail_diff = (total_o - head_o) - tail_x;
+                    // both document totals are identically 1: the fitted
+                    // probabilities are a mixture of row-stochastic phi rows
+                    // and the caller enforces row-normalized observed
+                    // proportions, so the collapsed tail is the complement
+                    // of the head mass and no pass over the vocabulary is
+                    // needed. tail_diff = (1 - head_o) - (1 - head_x)
+                    tail_x = 1.0 - head_x;
+                    const double tail_diff = head_x - head_o;
                     pearson += tail_diff * tail_diff / tail_x;
                     n_bins += 1;
                 }
