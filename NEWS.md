@@ -1,3 +1,48 @@
+# OpTop 0.18.0
+
+The interface release: everything a user touches at the console gets a
+face. New model entry points, classed results with compact print methods,
+a plot method for held-out runs, and the two vignette sections the
+feature set had outgrown.
+
+### New features
+
+* **`optop_model(theta, phi)`**: the public entry point for engines the
+  package has no adapter for. Any software that estimates a
+  document-topic and a topic-word matrix now enters the toolchain through
+  a validated constructor (named documents and terms, nonnegative
+  weights, unit row sums) and flows through the in-sample tools like a
+  native fit. Fold-in refuses it with a pointed message: no engine sits
+  behind it, so held-out evaluation wants the engine's own object.
+* **`optop_align_dtm_to_models()` is now exported.** The remediation
+  helper the alignment errors have pointed at since 0.13.0 ships with a
+  reference page, a runnable example, and direct tests.
+* **Every result prints itself.** Partitions, the three discrepancy-index
+  results, and the grid table now carry classes next to their unchanged
+  list (or `data.table`) structure, joining the already classed holdout
+  and moment-test results; compact cli print methods cover all of them
+  plus the model container. Dollar-access code is unaffected.
+* **`plot(holdout)`**: the Macro curve with its confidence band across
+  metrics, and a `which = "gains"` view drawing the adjacent paired gains
+  with one-sided upper bounds, the epsilon line, and the K selected by
+  the adequacy rule.
+
+### Documentation
+
+* New vignette section **"The Null-Discrepancy Floor"**: why the Macro
+  denominator needs a floor, the default `min_null = c`, and the real
+  collapsed speech in the inaugural corpus whose single unfloored ratio
+  drags the Macro index while Micro barely moves.
+* New vignette section **"Other Engines and Bare Matrices"**: the adapter
+  layer, `optop_warplda()` with a VEM-versus-WarpLDA comparison on one
+  scale, `optop_model()`, and the alignment helper.
+
+### Internal
+
+* The dense-row reconstructor orphaned by the 0.16.0 teardown is
+  removed; the `optop_fold_in()` methods gain direct per-engine contract
+  tests.
+
 # OpTop 0.17.0
 
 The kernel release: the compiled cores lose their last avoidable

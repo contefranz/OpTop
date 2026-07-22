@@ -165,6 +165,41 @@ word_snapshot <- list(k = k_star,
                       micro = word_idx$r2_micro_word,
                       macro = word_idx$r2_macro_word)
 
+# null-discrepancy floor demonstration at the sequential pick: the corpus
+# genuinely contains a structurally collapsed speech whose support is swept
+# entirely into the min bin; the sparse kernels compute its baseline
+# discrepancy as an exact zero (complement sums), so the demo shows the
+# reported, principled exclusion on real data
+dev_floor <- optop_index_deviance(m_star, dtm_counts, partition, baseline,
+                                  macro = TRUE)
+excl <- is.na(dev_floor$r2_doc) & is.finite(dev_floor$d_null)
+null_floor <- list(
+  k = k_star,
+  n_excluded = dev_floor$n_null_excluded,
+  share = dev_floor$null_excluded_share,
+  docs = rownames(dtm_counts)[excl],
+  lengths = unname(Matrix::rowSums(dtm_counts)[excl]),
+  d_null_excluded = unname(dev_floor$d_null[excl]),
+  macro_floor = dev_floor$r2_macro,
+  micro_floor = dev_floor$r2
+)
+
+# WarpLDA demonstration: the same corpus through a different engine, wrapped
+# by optop_warplda(); only compact numbers ship with the bundle
+set.seed(20260722)
+warp_lda <- text2vec::LDA$new(n_topics = k_star)
+warp_theta <- warp_lda$fit_transform(dtm_counts, n_iter = 500,
+                                     progressbar = FALSE)
+warp_fit <- optop_warplda(warp_lda, warp_theta)
+warp_part <- optop_make_partition(list(warp_fit), dtm_counts, c = 1)
+warp_dev <- optop_index_deviance(warp_fit, dtm_counts, warp_part, baseline,
+                                 macro = TRUE)
+warplda_demo <- list(k = k_star,
+                     micro = warp_dev$r2,
+                     macro = warp_dev$r2_macro,
+                     micro_vem = dev_floor$r2,
+                     macro_vem = dev_floor$r2_macro)
+
 ## Part 1c -- held-out validation on the inaugural corpus ----------------------
 
 # Seeded split: about 25% of the speeches are held out for evaluation and the
@@ -312,6 +347,8 @@ bundle <- list(
     console_cal_mm = mm_run$console,
     index_table = index_tab,
     word_snapshot = word_snapshot,
+    null_floor = null_floor,
+    warplda = warplda_demo,
     holdout = list(
       summary = ho$summary,
       gains = gt$gains,
