@@ -294,16 +294,19 @@ optop_make_partition <- function(models, dtm, c = 1,
     excluded_mass <- mean(N_min[excluded] / pmax(L[excluded], 1))
   }
 
-  list(nonrare_offsets = nr$offsets,
-       nonrare_words = nr$words,
-       vocab = if (is.null(vocab)) .optop_corpus_vocab(corpus) else vocab,
-       L = L,
-       chisq_min_ok = chisq_min_ok,
-       chisq_min_report = list(n_excluded = sum(excluded),
-                               share = mean(excluded),
-                               excluded_mass = excluded_mass),
-       c = c,
-       format = 2L)
+  structure(
+    list(nonrare_offsets = nr$offsets,
+         nonrare_words = nr$words,
+         vocab = if (is.null(vocab)) .optop_corpus_vocab(corpus) else vocab,
+         L = L,
+         chisq_min_ok = chisq_min_ok,
+         chisq_min_report = list(n_excluded = sum(excluded),
+                                 share = mean(excluded),
+                                 excluded_mass = excluded_mass),
+         c = c,
+         format = 2L),
+    class = c("optop_partition", "list")
+  )
 }
 
 # Slice a format-2 partition to the documents [offset + 1, offset + n]: the
@@ -366,20 +369,8 @@ optop_make_partition <- function(models, dtm, c = 1,
   partition$vocab <- colnames(mask)
   partition$rare_mask <- NULL
   partition$format <- 2L
+  class(partition) <- c("optop_partition", "list")
   partition
-}
-
-# Reconstruct one document's dense rare row from the sparse partition: the
-# deprecated SE re-optimization path is the only remaining consumer of a
-# dense mask and stays a small-corpus code path.
-.optop_partition_rare_row <- function(partition, j, W) {
-  out <- rep(TRUE, W)
-  o0 <- partition$nonrare_offsets[j]
-  o1 <- partition$nonrare_offsets[j + 1]
-  if (o1 > o0) {
-    out[partition$nonrare_words[(o0 + 1):o1] + 1L] <- FALSE
-  }
-  out
 }
 
 #' Global Corpus Baseline for OpTop Indices

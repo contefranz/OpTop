@@ -3,9 +3,24 @@
 \name{optop-print}
 \alias{optop-print}
 \alias{print.optop_theta_phi}
+\alias{print.optop_partition}
+\alias{print.optop_index}
+\alias{print.optop_index_table}
+\alias{print.optop_holdout}
+\alias{print.optop_moment_test}
 \title{Printing OpTop objects}
 \usage{
 \method{print}{optop_theta_phi}(x, ...)
+
+\method{print}{optop_partition}(x, ...)
+
+\method{print}{optop_index}(x, ...)
+
+\method{print}{optop_index_table}(x, ...)
+
+\method{print}{optop_holdout}(x, ...)
+
+\method{print}{optop_moment_test}(x, ...)
 }
 \arguments{
 \item{x}{The object to print.}

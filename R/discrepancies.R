@@ -634,7 +634,10 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                              min_null, metric)
   }
   out <- do.call(rbind, rows)
-  data.table::setDT(out)[]
+  data.table::setDT(out)
+  data.table::setattr(out, "class",
+                      c("optop_index_table", "data.table", "data.frame"))
+  out
 }
 
 
@@ -808,12 +811,15 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   r2_doc[valid] <- 1 - D_K[valid] / D_null[valid]
   r2_micro <- 1 - sum(D_K[valid]) / sum(D_null[valid])
   r2_macro <- mean(r2_doc[valid])
-  list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
-       r2_doc = r2_doc, d_model = D_K, d_null = D_null,
-       n_null_excluded = sum(!valid & is.finite(D_null)),
-       null_excluded_share =
-         sum(!valid & is.finite(D_null)) / length(D_null),
-       K = K, metric = metric)
+  structure(
+    list(r2 = r2_micro, r2_macro = if (macro) r2_macro else NULL,
+         r2_doc = r2_doc, d_model = D_K, d_null = D_null,
+         n_null_excluded = sum(!valid & is.finite(D_null)),
+         null_excluded_share =
+           sum(!valid & is.finite(D_null)) / length(D_null),
+         K = K, metric = metric),
+    class = c("optop_index", "list")
+  )
 }
 
 # Assemble the word-level result list from the per-word discrepancies. Words
@@ -825,11 +831,14 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   r2_word[valid] <- 1 - d_w[valid] / d_null[valid]
   names(r2_word) <- vocab
   omega <- d_null[valid] / sum(d_null[valid])
-  list(r2_word = r2_word,
-       r2_micro_word = sum(omega * r2_word[valid]),
-       r2_macro_word = mean(r2_word[valid]),
-       d_model = d_w, d_null = d_null,
-       K = K, metric = metric)
+  structure(
+    list(r2_word = r2_word,
+         r2_micro_word = sum(omega * r2_word[valid]),
+         r2_macro_word = mean(r2_word[valid]),
+         d_model = d_w, d_null = d_null,
+         K = K, metric = metric),
+    class = c("optop_index", "list")
+  )
 }
 
 #' Validate the alignment of dtm, partition and baseline with a model
