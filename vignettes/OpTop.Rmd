@@ -842,9 +842,9 @@ In empirical corpora the true number of topics is unknown. Following the
 paper, we therefore validate the procedure through a simulation study in
 which the ground truth is known: one corpus is simulated from the LDA
 generative process itself, with `r meta$J_sim` documents over
-`r meta$W_sim` words drawn from **`r meta$true_K` topics**, using
-`sim_dfm()` (a thin wrapper around `LDATS::sim_LDA_data()`), and a grid of
-models is re-estimated around the truth.
+`r meta$W_sim` words drawn from **`r meta$true_K` topics**, using the
+package's own `sim_dfm()` generator, and a grid of models is re-estimated
+around the truth.
 
 ```{r sim-call, eval = FALSE}
 rdirichlet <- function(n, alpha) {

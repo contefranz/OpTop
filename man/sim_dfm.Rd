@@ -2,37 +2,74 @@
 % Please edit documentation in R/sim_dfm.R
 \name{sim_dfm}
 \alias{sim_dfm}
-\title{Simulate a document-feature-matrix from a LDA specification}
+\title{Simulate a document-feature matrix from an LDA specification}
 \usage{
 sim_dfm(DTW, TWW, doc_length, alpha = NULL, seed = NULL)
 }
 \arguments{
-\item{DTW}{A matrix or data.frame with Document-Topic-Weights.}
+\item{DTW}{A matrix or data.frame of document-topic weights
+(\eqn{J \times k}{J x k}), rows summing to 1. Row names, when present,
+become the document names of the result. Ignored (except for its
+dimensions) when \code{alpha} is supplied.}
 
-\item{TWW}{A matrix or data.frame with Topic-Word-Weights.}
+\item{TWW}{A matrix or data.frame of topic-word weights
+(\eqn{k \times W}{k x W}), rows summing to 1. Column names, when
+present, become the feature names of the result.}
 
-\item{doc_length}{A vector containing the desired document length as total number of word counts.}
+\item{doc_length}{Numeric vector with the desired length (total token
+count) of each document; a single value is recycled to all \eqn{J}
+documents.}
 
-\item{alpha}{Parameter of the Dirichlet distribution for topics over documents.}
+\item{alpha}{Optional single positive number or vector of \eqn{k}
+positive numbers; when supplied, the document-topic weights are drawn
+fresh from a \eqn{\mathrm{Dirichlet}(\alpha)}{Dirichlet(alpha)} instead
+of using \code{DTW} (default \code{NULL}, use \code{DTW} as given).}
 
-\item{seed}{Input to \code{set.seed}.}
+\item{seed}{Optional integer passed to \code{\link[=set.seed]{set.seed()}} for reproducible
+draws (default \code{NULL}).}
 }
 \value{
-A \code{\link[quanteda]{dfm}} object.
+A \link[quanteda:dfm]{quanteda::dfm} of simulated word counts with one row per
+document.
 }
 \description{
-Simulate a document-feature-matrix from estimated DTW and TWW. The number of topics as well as
-the number of documents are inferred from the LDA parameters.
+Draw a synthetic corpus of word counts from the standard LDA generative
+model: each document \eqn{j} mixes the topic-word distributions with its
+topic weights, \eqn{p_j = \theta_j^\top \Phi}{p_j = theta_j' Phi}, and its
+\eqn{L_j} tokens are one multinomial draw from \eqn{p_j}. The number of
+topics, documents, and vocabulary size are inferred from the inputs. The
+generator is self-contained (no external simulation dependency) and is the
+quickest way to build small corpora with a known truth, for examples and
+for exercises like the vignette's known-truth study.
+}
+\section{Change in 0.16.0}{
+
+The generator is now implemented inside OpTop rather than delegated to
+the LDATS package. The simulated distribution is unchanged (LDA
+Dirichlet-multinomial sampling), but the random draws for a given \code{seed}
+differ from those of earlier versions.
+}
+
+\examples{
+# a small corpus with known truth: 20 documents, 3 topics, 50 words
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
+}
+theta <- rdirich(20, 3)
+phi <- rdirich(3, 50)
+colnames(phi) <- sprintf("w\%02d", 1:50)
+
+sim <- sim_dfm(theta, phi, doc_length = 200, seed = 42)
+sim
+quanteda::ntoken(sim)[1:5]
+
 }
 \references{
-Lewis, C. and Grossetti, F. (2019 - forthcoming):\cr
-A Statistical Approach for Optimal Topic Model Identification.
+Lewis, C. M. and Grossetti, F. (2022). A statistical approach for optimal
+topic model identification. \emph{Journal of Machine Learning Research},
+23(58), 1--20. \url{https://jmlr.org/papers/v23/19-297.html}
 }
 \seealso{
-\code{\link[topicmodels]{LDA}} \code{\link[quanteda]{dfm}}
-}
-\author{
-Francesco Grossetti \email{francesco.grossetti@unibocconi.it}
-
-Craig M. Lewis \email{craig.lewis@owen.vanderbilt.edu}
+\code{\link[=optimal_topic]{optimal_topic()}}, \code{\link[=optop_index_table]{optop_index_table()}}
 }

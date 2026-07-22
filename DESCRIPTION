@@ -19,7 +19,6 @@ Imports:
     cli (>= 3.6.2),
     data.table (>= 1.11.0),
     ggplot2 (>= 3.4.0),
-    LDATS (>= 0.2.7),
     Matrix,
     methods,
     quanteda (>= 2.0.0),
