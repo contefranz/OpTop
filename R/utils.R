@@ -521,21 +521,49 @@ optop_fold_in.optop_theta_phi <- function(model, newdata, ...) {
 
 #' Align a document-term matrix to a grid of fitted models
 #'
-#' Remediation helper referenced by the alignment errors of the index
-#' functions: subsets and reorders the columns of `dtm` to the intersection
-#' of the models' vocabularies, so that counts, partition and baseline can be
-#' recomputed on a support common to the whole grid. Accepts a
-#' `quanteda::dfm` (converted to `dgCMatrix`) or any matrix with column
-#' names.
+#' Every OpTop tool requires the document-term matrix and the models to
+#' share one vocabulary in one order, because probabilities are aligned by
+#' term name and never by position. When they drift apart (a feature was
+#' trimmed after fitting, an engine reordered its vocabulary, models in
+#' the grid were fit on slightly different preprocessing), the index
+#' functions stop and point here. This helper subsets and reorders the
+#' columns of `dtm` to the intersection of the models' vocabularies, in
+#' the term order of the first model. Recompute the partition and the
+#' baseline on the aligned matrix afterwards; they encode the support.
+#'
+#' Accepts a `quanteda::dfm` (returned as `dgCMatrix`) or any matrix with
+#' column names.
 #'
 #' @param dtm A document-term matrix of counts (rows are documents).
 #' @param models A list of fitted topic models supported by
-#'   `optop_as_theta_phi()`.
+#'   [optop_as_theta_phi()], including [optop_model()] objects.
 #'
 #' @return The realigned document-term matrix, with columns ordered as the
 #'   common vocabulary.
 #'
-#' @keywords internal
+#' @examples
+#' rdirich <- function(n, k) {
+#'   g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+#'   g / rowSums(g)
+#' }
+#' theta <- rdirich(4, 2)
+#' rownames(theta) <- sprintf("doc%d", 1:4)
+#' phi <- rdirich(2, 6)
+#' colnames(phi) <- sprintf("w%02d", 1:6)
+#' m <- optop_model(theta, phi)
+#'
+#' # counts whose columns are shuffled and carry one extra feature
+#' counts <- matrix(rpois(4 * 7, 3), 4, 7,
+#'                  dimnames = list(rownames(theta),
+#'                                  c("w03", "extra", "w01", "w06",
+#'                                    "w02", "w05", "w04")))
+#' aligned <- optop_align_dtm_to_models(counts, list(m))
+#' identical(colnames(aligned), m$terms)
+#'
+#' @seealso [optop_make_partition()] and [optop_make_baseline()], which
+#'   must be recomputed on the aligned matrix.
+#'
+#' @export
 optop_align_dtm_to_models <- function(dtm, models) {
   # collect model vocabularies
   vocabs <- lapply(models, function(m) optop_as_theta_phi(m)$terms)
