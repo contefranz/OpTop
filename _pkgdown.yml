@@ -55,8 +55,18 @@ reference:
       - optop_moment_test
 
   - title: Utilities
-    desc: Simulate corpora, shard very large ones, and wrap external engines.
+    desc: >-
+      Simulate corpora, shard very large ones, wrap external engines, and
+      align inputs.
     contents:
       - sim_dfm
       - optop_corpus
       - optop_warplda
+      - optop_model
+      - optop_align_dtm_to_models
+
+  - title: Methods
+    desc: Console summaries and plots for the objects OpTop returns.
+    contents:
+      - optop-print
+      - plot.optop_holdout

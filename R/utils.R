@@ -180,6 +180,58 @@ optop_as_theta_phi.optop_theta_phi <- function(model) {
             class = c("optop_theta_phi", "list"))
 }
 
+#' Build an OpTop model from bare weight matrices
+#'
+#' Wrap a document-topic matrix and a topic-word matrix into the model
+#' object every OpTop tool accepts. This is the public entry point for
+#' engines the package has no adapter for: estimate the two matrices with
+#' any software, hand them to `optop_model()`, and the result flows through
+#' [optimal_topic()], the discrepancy indices, and the grid summaries like
+#' any supported fit.
+#'
+#' The contract is validated on construction: `theta` is documents by
+#' topics and `phi` is topics by words, both nonnegative with rows summing
+#' to 1 (tolerance `1e-6`); `theta` needs one unique document identifier
+#' per row in its row names and `phi` one unique term per column in its
+#' column names, because OpTop aligns by name and never by position.
+#'
+#' One limitation follows from having no fitted engine behind the object:
+#' an `optop_model()` cannot fold new documents in, so the held-out tools
+#' ([optop_index_holdout()] and everything built on it), which must adapt
+#' the model to unseen documents, do not accept it. Use the engine's own
+#' object there instead.
+#'
+#' @param theta Numeric matrix, documents by topics: row `j` holds the
+#'   topic weights of document `j` and sums to 1. Row names are the
+#'   document identifiers, required and unique.
+#' @param phi Numeric matrix, topics by words: row `k` holds the word
+#'   distribution of topic `k` and sums to 1. Column names are the terms,
+#'   required and unique, in the same order as the columns of the
+#'   document-term matrix the model was estimated on.
+#'
+#' @return An object of class `optop_theta_phi`: a list with elements
+#'   `theta`, `phi`, `K` (the number of topics), `docs`, and `terms`.
+#'
+#' @examples
+#' theta <- matrix(c(0.7, 0.3,
+#'                   0.2, 0.8), 2, 2, byrow = TRUE,
+#'                 dimnames = list(c("doc1", "doc2"), NULL))
+#' phi <- matrix(c(0.5, 0.3, 0.2,
+#'                 0.1, 0.2, 0.7), 2, 3, byrow = TRUE,
+#'               dimnames = list(NULL, c("alpha", "beta", "gamma")))
+#' m <- optop_model(theta, phi)
+#' m
+#'
+#' @seealso [optop_as_theta_phi()] for the adapter generic behind the
+#'   supported engines, [optop_warplda()] for text2vec WarpLDA fits.
+#'
+#' @export
+optop_model <- function(theta, phi) {
+  tp <- .optop_tp(theta, phi)
+  .optop_validate_theta_phi(tp, "optop_model")
+  tp
+}
+
 #' Wrap a text2vec WarpLDA fit for OpTop
 #'
 #' Make a WarpLDA topic model usable with every OpTop tool. text2vec's
@@ -386,6 +438,17 @@ optop_fold_in.default <- function(model, newdata, ...) {
               "text2vec WarpLDA via optop_warplda()."))
 }
 
+#' @describeIn optop_fold_in Bare containers built by [optop_model()] carry
+#'   no fitted engine, so new documents cannot be folded in: held-out
+#'   evaluation needs the engine's own object.
+#' @exportS3Method optop_fold_in optop_theta_phi
+optop_fold_in.optop_theta_phi <- function(model, newdata, ...) {
+  stop(paste0("fold-in is not available for a bare optop_model(): the ",
+              "container holds only theta and phi, and adapting to unseen ",
+              "documents needs the fitted engine. Pass the engine's own ",
+              "object to the held-out tools."))
+}
+
 #' Validate an adapter result
 #'
 #' Contract enforcement behind [optimal_topic()]: checks that an
@@ -458,21 +521,49 @@ optop_fold_in.default <- function(model, newdata, ...) {
 
 #' Align a document-term matrix to a grid of fitted models
 #'
-#' Remediation helper referenced by the alignment errors of the index
-#' functions: subsets and reorders the columns of `dtm` to the intersection
-#' of the models' vocabularies, so that counts, partition and baseline can be
-#' recomputed on a support common to the whole grid. Accepts a
-#' `quanteda::dfm` (converted to `dgCMatrix`) or any matrix with column
-#' names.
+#' Every OpTop tool requires the document-term matrix and the models to
+#' share one vocabulary in one order, because probabilities are aligned by
+#' term name and never by position. When they drift apart (a feature was
+#' trimmed after fitting, an engine reordered its vocabulary, models in
+#' the grid were fit on slightly different preprocessing), the index
+#' functions stop and point here. This helper subsets and reorders the
+#' columns of `dtm` to the intersection of the models' vocabularies, in
+#' the term order of the first model. Recompute the partition and the
+#' baseline on the aligned matrix afterwards; they encode the support.
+#'
+#' Accepts a `quanteda::dfm` (returned as `dgCMatrix`) or any matrix with
+#' column names.
 #'
 #' @param dtm A document-term matrix of counts (rows are documents).
 #' @param models A list of fitted topic models supported by
-#'   `optop_as_theta_phi()`.
+#'   [optop_as_theta_phi()], including [optop_model()] objects.
 #'
 #' @return The realigned document-term matrix, with columns ordered as the
 #'   common vocabulary.
 #'
-#' @keywords internal
+#' @examples
+#' rdirich <- function(n, k) {
+#'   g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+#'   g / rowSums(g)
+#' }
+#' theta <- rdirich(4, 2)
+#' rownames(theta) <- sprintf("doc%d", 1:4)
+#' phi <- rdirich(2, 6)
+#' colnames(phi) <- sprintf("w%02d", 1:6)
+#' m <- optop_model(theta, phi)
+#'
+#' # counts whose columns are shuffled and carry one extra feature
+#' counts <- matrix(rpois(4 * 7, 3), 4, 7,
+#'                  dimnames = list(rownames(theta),
+#'                                  c("w03", "extra", "w01", "w06",
+#'                                    "w02", "w05", "w04")))
+#' aligned <- optop_align_dtm_to_models(counts, list(m))
+#' identical(colnames(aligned), m$terms)
+#'
+#' @seealso [optop_make_partition()] and [optop_make_baseline()], which
+#'   must be recomputed on the aligned matrix.
+#'
+#' @export
 optop_align_dtm_to_models <- function(dtm, models) {
   # collect model vocabularies
   vocabs <- lapply(models, function(m) optop_as_theta_phi(m)$terms)

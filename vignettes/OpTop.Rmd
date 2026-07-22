@@ -51,6 +51,8 @@ res <- readRDS(system.file("extdata", "optop-vignette-results.rds",
 meta <- res$meta
 idx_tab <- res$inaugural$index_table
 word_r2 <- res$inaugural$word_snapshot
+nf <- res$inaugural$null_floor
+warp <- res$inaugural$warplda
 ho_res <- res$inaugural$holdout
 sim_chi <- res$sim$chi
 sim_picks <- res$sim$picks
@@ -671,6 +673,57 @@ knitr::kable(
 )
 ```
 
+### The Null-Discrepancy Floor
+
+Each document-level index is a ratio, and its denominator is itself a
+measured quantity: the discrepancy of the no-topics baseline on that
+document. For almost every document the denominator is comfortably large.
+The exception is a document whose entire support is rare relative to its
+length: at partition resolution every one of its words falls into the
+collapsed min bin, and there the observed bin mass equals the baseline bin
+mass *by construction*. The baseline discrepancy is then numerically zero
+in every family at once, and the ratio degenerates; such a document
+contributes an arbitrarily wild value to the Macro average while carrying
+no usable information about fit.
+
+The index functions therefore restrict the Macro aggregation to the
+documents whose baseline discrepancy clears a floor,
+$D_j(\mathrm{null}) \ge$ `min_null`, and report every exclusion. The
+default floor is the partition constant `c`, the same yardstick that
+defines the harmonized support: a discrepancy below the resolution of a
+single expected count is indistinguishable from rounding noise. Setting
+`min_null = 0` restores the strict-positivity rule of versions before
+0.14.1 exactly.
+
+```{r null-floor-call, eval = FALSE}
+dev_floor <- optop_index_deviance(m_star, dtm_counts, partition, baseline,
+                                  macro = TRUE)
+dev_floor$n_null_excluded
+```
+
+The inaugural corpus is not a contrived example. At the sequential pick
+(K = `r nf$k`) the floor excludes `r nf$n_excluded` speech
+(`r sprintf("%.1f%%", 100 * nf$share)` of the corpus):
+`r paste(nf$docs, collapse = ", ")`, Washington's famously brief second
+inaugural, `r nf$lengths[1]` tokens after preprocessing. Every one of its
+surviving words is rare at the partition resolution
+$\tau_j = c / L_j$, the whole document lives in the collapsed min bin,
+and its baseline deviance evaluates to exactly
+`r nf$d_null_excluded[1]`: the ratio is $0/0$ and carries no information
+about fit. The Macro index over the remaining speeches is
+`r round(nf$macro_floor, 4)`.
+
+The strict-positivity rule of versions before 0.14.1 happens to drop an
+exact zero as well, but silently, and only by the sign luck of
+floating-point arithmetic: a collapsed document landing a hair *above*
+zero would have stayed in, free to contribute a ratio in the thousands to
+the Macro average. The floor replaces that accident with a rule stated in
+the units of the analysis (one expected count) and reports every
+exclusion through the accompanying alert, so a silent change of estimand
+can never happen. The Micro index is nearly immune either way: its
+weights are proportional to the baseline discrepancies, so a
+near-collapsed document has almost no say in it.
+
 ## Held-Out Validation and Topic-Number Choice
 
 The indices above are computed on the same documents used to estimate the
@@ -915,6 +968,67 @@ saturated p-values falls close to the actual null level, which is the
 favorable case discussed in the calibration section. The tools should be
 read as locating the *region* of adequate $K$, with the discrepancy indices
 quantifying the incremental explanatory power of each candidate.
+
+## Other Engines and Bare Matrices
+
+Everything above ran on `topicmodels` fits, but nothing in the method is
+tied to an estimator. Fits from `topicmodels` (VEM and Gibbs, and CTM),
+`seededlda`, and NLPstudio are recognized directly: pass them to any OpTop
+function and the adapter layer extracts the two weight matrices behind the
+scenes. Two more doors cover everything else.
+
+**text2vec WarpLDA.** The WarpLDA sampler splits its output in two:
+`fit_transform()` *returns* the document-topic matrix while the model
+object retains only the topic-word distribution. `optop_warplda()` bundles
+the two halves into one object that behaves like any supported fit,
+held-out fold-in included:
+
+```{r warplda-call, eval = FALSE}
+lda <- text2vec::LDA$new(n_topics = k_star)
+theta <- lda$fit_transform(dtm_counts, n_iter = 500, progressbar = FALSE)
+fit <- optop_warplda(lda, theta)
+
+warp_part <- optop_make_partition(list(fit), dtm_counts, c = 1)
+warp_dev <- optop_index_deviance(fit, dtm_counts, warp_part, baseline,
+                                 macro = TRUE)
+```
+
+Run on the inaugural corpus at K = `r warp$k`, the WarpLDA fit reaches a
+micro deviance index of `r round(warp$micro, 4)` against
+`r round(warp$micro_vem, 4)` for the VEM fit of the same size: the indices
+compare engines on one scale, which is precisely their purpose.
+
+**Any other engine.** If your estimator only hands you matrices, wrap them
+yourself: `optop_model()` validates the full contract (named documents and
+terms, nonnegative weights, unit row sums) and returns an object every
+in-sample tool accepts.
+
+```{r optop-model-demo}
+rdirich <- function(n, k) {
+  g <- matrix(stats::rgamma(n * k, shape = 1), n, k)
+  g / rowSums(g)
+}
+set.seed(11)
+theta_toy <- rdirich(5, 2)
+rownames(theta_toy) <- sprintf("doc%d", 1:5)
+phi_toy <- rdirich(2, 8)
+colnames(phi_toy) <- sprintf("w%02d", 1:8)
+
+m_toy <- optop_model(theta_toy, phi_toy)
+m_toy
+```
+
+One limitation is structural: a bare matrix pair carries no fitted engine,
+so new documents cannot be folded in and the held-out tools refuse an
+`optop_model()` with a pointed message. Held-out evaluation always wants
+the engine's own object.
+
+A closing practical note: OpTop aligns by term name, never by position. If
+the document-term matrix and the models drift apart (a trimmed feature, a
+reordered vocabulary), the index functions stop and point at
+`optop_align_dtm_to_models()`, which subsets and reorders the counts to
+the grid's common vocabulary; recompute the partition and the baseline on
+the aligned matrix afterwards.
 
 ## A Note On Computational Efficiency
 
