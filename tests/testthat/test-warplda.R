@@ -85,4 +85,9 @@ test_that("unbinned aggregation commutes between documents and words", {
   word <- optop_index_deviance(m, fx$dtm, unbinned, fx$baseline,
                                level = "word")
   expect_equal(sum(doc$d_model), sum(word$d_model), tolerance = 1e-10)
+
+  # the null side commutes too: in sample the omitted word-level linear
+  # term is identically zero, so the multinomial document null total and
+  # the Poisson word null total coincide on the unbinned support
+  expect_equal(sum(doc$d_null), sum(word$d_null), tolerance = 1e-10)
 })

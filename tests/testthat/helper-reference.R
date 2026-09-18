@@ -161,7 +161,9 @@ ref_index_word <- function(model, dtm, partition, baseline,
     } else { # deviance
       # fitted side: Poisson unit deviance 2 * [N log(N/E) - (N - E)], with
       # the linear correction on the UNfloored expectation; for the null side
-      # the correction vanishes identically (sum_j B_jw = sum_j N_jw)
+      # the correction vanishes identically in sample (sum_j B_jw = sum_j
+      # N_jw when pi is the corpus distribution of the same counts), the
+      # precondition guarded since 0.20.1
       idx <- N_w > 0
       log_term <- if (any(idx)) {
         2 * sum(N_w[idx] * (log(N_w[idx]) - log(pmax(E_w, eps)[idx])))

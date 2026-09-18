@@ -195,6 +195,14 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
     f_tr <- as.numeric(Matrix::colSums(dtm_train))
   }
 
+  # the fit-stratified score reads the word-level deviance null on the
+  # training counts, whose in-sample cancellation requires the unsmoothed
+  # training baseline; f_tr is the pooled witness, so the guard is free
+  if (type == "fit") {
+    .optop_check_word_null_baseline(f_tr, sum(f_tr),
+                                    baseline$pi_glob[vocab])
+  }
+
   # evaluation residual ingredients: d_j on the training support with
   # L_j restricted to aligned tokens, so sum_w d_jw = 1 and 1' e_j = 0
   n_ev <- sum(vapply(preps, function(p) nrow(p$dtm_aligned), numeric(1)))
