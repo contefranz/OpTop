@@ -57,7 +57,11 @@ bit-identical to an unsharded run).}
 \emph{aligned} to the model vocabulary (same features and order).}
 
 \item{baseline}{Result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}, computed on the same aligned
-counts DTM used for \code{partition}.}
+counts DTM used for \code{partition}. For the word-level deviance the
+baseline must additionally be the unsmoothed corpus distribution of
+\code{dtm} itself (the in-sample precondition of the null side); any other
+baseline triggers a warning of class \code{optop_word_null_baseline}. See
+the \emph{Word-level aggregation} paragraph in Details.}
 
 \item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}
@@ -204,8 +208,17 @@ reveal which words the topic structure captures well and which it
 mispredicts. The word-level deviance is the Poisson unit deviance
 \eqn{2\sum_j [N_{jw}\log(N_{jw}/E_{jw}) - (N_{jw}-E_{jw})]}{2 sum_j [N log(N/E) - (N - E)]},
 which is nonnegative term by term, so the word deviance index never
-exceeds one; for the corpus baseline the linear correction vanishes
-identically. Micro-Word weights words by their baseline discrepancy;
+exceeds one. On the null side the kernel omits the linear correction;
+the omission is exact \strong{in sample}, that is when the baseline is the
+unsmoothed corpus distribution of the same counts matrix
+(\code{colSums(dtm) / sum(dtm)}, the \code{optop_make_baseline(dtm)} default),
+because then \eqn{\sum_j (N_{jw} - L_j \pi_w) = 0}{sum_j (N_jw - L_j pi_w) = 0}
+for every word. Against any other baseline (a training baseline applied
+to different counts, or \code{smooth_lambda > 0}) the omitted term is
+nonzero and the word-level deviance is not a valid held-out deviance;
+since 0.20.1 such calls emit a warning of class
+\code{optop_word_null_baseline}. Held-out word-level indices are a planned
+feature. Micro-Word weights words by their baseline discrepancy;
 Macro-Word averages the word-level indices over the words with positive
 baseline discrepancy (degenerate words carry \code{NA}). Restrict attention to
 words with adequate support when interpreting single-word values.

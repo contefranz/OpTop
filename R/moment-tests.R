@@ -43,7 +43,10 @@
 #' @param adjust Multiple-testing adjustment of the marginal per-stratum
 #'   t tests: `"none"` (default), `"bonferroni"`, or `"BH"`.
 #' @param baseline Optional \emph{training} baseline for the fit score
-#'   (default `NULL` computes it from `dtm_train`).
+#'   (default `NULL` computes it from `dtm_train`). The `type = "fit"`
+#'   score reads the word-level deviance null on the training counts, so a
+#'   supplied baseline must be the unsmoothed training baseline; anything
+#'   else triggers a warning of class `optop_word_null_baseline`.
 #' @param n_threads Integer; OpenMP threads of the compiled kernels used for
 #'   the training fit score.
 #' @param ... Passed to the engine's fold-in routine.

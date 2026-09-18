@@ -55,7 +55,10 @@ entries, which leaves every row sum at zero.}
 t tests: \code{"none"} (default), \code{"bonferroni"}, or \code{"BH"}.}
 
 \item{baseline}{Optional \emph{training} baseline for the fit score
-(default \code{NULL} computes it from \code{dtm_train}).}
+(default \code{NULL} computes it from \code{dtm_train}). The \code{type = "fit"}
+score reads the word-level deviance null on the training counts, so a
+supplied baseline must be the unsmoothed training baseline; anything
+else triggers a warning of class \code{optop_word_null_baseline}.}
 
 \item{n_threads}{Integer; OpenMP threads of the compiled kernels used for
 the training fit score.}

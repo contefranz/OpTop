@@ -20,7 +20,11 @@
 #' @param partition Result from [`optop_make_partition()`], computed on a DTM that is
 #'   *aligned* to the model vocabulary (same features and order).
 #' @param baseline Result from [`optop_make_baseline()`], computed on the same aligned
-#'   counts DTM used for `partition`.
+#'   counts DTM used for `partition`. For the word-level deviance the
+#'   baseline must additionally be the unsmoothed corpus distribution of
+#'   `dtm` itself (the in-sample precondition of the null side); any other
+#'   baseline triggers a warning of class `optop_word_null_baseline`. See
+#'   the *Word-level aggregation* paragraph in Details.
 #' @param macro Logical; if `TRUE`, also compute the Macro index (equal-weight average of
 #'   the per-document indices). Default: `FALSE`.
 #' @param level Character; aggregation level for the index. `"document"` (default) computes
@@ -123,8 +127,17 @@
 #' mispredicts. The word-level deviance is the Poisson unit deviance
 #' \eqn{2\sum_j [N_{jw}\log(N_{jw}/E_{jw}) - (N_{jw}-E_{jw})]}{2 sum_j [N log(N/E) - (N - E)]},
 #' which is nonnegative term by term, so the word deviance index never
-#' exceeds one; for the corpus baseline the linear correction vanishes
-#' identically. Micro-Word weights words by their baseline discrepancy;
+#' exceeds one. On the null side the kernel omits the linear correction;
+#' the omission is exact **in sample**, that is when the baseline is the
+#' unsmoothed corpus distribution of the same counts matrix
+#' (`colSums(dtm) / sum(dtm)`, the `optop_make_baseline(dtm)` default),
+#' because then \eqn{\sum_j (N_{jw} - L_j \pi_w) = 0}{sum_j (N_jw - L_j pi_w) = 0}
+#' for every word. Against any other baseline (a training baseline applied
+#' to different counts, or `smooth_lambda > 0`) the omitted term is
+#' nonzero and the word-level deviance is not a valid held-out deviance;
+#' since 0.20.1 such calls emit a warning of class
+#' `optop_word_null_baseline`. Held-out word-level indices are a planned
+#' feature. Micro-Word weights words by their baseline discrepancy;
 #' Macro-Word averages the word-level indices over the words with positive
 #' baseline discrepancy (degenerate words carry `NA`). Restrict attention to
 #' words with adequate support when interpreting single-word values.
@@ -421,7 +434,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param partition Optional precomputed result from [`optop_make_partition()`].
 #'   If `NULL`, it is computed internally from `models` and `dtm`.
 #' @param baseline Optional precomputed result from [`optop_make_baseline()`]. If `NULL`,
-#'   it is computed internally from `dtm`.
+#'   it is computed internally from `dtm`. For the word-level deviance the
+#'   baseline must be the unsmoothed corpus distribution of `dtm` itself;
+#'   any other baseline triggers a warning of class
+#'   `optop_word_null_baseline` (see [optop_index()], *Word-level
+#'   aggregation*).
 #' @param level Character; aggregation level for the indices. `"document"` (default)
 #'   returns document-level micro/macro indices. `"word"` returns word-level
 #'   Micro-Word and Macro-Word indices.
