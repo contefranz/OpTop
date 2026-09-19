@@ -43,7 +43,10 @@
 #' @param adjust Multiple-testing adjustment of the marginal per-stratum
 #'   t tests: `"none"` (default), `"bonferroni"`, or `"BH"`.
 #' @param baseline Optional \emph{training} baseline for the fit score
-#'   (default `NULL` computes it from `dtm_train`).
+#'   (default `NULL` computes it from `dtm_train`). The `type = "fit"`
+#'   score reads the word-level deviance null on the training counts, so a
+#'   supplied baseline must be the unsmoothed training baseline; anything
+#'   else triggers a warning of class `optop_word_null_baseline`.
 #' @param n_threads Integer; OpenMP threads of the compiled kernels used for
 #'   the training fit score.
 #' @param ... Passed to the engine's fold-in routine.
@@ -193,6 +196,14 @@ optop_moment_test <- function(models, dtm_eval, dtm_train,
                  "align the training dtm first"))
     }
     f_tr <- as.numeric(Matrix::colSums(dtm_train))
+  }
+
+  # the fit-stratified score reads the word-level deviance null on the
+  # training counts, whose in-sample cancellation requires the unsmoothed
+  # training baseline; f_tr is the pooled witness, so the guard is free
+  if (type == "fit") {
+    .optop_check_word_null_baseline(f_tr, sum(f_tr),
+                                    baseline$pi_glob[vocab])
   }
 
   # evaluation residual ingredients: d_j on the training support with

@@ -552,3 +552,46 @@ the v1.0.0 tag (optionally archived for a DOI), and the submission.
 Deferred features (word-subset API for the word-level indices, held-out
 token completion, corpus support inside crossfit, the count-based Pearson
 option) wait for 1.1.0 or later.
+
+## 0.20.1: the word-level deviance null and the external report (recorded 2026-09-18)
+
+An external report computed word-level deviance indices with a training
+baseline against evaluation counts, read them as a held-out deviance, and
+proposed adding the missing null linear term to the kernel. Evaluation of
+the report against main at 1166dae:
+
+- The kernel computes the word-level null as
+  2 sum_{n>0} n (log n - log max(b, eps)) (src/index_core.cpp:209-212,
+  emitted at :233) while the model side carries the linear correction
+  over all cells (:191, :232). The null-side omission is an exact
+  in-sample identity: with pi_w = N_.w / sum(N) of the same counts and
+  L_j = rowSums(dtm), sum_j (N_jw - L_j pi_w) = 0 per word. It fails
+  with a baseline from different counts and with smooth_lambda > 0.
+- The document level is immune by construction: the min-bin complement
+  forces sum N = sum B = L_j per document (index_core.cpp:398-401), so
+  optop_index_holdout() and optop_crossfit() are unaffected even with a
+  training baseline. The report's headline claim, that the published
+  worst-fit words list is overturned, is false twice over: that list is
+  in-sample and uses the Pearson family, which has no linear term in any
+  convention.
+- The off-label call was silently accepted because alignment validation
+  is vocabulary-only, and the fit-stratified path of the moment test
+  bypassed even that.
+- The report's kernel diff is mechanically well-formed but rejected for
+  now: computing the linear term unconditionally replaces an exact
+  structural zero with floating-point cancellation residue in sample,
+  and the word path has no null floor (V+ is a bare d_null > 0), so
+  degenerate words would enter V+ carrying noise ratios.
+
+Decision: no kernel change in a patch. 0.20.1 ships a provenance guard
+(per-call warning of class optop_word_null_baseline, elementwise relative
+tolerance 1e-8 with a one-token floor, pooled column sums as the
+witness, wired once per user-facing call in the deviance impl, the grid
+table, and the moment test's fit path), corrected documentation stating
+the in-sample precondition, and the previously missing null-side arm of
+the Lemma 2 commutation test. In-sample outputs are bit-identical.
+
+Deferred to 1.1.0, joining the word-subset API and held-out token
+completion above: the corrected held-out word-level deviance, that is
+the null side carrying the linear term with scoring-token totals, plus a
+word-level null floor mirroring min_null.

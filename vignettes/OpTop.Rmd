@@ -655,7 +655,12 @@ for choosing $K$.
 
 The indices are also available at the **word level**, computed on the
 unbinned vocabulary, which serves as a diagnostic: it identifies the words
-the selected model captures well and those it misses. For the sequential
+the selected model captures well and those it misses. For the deviance
+family this diagnostic is in-sample by construction: its null side is
+exact only against the unsmoothed corpus baseline of the counts being
+scored, and since 0.20.1 the package warns when a different baseline is
+supplied, because the resulting values are not a valid held-out deviance.
+For the sequential
 pick (K = `r word_r2$k`), the micro word-level chi-square index is
 `r round(word_r2$micro, 3)`; the ten highest- and lowest-index words are
 reported below:

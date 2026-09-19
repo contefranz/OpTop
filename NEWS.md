@@ -1,3 +1,54 @@
+# OpTop 0.20.1
+
+A validity-guard patch prompted by an external report: the word-level
+deviance null is exact only in sample, and the package now says so
+instead of silently accepting foreign baselines. No kernel change; every
+in-sample result is bit-identical to 0.20.0.
+
+### Fixes
+
+* **The in-sample precondition of the word-level deviance null is now
+  guarded.** The compiled null side omits the Poisson linear term
+  `2 sum_j (N_jw - L_j pi_w)`, an omission that is exact when the
+  baseline is the unsmoothed corpus distribution of the same counts
+  (`colSums(dtm) / sum(dtm)`, the `optop_make_baseline(dtm)` default)
+  and wrong otherwise: a training baseline applied to different counts,
+  or `smooth_lambda > 0`. `optop_index_deviance(level = "word")`,
+  `optop_index_table(level = "word")` and the fit-stratified score of
+  `optop_moment_test(type = "fit")` now compare the supplied baseline
+  against the pooled column sums (elementwise relative gap with a
+  one-token floor, tolerance 1e-8; one pass over the nonzeros, only in
+  the guarded configuration) and emit a per-call warning of class
+  `optop_word_null_baseline` naming the precondition and the
+  consequence: such values are not a valid held-out deviance. The
+  document-level indices, `optop_index_holdout()`, and `optop_crossfit()`
+  are immune by construction (the min-bin complement equalizes the
+  observed and baseline totals per document) and are unchanged.
+* The moment test's fit-stratified path previously accepted a
+  user-supplied baseline with no validation at all; the guard now also
+  catches misaligned or unnamed baselines there, which used to produce
+  silent `NaN` strata.
+
+### Documentation
+
+* The word-level paragraph of `?optop_index`, the `baseline` parameters
+  of the index functions and of `optop_moment_test()`,
+  `?optop_make_baseline`, and the vignette now state the in-sample
+  precondition explicitly instead of the former unconditional "vanishes
+  identically". The corrected held-out word-level deviance (the null
+  linear term with scoring-token totals plus a word-level null floor) is
+  recorded in `dev/AUDIT.md` as a 1.1.0 feature alongside the
+  word-subset API.
+
+### Tests
+
+* The Lemma 2 commutation test gains its missing null arm (document and
+  word totals of the deviance null agree on the unbinned support), and a
+  new test file pins the guard: silent and bit-identical in sample,
+  plain and sharded; warning on smoothed and cross-corpus baselines,
+  once per call even across a model grid; silent for the squared-error
+  and Pearson families and at the document level.
+
 # OpTop 0.20.0
 
 The CRAN-clean release: no new statistics, every remaining rough edge a

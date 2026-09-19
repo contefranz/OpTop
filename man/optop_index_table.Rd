@@ -42,7 +42,11 @@ per-document indices). Default: \code{FALSE}.}
 If \code{NULL}, it is computed internally from \code{models} and \code{dtm}.}
 
 \item{baseline}{Optional precomputed result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}. If \code{NULL},
-it is computed internally from \code{dtm}.}
+it is computed internally from \code{dtm}. For the word-level deviance the
+baseline must be the unsmoothed corpus distribution of \code{dtm} itself;
+any other baseline triggers a warning of class
+\code{optop_word_null_baseline} (see \code{\link[=optop_index]{optop_index()}}, \emph{Word-level
+aggregation}).}
 
 \item{level}{Character; aggregation level for the indices. \code{"document"} (default)
 returns document-level micro/macro indices. \code{"word"} returns word-level

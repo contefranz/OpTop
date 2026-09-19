@@ -31,7 +31,11 @@ bit-identical to an unsharded run).}
 \emph{aligned} to the model vocabulary (same features and order).}
 
 \item{baseline}{Result from \code{\link[=optop_make_baseline]{optop_make_baseline()}}, computed on the same aligned
-counts DTM used for \code{partition}.}
+counts DTM used for \code{partition}. For the word-level deviance the
+baseline must additionally be the unsmoothed corpus distribution of
+\code{dtm} itself (the in-sample precondition of the null side); any other
+baseline triggers a warning of class \code{optop_word_null_baseline}. See
+the \emph{Word-level aggregation} paragraph in Details.}
 
 \item{macro}{Logical; if \code{TRUE}, also compute the Macro index (equal-weight average of
 the per-document indices). Default: \code{FALSE}.}

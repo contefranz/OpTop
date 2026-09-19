@@ -20,7 +20,11 @@
 #' @param partition Result from [`optop_make_partition()`], computed on a DTM that is
 #'   *aligned* to the model vocabulary (same features and order).
 #' @param baseline Result from [`optop_make_baseline()`], computed on the same aligned
-#'   counts DTM used for `partition`.
+#'   counts DTM used for `partition`. For the word-level deviance the
+#'   baseline must additionally be the unsmoothed corpus distribution of
+#'   `dtm` itself (the in-sample precondition of the null side); any other
+#'   baseline triggers a warning of class `optop_word_null_baseline`. See
+#'   the *Word-level aggregation* paragraph in Details.
 #' @param macro Logical; if `TRUE`, also compute the Macro index (equal-weight average of
 #'   the per-document indices). Default: `FALSE`.
 #' @param level Character; aggregation level for the index. `"document"` (default) computes
@@ -123,8 +127,17 @@
 #' mispredicts. The word-level deviance is the Poisson unit deviance
 #' \eqn{2\sum_j [N_{jw}\log(N_{jw}/E_{jw}) - (N_{jw}-E_{jw})]}{2 sum_j [N log(N/E) - (N - E)]},
 #' which is nonnegative term by term, so the word deviance index never
-#' exceeds one; for the corpus baseline the linear correction vanishes
-#' identically. Micro-Word weights words by their baseline discrepancy;
+#' exceeds one. On the null side the kernel omits the linear correction;
+#' the omission is exact **in sample**, that is when the baseline is the
+#' unsmoothed corpus distribution of the same counts matrix
+#' (`colSums(dtm) / sum(dtm)`, the `optop_make_baseline(dtm)` default),
+#' because then \eqn{\sum_j (N_{jw} - L_j \pi_w) = 0}{sum_j (N_jw - L_j pi_w) = 0}
+#' for every word. Against any other baseline (a training baseline applied
+#' to different counts, or `smooth_lambda > 0`) the omitted term is
+#' nonzero and the word-level deviance is not a valid held-out deviance;
+#' since 0.20.1 such calls emit a warning of class
+#' `optop_word_null_baseline`. Held-out word-level indices are a planned
+#' feature. Micro-Word weights words by their baseline discrepancy;
 #' Macro-Word averages the word-level indices over the words with positive
 #' baseline discrepancy (degenerate words carry `NA`). Restrict attention to
 #' words with adequate support when interpreting single-word values.
@@ -375,6 +388,13 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
   vocab_model <- colnames(tp$phi)
   pi_row <- .optop_validate_alignment(vocab_model, dtm, partition, baseline)
 
+  # the word-level null relies on the in-sample cancellation of its linear
+  # term; when the null is hoisted (null_disc), the table call has already
+  # run the guard once
+  if (level == "word" && is.null(null_disc)) {
+    .optop_check_word_null_baseline(dtm, partition$L, pi_row)
+  }
+
   theta <- tp$theta
   phi <- tp$phi
 
@@ -414,7 +434,11 @@ optop_index_deviance <- function(model, dtm, partition, baseline,
 #' @param partition Optional precomputed result from [`optop_make_partition()`].
 #'   If `NULL`, it is computed internally from `models` and `dtm`.
 #' @param baseline Optional precomputed result from [`optop_make_baseline()`]. If `NULL`,
-#'   it is computed internally from `dtm`.
+#'   it is computed internally from `dtm`. For the word-level deviance the
+#'   baseline must be the unsmoothed corpus distribution of `dtm` itself;
+#'   any other baseline triggers a warning of class
+#'   `optop_word_null_baseline` (see [optop_index()], *Word-level
+#'   aggregation*).
 #' @param level Character; aggregation level for the indices. `"document"` (default)
 #'   returns document-level micro/macro indices. `"word"` returns word-level
 #'   Micro-Word and Macro-Word indices.
@@ -533,6 +557,11 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   }
   pi_row_tab <- .optop_validate_alignment(dtm_vocab, dtm, partition,
                                           baseline)
+  # once per table call, not per model: the per-model sweeps below run with
+  # do_null = FALSE and receive the hoisted null
+  if (level == "word" && "deviance" %in% metrics_engine) {
+    .optop_check_word_null_baseline(dtm, partition$L, pi_row_tab)
+  }
   nulls <- if (length(metrics_engine)) {
     .optop_index_engine(theta = NULL, phi = NULL, dtm, partition, pi_row_tab,
                         metrics_engine, level, block_size, n_threads,
@@ -869,6 +898,70 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
   pi_row
 }
 
+# Provenance guard of the word-level deviance null (0.20.1). The compiled
+# null side omits the Poisson linear term 2 * sum_j (N_jw - L_j * pi_w),
+# which vanishes exactly when pi is the unsmoothed corpus distribution of
+# the SAME counts being evaluated (the in-sample construction) and is
+# nonzero otherwise: a baseline from different counts, or
+# smooth_lambda > 0. One elementwise relative comparison of the pooled
+# column sums against pi * L_tot decides; a mismatch emits one per-call
+# cli warning of class "optop_word_null_baseline". Callers own the
+# once-per-call gate; never call per shard or per model.
+#   dtm_or_colsums: counts matrix, optop_corpus, or precomputed pooled
+#     column sums aligned to pi_glob (the moment test passes f_tr).
+#   L: the document lengths the kernel will use (partition$L or a stub),
+#     or their precomputed sum as a scalar.
+#   pi_glob: baseline probabilities aligned to the dtm vocabulary.
+# The tolerance separates in-sample noise (re-multiplication and
+# summation-order effects, <= ~1e-13 relative) from real violations
+# (smoothing or cross-corpus baselines, >= ~1e-6 on rare words) by two
+# decades on each side. Returns invisible(TRUE) when in-sample-compatible
+# and invisible(FALSE) after warning.
+.optop_check_word_null_baseline <- function(dtm_or_colsums, L, pi_glob,
+                                            tol = 1e-8) {
+  cs <- if (is.numeric(dtm_or_colsums)) {
+    as.numeric(dtm_or_colsums)
+  } else if (.optop_is_corpus(dtm_or_colsums)) {
+    acc <- NULL
+    for (s in seq_len(dtm_or_colsums$n_shards)) {
+      cs_s <- Matrix::colSums(.optop_corpus_shard(dtm_or_colsums, s))
+      acc <- if (is.null(acc)) cs_s else acc + cs_s
+    }
+    as.numeric(acc)
+  } else {
+    as.numeric(Matrix::colSums(dtm_or_colsums))
+  }
+  pi_num <- as.numeric(pi_glob)
+  rel <- if (length(cs) != length(pi_num)) {
+    Inf
+  } else {
+    l_tot <- sum(as.numeric(L))
+    # b is the per-word baseline token mass the kernel's null side implies
+    b <- pi_num * l_tot
+    max(abs(cs - b) / pmax(cs, b, 1))
+  }
+  ok <- isTRUE(rel <= tol)
+  if (!ok) {
+    gap <- if (is.finite(rel)) signif(rel, 2) else "undefined"
+    cli::cli_warn(c(
+      "!" = paste(
+        "the word-level deviance null was requested against a baseline",
+        "that is not the unsmoothed corpus distribution of the counts",
+        "being evaluated (largest per-word relative gap: {gap})."),
+      "i" = paste(
+        "the compiled kernel omits the Poisson linear term of the null",
+        "side; the omission is exact only when {.field pi_glob} equals",
+        "{.code colSums(dtm) / sum(dtm)} of the same counts matrix, so",
+        "these word-level deviance values are not a valid held-out",
+        "deviance."),
+      "i" = paste(
+        "see {.help OpTop::optop_index}; held-out word-level indices",
+        "are a planned feature.")
+    ), class = "optop_word_null_baseline")
+  }
+  invisible(ok)
+}
+
 #' Baseline (no-topics) discrepancy for one metric
 #'
 #' This quantity does not depend on the fitted model, only on the observed
@@ -895,6 +988,8 @@ optop_index_table <- function(models, dtm, metrics = c("se","chisq","deviance"),
                               metric = c("se", "chisq", "deviance"),
                               level = c("document", "word"),
                               block_size = NULL, n_threads = 1L) {
+  # callers own the word-level provenance guard
+  # (.optop_check_word_null_baseline); this helper never warns
   metric <- match.arg(metric)
   level <- match.arg(level)
   eng <- .optop_index_engine(theta = NULL, phi = NULL, dtm, partition,

@@ -408,7 +408,11 @@ optop_make_partition <- function(models, dtm, c = 1,
 #' every fitted \eqn{K}-topic model lies. For held-out evaluation, compute
 #' the baseline on the \emph{training} corpus and pass it to
 #' [optop_index_holdout()]; words absent from the training sample have zero
-#' baseline probability unless \code{smooth_lambda > 0}.
+#' baseline probability unless \code{smooth_lambda > 0}. One caveat: the
+#' \emph{word-level deviance} indices require the unsmoothed in-sample
+#' baseline of the counts being evaluated, so a smoothed or cross-corpus
+#' baseline at \code{level = "word"} triggers a warning of class
+#' \code{optop_word_null_baseline} (see [optop_index()]).
 #'
 #' @seealso
 #' \code{\link{optop_make_partition}},
