@@ -151,3 +151,27 @@
   list(mu = mu, sigma2 = sigma2,
        a = sigma2 / (2 * mu), nu = 2 * mu^2 / sigma2)
 }
+
+#' Exact null mean of the Test 1 statistic
+#'
+#' Under the conditional fitted-model null, document \eqn{j}'s counts over
+#' its \eqn{k_j} collapsed bins are multinomial, so its contribution
+#' \eqn{(k_j/N_j)\,X^2_j}{(k_j/N_j) X^2_j} has mean
+#' \eqn{k_j (k_j - 1) / N_j}{k_j (k_j - 1) / N_j} exactly (Haldane, 1937),
+#' whatever the bin probabilities. The corpus mean is the sum over
+#' documents: it is the `mu` of `.optop_moment_null()`, computed from the
+#' bin counts alone, and the denominator of the excess ratio reported by
+#' [optop_select()].
+#'
+#' @param bin_counts Integer vector of per-document bin counts \eqn{k_j}, as
+#'   exported by the compiled core.
+#' @param doc_lengths Numeric vector of document lengths \eqn{N_j}, aligned
+#'   with `bin_counts`.
+#'
+#' @return The null mean, a single number.
+#'
+#' @keywords internal
+.optop_null_mean <- function(bin_counts, doc_lengths) {
+  k <- as.numeric(bin_counts)
+  sum(k * (k - 1) / as.numeric(doc_lengths))
+}

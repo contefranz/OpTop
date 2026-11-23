@@ -11,7 +11,7 @@ optop_select(
   q = 0.95,
   alpha = 0.05,
   selection = c("sequential", "min"),
-  calibrate = c("none", "bootstrap", "moment"),
+  calibrate = c("moment", "none", "bootstrap"),
   n_boot = 200L,
   doc_lengths = NULL,
   seed = NULL,
@@ -26,7 +26,7 @@ optimal_topic(
   q = 0.95,
   alpha = 0.05,
   selection = c("sequential", "min"),
-  calibrate = c("none", "bootstrap", "moment"),
+  calibrate = c("moment", "none", "bootstrap"),
   n_boot = 200L,
   doc_lengths = NULL,
   seed = NULL,
@@ -73,19 +73,26 @@ paper's numerical setting \eqn{I^K = 0.05}.}
 \code{"sequential"} (default) or \code{"min"}.}
 
 \item{calibrate}{Character; how the p-values are computed (see the
-Calibration part of Details): \code{"none"} (default, the asymptotic
-chi-square of Equation 8), \code{"bootstrap"} (parametric bootstrap under the
-fitted-model null), or \code{"moment"} (exact multinomial moments matched to
-a scaled chi-square).}
+Calibration part of Details): \code{"moment"} (default since 0.21.0: exact
+multinomial moments matched to a scaled chi-square), \code{"none"} (the
+asymptotic chi-square of Equation 8, a yardstick rather than a valid
+test at corpus scale), or \code{"bootstrap"} (parametric bootstrap under the
+fitted-model null). Calibration needs \code{doc_lengths}: when they are
+missing and \code{calibrate} is left at its default, the function falls back
+to \code{"none"} and signals it; an explicit \code{"moment"} or \code{"bootstrap"}
+without \code{doc_lengths} is an error.}
 
 \item{n_boot}{Integer; number of bootstrap replicates per model when
 \code{calibrate = "bootstrap"} (default \code{200L}, minimum \code{20}).}
 
 \item{doc_lengths}{Numeric vector with the length (total token count) of
-each document; required when \code{calibrate != "none"}, typically
-\code{quanteda::ntoken()} of the counts dfm the models were fitted on. If
+each document, typically \code{quanteda::ntoken()} of the counts dfm the
+models were fitted on. Strongly recommended: it enables the default
+calibration and the \code{excess} ratio, which are otherwise unavailable
+because a proportions dfm no longer carries the document lengths. If
 named, names are matched to the document ids of \code{weighted_dfm}; if
-unnamed, the vector must follow the row order of \code{weighted_dfm}.}
+unnamed, the vector must follow the row order of \code{weighted_dfm} (with
+an \code{\link[=optop_corpus]{optop_corpus()}} it must be named).}
 
 \item{seed}{Optional integer passed to \code{\link[=set.seed]{set.seed()}} before the bootstrap,
 for reproducible calibrated p-values (default \code{NULL}).}
@@ -123,6 +130,9 @@ statistic.
 \code{calibrate = "none"}, calibrated otherwise.
 \item \code{pval_chisq}: only when \code{calibrate != "none"}: the uncalibrated
 asymptotic chi-square p-value, for comparison.
+\item \code{excess}: the raw statistic over its exact null mean (see the Excess
+ratio part of Details); about 1 under the fitted-model null, \code{NA}
+without \code{doc_lengths}. Added in 0.21.0, always the last column.
 }
 }
 \description{
@@ -184,7 +194,13 @@ estimated from the same data they are tested against. The practical
 consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
 the thousands the chi-square quantiles are razor-thin and upper-tail
 p-values saturate at 0 or 1 unless the fit is genuinely borderline;
-\code{alpha} is not a true Type-I error rate.
+\code{alpha} is not a true Type-I error rate. The direction of the error is set
+by the ratio of bins to document length, not by the fit: when
+\eqn{P_j + 1 > N_j}{P_j + 1 > N_j} on average the asymptotic test rejects
+even a correctly specified model, and when \eqn{P_j + 1 < N_j}{P_j + 1 < N_j}
+it accepts almost any model. This is why, since 0.21.0, the default is the
+moment calibration below, and \code{calibrate = "none"} is kept for
+reproducing earlier results and as a comparison column (\code{pval_chisq}).
 
 Calibration replaces the chi-square reference with the distribution of the
 statistic under the \strong{conditional fitted-model null}: document \eqn{j} is
@@ -233,6 +249,20 @@ prohibitive). Calibrated p-values are therefore conditional on the fitted
 parameters and do not account for estimation noise in \eqn{\theta}{theta}
 and \eqn{\phi}{phi}.
 
+\strong{Excess ratio.} With \code{doc_lengths}, the returned \code{excess} column is the
+raw statistic divided by its \emph{exact} mean under the conditional
+fitted-model null, \eqn{\sum_j (P_j + 1) P_j / N_j}{sum_j (P_j + 1) P_j / N_j}
+(Haldane, 1937). It is about 1 when the documents are consistent with the
+fitted model and reads as an effect size otherwise: an excess of 2.5 means
+the observed discrepancy is two and a half times what a correctly
+specified model would produce on documents of these lengths. On large
+real corpora every model is typically rejected even after calibration,
+because word counts are \emph{bursty} (a word used once in a document tends to
+be used again, beyond what a multinomial with fixed topic mixtures
+allows) and the statistic has millions of degrees of freedom; the excess
+ratio then shows how far each \eqn{K} is from adequacy, and how slowly
+adding topics closes the gap, where the p-value can only say "rejected".
+
 \strong{Input alignment.} \code{weighted_dfm} must be a \code{quanteda::dfm} of word
 proportions (row-wise), built from the same counts dfm the models were
 fitted on. Its features must match the models' common vocabulary: when
@@ -279,14 +309,22 @@ models <- lapply(c(2, 3, 4), function(k) {
   optop_model(th, ph)
 })
 
-test1 <- optop_select(models, wprop, do_plot = FALSE)
+# document lengths come from the counts: they enable the default moment
+# calibration and the excess ratio
+test1 <- optop_select(models, wprop,
+                      doc_lengths = quanteda::ntoken(counts),
+                      do_plot = FALSE)
 test1
 
-# bootstrap-calibrated p-values: document lengths come from the counts
+# bootstrap-calibrated p-values, the reference method
 test1_cal <- optop_select(models, wprop,
                           calibrate = "bootstrap", n_boot = 50,
                           doc_lengths = quanteda::ntoken(counts),
                           seed = 42, do_plot = FALSE)
+
+# the uncalibrated chi-square of Equation 8, for reproducing earlier work
+test1_raw <- optop_select(models, wprop, calibrate = "none",
+                          do_plot = FALSE)
 
 \donttest{
 # the same flow with real engine fits (topicmodels VEM)
@@ -294,7 +332,8 @@ fits <- lapply(2:4, function(k) {
   topicmodels::LDA(quanteda::convert(counts, to = "topicmodels"),
                    k = k, method = "VEM", control = list(seed = 500 + k))
 })
-optop_select(fits, wprop, do_plot = FALSE)
+optop_select(fits, wprop, doc_lengths = quanteda::ntoken(counts),
+             do_plot = FALSE)
 }
 
 }

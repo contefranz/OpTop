@@ -14,7 +14,8 @@
   alpha,
   do_plot,
   verbose,
-  tic
+  tic,
+  null_mean = NULL
 )
 }
 \description{

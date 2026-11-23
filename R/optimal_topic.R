@@ -1,6 +1,7 @@
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(c("id_doc", "document", "check", "topic", "topics",
-                           ".", "pval", "OpTop", "raw", "df", "pval_chisq"))
+                           ".", "pval", "OpTop", "raw", "df", "pval_chisq",
+                           "excess"))
 }
 #' Select the optimal number of topics from a pool of topic models
 #'
@@ -48,17 +49,24 @@ if (getRversion() >= "2.15.1") {
 #' @param selection Character; how the optimal `K` is chosen (see Details):
 #'   `"sequential"` (default) or `"min"`.
 #' @param calibrate Character; how the p-values are computed (see the
-#'   Calibration part of Details): `"none"` (default, the asymptotic
-#'   chi-square of Equation 8), `"bootstrap"` (parametric bootstrap under the
-#'   fitted-model null), or `"moment"` (exact multinomial moments matched to
-#'   a scaled chi-square).
+#'   Calibration part of Details): `"moment"` (default since 0.21.0: exact
+#'   multinomial moments matched to a scaled chi-square), `"none"` (the
+#'   asymptotic chi-square of Equation 8, a yardstick rather than a valid
+#'   test at corpus scale), or `"bootstrap"` (parametric bootstrap under the
+#'   fitted-model null). Calibration needs `doc_lengths`: when they are
+#'   missing and `calibrate` is left at its default, the function falls back
+#'   to `"none"` and signals it; an explicit `"moment"` or `"bootstrap"`
+#'   without `doc_lengths` is an error.
 #' @param n_boot Integer; number of bootstrap replicates per model when
 #'   `calibrate = "bootstrap"` (default `200L`, minimum `20`).
 #' @param doc_lengths Numeric vector with the length (total token count) of
-#'   each document; required when `calibrate != "none"`, typically
-#'   `quanteda::ntoken()` of the counts dfm the models were fitted on. If
+#'   each document, typically `quanteda::ntoken()` of the counts dfm the
+#'   models were fitted on. Strongly recommended: it enables the default
+#'   calibration and the `excess` ratio, which are otherwise unavailable
+#'   because a proportions dfm no longer carries the document lengths. If
 #'   named, names are matched to the document ids of `weighted_dfm`; if
-#'   unnamed, the vector must follow the row order of `weighted_dfm`.
+#'   unnamed, the vector must follow the row order of `weighted_dfm` (with
+#'   an [optop_corpus()] it must be named).
 #' @param seed Optional integer passed to [set.seed()] before the bootstrap,
 #'   for reproducible calibrated p-values (default `NULL`).
 #' @param n_threads Integer; number of OpenMP threads used by the compiled
@@ -125,7 +133,13 @@ if (getRversion() >= "2.15.1") {
 #' consequence is that with \eqn{\sum_j P_j}{sum_j P_j} degrees of freedom in
 #' the thousands the chi-square quantiles are razor-thin and upper-tail
 #' p-values saturate at 0 or 1 unless the fit is genuinely borderline;
-#' `alpha` is not a true Type-I error rate.
+#' `alpha` is not a true Type-I error rate. The direction of the error is set
+#' by the ratio of bins to document length, not by the fit: when
+#' \eqn{P_j + 1 > N_j}{P_j + 1 > N_j} on average the asymptotic test rejects
+#' even a correctly specified model, and when \eqn{P_j + 1 < N_j}{P_j + 1 < N_j}
+#' it accepts almost any model. This is why, since 0.21.0, the default is the
+#' moment calibration below, and `calibrate = "none"` is kept for
+#' reproducing earlier results and as a comparison column (`pval_chisq`).
 #'
 #' Calibration replaces the chi-square reference with the distribution of the
 #' statistic under the **conditional fitted-model null**: document \eqn{j} is
@@ -172,6 +186,20 @@ if (getRversion() >= "2.15.1") {
 #' parameters and do not account for estimation noise in \eqn{\theta}{theta}
 #' and \eqn{\phi}{phi}.
 #'
+#' **Excess ratio.** With `doc_lengths`, the returned `excess` column is the
+#' raw statistic divided by its *exact* mean under the conditional
+#' fitted-model null, \eqn{\sum_j (P_j + 1) P_j / N_j}{sum_j (P_j + 1) P_j / N_j}
+#' (Haldane, 1937). It is about 1 when the documents are consistent with the
+#' fitted model and reads as an effect size otherwise: an excess of 2.5 means
+#' the observed discrepancy is two and a half times what a correctly
+#' specified model would produce on documents of these lengths. On large
+#' real corpora every model is typically rejected even after calibration,
+#' because word counts are *bursty* (a word used once in a document tends to
+#' be used again, beyond what a multinomial with fixed topic mixtures
+#' allows) and the statistic has millions of degrees of freedom; the excess
+#' ratio then shows how far each \eqn{K} is from adequacy, and how slowly
+#' adding topics closes the gap, where the p-value can only say "rejected".
+#'
 #' **Input alignment.** `weighted_dfm` must be a `quanteda::dfm` of word
 #' proportions (row-wise), built from the same counts dfm the models were
 #' fitted on. Its features must match the models' common vocabulary: when
@@ -205,6 +233,9 @@ if (getRversion() >= "2.15.1") {
 #'   `calibrate = "none"`, calibrated otherwise.
 #' - `pval_chisq`: only when `calibrate != "none"`: the uncalibrated
 #'   asymptotic chi-square p-value, for comparison.
+#' - `excess`: the raw statistic over its exact null mean (see the Excess
+#'   ratio part of Details); about 1 under the fitted-model null, `NA`
+#'   without `doc_lengths`. Added in 0.21.0, always the last column.
 #'
 #' @examples
 #' # simulate a corpus whose truth is known, then let Test 1 recover it:
@@ -228,14 +259,22 @@ if (getRversion() >= "2.15.1") {
 #'   optop_model(th, ph)
 #' })
 #'
-#' test1 <- optop_select(models, wprop, do_plot = FALSE)
+#' # document lengths come from the counts: they enable the default moment
+#' # calibration and the excess ratio
+#' test1 <- optop_select(models, wprop,
+#'                       doc_lengths = quanteda::ntoken(counts),
+#'                       do_plot = FALSE)
 #' test1
 #'
-#' # bootstrap-calibrated p-values: document lengths come from the counts
+#' # bootstrap-calibrated p-values, the reference method
 #' test1_cal <- optop_select(models, wprop,
 #'                           calibrate = "bootstrap", n_boot = 50,
 #'                           doc_lengths = quanteda::ntoken(counts),
 #'                           seed = 42, do_plot = FALSE)
+#'
+#' # the uncalibrated chi-square of Equation 8, for reproducing earlier work
+#' test1_raw <- optop_select(models, wprop, calibrate = "none",
+#'                           do_plot = FALSE)
 #'
 #' \donttest{
 #' # the same flow with real engine fits (topicmodels VEM)
@@ -243,7 +282,8 @@ if (getRversion() >= "2.15.1") {
 #'   topicmodels::LDA(quanteda::convert(counts, to = "topicmodels"),
 #'                    k = k, method = "VEM", control = list(seed = 500 + k))
 #' })
-#' optop_select(fits, wprop, do_plot = FALSE)
+#' optop_select(fits, wprop, doc_lengths = quanteda::ntoken(counts),
+#'              do_plot = FALSE)
 #' }
 #'
 #' @references
@@ -268,7 +308,7 @@ if (getRversion() >= "2.15.1") {
 
 optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                          selection = c("sequential", "min"),
-                         calibrate = c("none", "bootstrap", "moment"),
+                         calibrate = c("moment", "none", "bootstrap"),
                          n_boot = 200L, doc_lengths = NULL, seed = NULL,
                          n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
 
@@ -290,6 +330,7 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     stop("alpha must be a numeric")
   }
   selection <- match.arg(selection)
+  calibrate_implicit <- missing(calibrate)
   calibrate <- match.arg(calibrate)
   if (!is.logical(verbose)) {
     stop("verbose must be either TRUE or FALSE")
@@ -300,17 +341,28 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   }
   n_threads <- as.integer(n_threads)
 
-  calibrating <- calibrate != "none"
-  if (calibrating) {
-    if (is.null(doc_lengths)) {
+  # the default moment calibration needs the document lengths, which a
+  # proportions dfm no longer carries: without them, an implicit default
+  # falls back to the asymptotic chi-square (signalled, since its p-values
+  # are not a valid test at corpus scale), while an explicit request errors
+  if (calibrate != "none" && is.null(doc_lengths)) {
+    if (!calibrate_implicit) {
       stop(paste("calibrate != \"none\" needs doc_lengths: the total token",
                  "count of each document, typically quanteda::ntoken() of",
                  "the counts dfm the models were fitted on"))
     }
+    .optop_alert_uncalibrated()
+    calibrate <- "none"
+  }
+  calibrating <- calibrate != "none"
+  have_lengths <- !is.null(doc_lengths)
+  if (have_lengths) {
     if (!is.numeric(doc_lengths) || any(!is.finite(doc_lengths)) ||
         any(doc_lengths <= 0)) {
       stop("doc_lengths must be a numeric vector of positive document lengths")
     }
+  }
+  if (calibrating) {
     if (!is.numeric(n_boot) || length(n_boot) != 1L || n_boot < 20) {
       stop("n_boot must be a single number >= 20")
     }
@@ -331,7 +383,7 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     stop(paste("weighted_dfm has duplicated document ids; document",
                "alignment would be ambiguous"))
   }
-  if (calibrating && is.null(names(doc_lengths)) &&
+  if (have_lengths && is.null(names(doc_lengths)) &&
       length(doc_lengths) != length(docs)) {
     stop(paste("unnamed doc_lengths must have one entry per document of",
                "weighted_dfm, in the same row order"))
@@ -422,11 +474,11 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     )
     weighted_dfm <- weighted_dfm[-id_toremove, ]
     docs <- docs[-id_toremove]
-    if (calibrating && is.null(names(doc_lengths))) {
+    if (have_lengths && is.null(names(doc_lengths))) {
       doc_lengths <- doc_lengths[-id_toremove]
     }
   }
-  if (calibrating && !is.null(names(doc_lengths))) {
+  if (have_lengths && !is.null(names(doc_lengths))) {
     doc_lengths <- doc_lengths[docs]
     if (anyNA(doc_lengths)) {
       stop("doc_lengths is missing entries for some documents of weighted_dfm")
@@ -460,6 +512,10 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 
   Chi_K_rows <- vector("list", n_models)
   pval_cal <- rep(NA_real_, n_models)
+  # exact null mean of each model's statistic, the denominator of the excess
+  # ratio; it needs the per-document bin counts, hence the envelope
+  null_mean <- if (have_lengths) rep(NA_real_, n_models) else NULL
+  want_envelope <- calibrating || have_lengths
   # transpose once: a document becomes a contiguous sparse column for the
   # C++ core. The raw CSC slots (@p, @i, @x) cross the boundary as
   # zero-copy views, so no per-model conversion or copy of the corpus is
@@ -474,8 +530,11 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     doc_map_i <- match(docs, meta[[i_mod]]$docs) - 1L
     core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
                                    dfm_t@x, dfm_terms, q, doc_map_i,
-                                   calibrating, n_threads)
+                                   want_envelope, n_threads)
     Chi_K_rows[[i_mod]] <- core_out$stat
+    if (have_lengths) {
+      null_mean[i_mod] <- .optop_null_mean(core_out$bin_counts, doc_lengths)
+    }
     if (calibrating) {
       T_obs <- core_out$stat[1L, 2L]
       if (calibrate == "bootstrap") {
@@ -503,21 +562,50 @@ optop_select <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 
   .optop_ot_finish(Chi_K_rows, pval_cal, calibrating,
                    calibrate, n_boot, selection, alpha, do_plot,
-                   verbose, tic)
+                   verbose, tic, null_mean = null_mean)
 }
 
 #' @rdname optop_select
 #' @export
 optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                           selection = c("sequential", "min"),
-                          calibrate = c("none", "bootstrap", "moment"),
+                          calibrate = c("moment", "none", "bootstrap"),
                           n_boot = 200L, doc_lengths = NULL, seed = NULL,
                           n_threads = 1L, do_plot = TRUE, verbose = TRUE) {
   .optop_rename_note()
-  optop_select(topic_models, weighted_dfm, q = q, alpha = alpha,
-               selection = selection, calibrate = calibrate,
-               n_boot = n_boot, doc_lengths = doc_lengths, seed = seed,
-               n_threads = n_threads, do_plot = do_plot, verbose = verbose)
+  args <- list(topic_models, weighted_dfm, q = q, alpha = alpha,
+               selection = selection, n_boot = n_boot,
+               doc_lengths = doc_lengths, seed = seed, n_threads = n_threads,
+               do_plot = do_plot, verbose = verbose)
+  # forward calibrate only when the caller set it, so the alias keeps the
+  # default's fallback when doc_lengths are absent
+  if (!missing(calibrate)) {
+    args$calibrate <- calibrate
+  }
+  do.call(optop_select, args)
+}
+
+#' Signal the fallback to uncalibrated p-values
+#'
+#' Fired when `calibrate` is left at its default but `doc_lengths` is
+#' missing: the moment calibration cannot run, the asymptotic chi-square
+#' reference is used instead, and the user is told why that reference is
+#' not a valid test at corpus scale. Corrective actions are always
+#' signalled, whatever `verbose`; passing `calibrate = "none"` explicitly
+#' opts out of the alert.
+#'
+#' @return `NULL`, invisibly.
+#'
+#' @keywords internal
+.optop_alert_uncalibrated <- function() {
+  cli::cli_alert_warning(paste(
+    "doc_lengths not supplied: p-values use the uncalibrated chi-square",
+    "reference (calibrate = \"none\"), which can reject a correctly",
+    "specified model or accept any model at corpus scale. Pass",
+    "doc_lengths = quanteda::ntoken(counts_dfm) for moment-calibrated",
+    "p-values and the excess ratio"
+  ))
+  invisible(NULL)
 }
 
 # session-scoped flag so the alias notes the rename exactly once
@@ -569,7 +657,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
 #' @keywords internal
 .optop_ot_finish <- function(Chi_K_rows, pval_cal, calibrating,
                              calibrate, n_boot, selection, alpha, do_plot,
-                             verbose, tic) {
+                             verbose, tic, null_mean = NULL) {
   Chi_K <- data.table::as.data.table(do.call(rbind, Chi_K_rows))
   data.table::setnames(Chi_K, old = names(Chi_K), c("topic", "raw", "df"))
   Chi_K[, OpTop := raw / df]
@@ -577,6 +665,10 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   # adequacy, and misspecification only inflates it, so the p-value is the
   # upper tail
   Chi_K[, pval := stats::pchisq(raw, df = df, lower.tail = FALSE)]
+  # excess ratio: the raw statistic over its exact mean under the
+  # conditional fitted-model null (about 1 when the data are consistent with
+  # the model); NA without document lengths
+  Chi_K[, excess := if (is.null(null_mean)) NA_real_ else raw / null_mean]
   Chi_K[, raw := NULL]
   if (calibrating) {
     # the selection rules read pval: the calibrated value takes its place and
@@ -584,9 +676,10 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     Chi_K[, pval_chisq := pval]
     Chi_K[, pval := pval_cal]
     data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval",
-                                     "pval_chisq"))
+                                     "pval_chisq", "excess"))
   } else {
-    data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval"))
+    data.table::setcolorder(Chi_K, c("topic", "OpTop", "df", "pval",
+                                     "excess"))
   }
 
   cal_suffix <- switch(calibrate,
@@ -679,7 +772,8 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
                              calibrate, n_boot, doc_lengths, seed, n_threads,
                              do_plot, verbose, tic) {
   calibrating <- calibrate != "none"
-  if (calibrating && is.null(names(doc_lengths))) {
+  have_lengths <- !is.null(doc_lengths)
+  if (have_lengths && is.null(names(doc_lengths))) {
     stop(paste("corpus input needs named doc_lengths: names are matched to",
                "the document ids of every shard"))
   }
@@ -785,6 +879,8 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   }
   mm_mu <- numeric(n_models)
   mm_s2 <- numeric(n_models)
+  nm_sum <- numeric(n_models)
+  want_envelope <- calibrating || have_lengths
   T_kept <- 0
   n_dropped <- 0
   warned_perm <- FALSE
@@ -843,7 +939,7 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
     }
 
     dl_s <- NULL
-    if (calibrating) {
+    if (have_lengths) {
       dl_s <- doc_lengths[docs_s]
       if (anyNA(dl_s)) {
         stop("doc_lengths is missing entries for some corpus documents")
@@ -860,9 +956,12 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
       doc_map_i <- match(docs_s, model_docs) - 1L
       core_out <- optimal_topic_core(tp$theta, tp$phi, dfm_t@p, dfm_t@i,
                                      dfm_t@x, dfm_terms, q, doc_map_i,
-                                     calibrating, n_threads)
+                                     want_envelope, n_threads)
       raw_sum[i] <- raw_sum[i] + core_out$stat[1L, 2L]
       df_sum[i] <- df_sum[i] + core_out$stat[1L, 3L]
+      if (have_lengths) {
+        nm_sum[i] <- nm_sum[i] + .optop_null_mean(core_out$bin_counts, dl_s)
+      }
       if (calibrate == "bootstrap") {
         T_null_sum[, i] <- T_null_sum[, i] +
           .optop_boot_null(doc_lengths = dl_s, n_boot = n_boot,
@@ -922,5 +1021,6 @@ optimal_topic <- function(topic_models, weighted_dfm, q = 0.95, alpha = 0.05,
   .optop_ot_finish(Chi_K_rows, pval_cal,
                    calibrating = calibrating, calibrate = calibrate,
                    n_boot = n_boot, selection = selection, alpha = alpha,
-                   do_plot = do_plot, verbose = verbose, tic = tic)
+                   do_plot = do_plot, verbose = verbose, tic = tic,
+                   null_mean = if (have_lengths) nm_sum else NULL)
 }

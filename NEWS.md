@@ -1,3 +1,51 @@
+# OpTop 0.21.0
+
+Calibrated p-values become the default for Test 1, and the test reports an
+effect size alongside them. Statistics and calibrated p-values are
+unchanged; what changes is which p-value `optop_select()` uses when the
+user does not choose, plus one new column.
+
+### Breaking changes
+
+* **`optop_select()` (and its alias `optimal_topic()`) now defaults to
+  `calibrate = "moment"`.** The uncalibrated chi-square reference of
+  Equation 8 is a yardstick, not a valid test at corpus scale: because the
+  statistic is scaled by the number of envelope bins rather than by the
+  document length, its null level is set by the ratio of the two, so the
+  asymptotic p-value can reject a correctly specified model (bins exceed
+  the document length) or accept almost any model (bins fall short of it).
+  Data simulated from a fitted model show the pattern directly: asymptotic
+  p-values at 0 or 1 under a true model, interior moment-calibrated ones
+  (see the new tests in `test-calibration.R`). The moment calibration needs
+  `doc_lengths`; when they are missing and `calibrate` is left at its
+  default, the function falls back to `calibrate = "none"` and signals it
+  (whatever `verbose`); an explicit `calibrate = "moment"` or
+  `"bootstrap"` without lengths remains an error, and an explicit
+  `calibrate = "none"` reproduces earlier results without the signal.
+
+### New features
+
+* **`excess` column.** With `doc_lengths`, `optop_select()` reports the raw
+  statistic divided by its exact mean under the conditional fitted-model
+  null, `sum_j (P_j + 1) P_j / N_j` (Haldane, 1937). The ratio is about 1
+  when the documents are consistent with the model and reads as an effect
+  size otherwise; it is `NA` without lengths and does not depend on the
+  calibration. It is always the last column, so `pval` keeps its position.
+  On large real corpora, where word burstiness makes every K reject even
+  after calibration, the excess ratio shows how far each K is from adequacy
+  and how slowly additional topics close the gap.
+* With an `optop_corpus()`, the excess ratio composes exactly across shards
+  like the other Test 1 quantities.
+
+### Minor changes
+
+* `doc_lengths` is validated whenever supplied, not only when calibrating;
+  with an `optop_corpus()` it must then be named.
+* Documentation: `?optop_select` explains when the asymptotic reference
+  errs in each direction and documents the excess ratio; the vignette's
+  uncalibrated calls now ask for `calibrate = "none"` explicitly, and the
+  calibration section discusses the excess ratio.
+
 # OpTop 0.20.1
 
 A validity-guard patch prompted by an external report: the word-level
