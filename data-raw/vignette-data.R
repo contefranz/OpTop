@@ -82,6 +82,7 @@ seq_run <- capture_cli(
                selection = "sequential",
                q = 0.95,
                alpha = alpha,
+               calibrate = "none",
                do_plot = FALSE)
 )
 min_run <- capture_cli(
@@ -90,6 +91,7 @@ min_run <- capture_cli(
                selection = "min",
                q = 0.95,
                alpha = alpha,
+               calibrate = "none",
                do_plot = FALSE)
 )
 
@@ -133,7 +135,7 @@ pick_min <- function(tab) tab$topic[which.min(tab$OpTop)]
 chi_by_q <- lapply(q_sweep, function(q) {
   if (q == 0.95) return(seq_run$value)
   optop_select(VEM_models, weighted_dfm, q = q, alpha = alpha,
-               do_plot = FALSE, verbose = TRUE)
+               calibrate = "none", do_plot = FALSE, verbose = TRUE)
 })
 names(chi_by_q) <- sprintf("q%.2f", q_sweep)
 
@@ -343,7 +345,7 @@ sim_models <- parallel::mclapply(
 
 sim_weighted <- quanteda::dfm_weight(sim_corpus, scheme = "prop")
 sim_chi <- optop_select(sim_models, sim_weighted, q = 0.95, alpha = alpha,
-                        do_plot = FALSE, verbose = TRUE)
+                        calibrate = "none", do_plot = FALSE, verbose = TRUE)
 sim_picks <- data.frame(
   sequential = pick_sequential(sim_chi, alpha),
   min = pick_min(sim_chi)

@@ -213,7 +213,14 @@ in `df`, and the upper-tail p-value in `pval`.
 while the discrepancy indices of the second part consume the raw *counts*;
 both objects are therefore required. With `verbose = TRUE`, the function
 reports its setup, its progress across the grid, the selected model together
-with the rule that chose it, and the elapsed time:
+with the rule that chose it, and the elapsed time.
+
+Since OpTop 0.21.0 the default is `calibrate = "moment"`, the calibrated
+p-values of the section [Calibrated p-Values], which need the document
+lengths as well. The two calls below reproduce the paper's uncalibrated
+statistic, so they ask for `calibrate = "none"` explicitly; a call that
+supplies neither `doc_lengths` nor `calibrate` falls back to the same
+uncalibrated reference and says so.
 
 ```{r optimal-call-seq, eval = have_models}
 # Use the sequential approach
@@ -222,6 +229,7 @@ chi_seq <- optop_select(topic_models = VEM_models,
                         selection = "sequential",
                         q = 0.95,
                         alpha = 0.01,
+                        calibrate = "none",
                         do_plot = FALSE)
 ```
 
@@ -236,6 +244,7 @@ chi_min <- optop_select(topic_models = VEM_models,
                         selection = "min",
                         q = 0.95,
                         alpha = 0.01,
+                        calibrate = "none",
                         do_plot = FALSE)
 ```
 
@@ -259,6 +268,9 @@ head(chi_seq)
 - `pval` is the upper-tail p-value of the raw statistic. Small values
   indicate that the observed discrepancy is larger than sampling noise can
   explain, so the $K$-topic model is rejected.
+- `excess` is the raw statistic divided by its exact null mean, an effect
+  size introduced in 0.21.0 and discussed in the section
+  [Calibrated p-Values]. It needs the document lengths, so it is `NA` here.
 
 The `selection` rule affects which K is *reported* as optimal (and the plot
 guides), never the table itself. The two calls above return identical
@@ -421,6 +433,37 @@ comparison):
 head(chi_cal)
 ```
 
+With the document lengths available, the table also reports the **excess
+ratio** `excess`: the raw statistic divided by its exact mean under the
+fitted-model null (Equation (7a) below, summed over documents). Under the
+null the ratio is close to 1, whatever the bin and document sizes, so it
+reads directly as an effect size: an excess of 1.5 means that the observed
+discrepancy is half again what a correctly specified $K$-topic model would
+produce on documents of these lengths. Unlike the p-value, it does not
+saturate as the corpus grows, and it does not depend on which calibration
+produced the p-value:
+
+```{r cal-excess}
+chi_cal[, .(topic, excess = round(excess, 3), pval = signif(pval, 3))][seq(1, .N, by = 4)]
+```
+
+Values well below 1 are informative too. The test is run in sample, on the
+documents the models were fitted to, and once $K$ approaches the number of
+addresses in the corpus each document can be reproduced almost exactly: the
+fit is then closer to the data than sampling noise would allow, and the
+excess ratio collapses towards 0. A ratio below 1 therefore signals
+overfitting rather than a better model, which is one more reason to read the
+calibrated sequential rule as locating the *smallest* adequate $K$.
+
+On large corpora the distinction matters. A real collection of texts is
+never exactly multinomial given its topic mixtures: words are *bursty*,
+since a term used once in a document tends to be used again, more often than
+any fixed mixture allows. With millions of degrees of freedom, even a modest
+excess is then decisively significant, and every $K$ on the grid can be
+rejected after calibration. The p-value only reports the rejection; the
+excess ratio shows how far each candidate is from adequacy, and how slowly
+additional topics close the gap.
+
 The bootstrap is the reference method; `calibrate = "moment"` targets the
 same null in closed form. Haldane (1937) gives the exact multinomial moments
 of the count-based Pearson statistic over $k_j$ bins:
@@ -458,7 +501,8 @@ $$
 
 The method requires no simulation and no seed; it is a fast approximation
 that corrects the location and the scale of the reference, although not its
-higher moments:
+higher moments. It is the default since 0.21.0, so with `doc_lengths`
+supplied the call below is equivalent to leaving `calibrate` unset:
 
 ```{r optimal-call-mm, eval = have_models}
 chi_cal_mm <- optop_select(topic_models = VEM_models,
@@ -563,7 +607,7 @@ q_grid <- c(0.80, 0.90, 0.95, 0.99)
 
 chi_by_q <- lapply(q_grid, function(q) {
   optop_select(VEM_models, weighted_dfm, q = q, alpha = alpha,
-               do_plot = FALSE)
+               calibrate = "none", do_plot = FALSE)
 })
 names(chi_by_q) <- sprintf("q%.2f", q_grid)
 ```
@@ -974,7 +1018,8 @@ sim_models <- parallel::mclapply(
 
 sim_chi <- optop_select(sim_models,
                         quanteda::dfm_weight(sim_corpus, scheme = "prop"),
-                        q = 0.95, alpha = alpha, verbose = TRUE)
+                        q = 0.95, alpha = alpha, calibrate = "none",
+                        verbose = TRUE)
 ```
 
 ```{r sim-plot}
@@ -1326,7 +1371,10 @@ reference timings of the scale benchmark.
 - The chi-square reference for Test 1 is asymptotic rather than exact; the
   calibrated p-values presented above (`calibrate = "bootstrap"` or
   `calibrate = "moment"`) address this, and `?optop_select` documents the
-  underlying statistical reasoning.
+  underlying statistical reasoning. Since 0.21.0 the moment calibration is
+  the default, the uncalibrated reference is used only on request or, with
+  a signal, when `doc_lengths` is missing, and the `excess` column reports
+  the statistic relative to its exact null mean.
 
 ## References
 

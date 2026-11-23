@@ -48,7 +48,8 @@ test_that("self-generated data: asymptotic p-values saturate, calibrated ones ar
   )
 
   expect_identical(names(got),
-                   c("topic", "OpTop", "df", "pval", "pval_chisq"))
+                   c("topic", "OpTop", "df", "pval", "pval_chisq",
+                     "excess"))
 
   row_gen <- got[got$topic == gen@k]
   # the chi-square yardstick is far off scale even under the true model
@@ -141,4 +142,99 @@ test_that("calibration validates its inputs", {
                  verbose = FALSE),
     "n_boot"
   )
+})
+
+# --- 0.21.0: moment calibration by default, uncalibrated fallback, excess ratio
+
+test_that("the default calibration is moment when doc_lengths are supplied", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+  dl <- rowSums(fx$counts)
+
+  got_default <- optop_select(fx$models, wp$wdfm, doc_lengths = dl,
+                              do_plot = FALSE, verbose = FALSE)
+  got_moment <- optop_select(fx$models, wp$wdfm, calibrate = "moment",
+                             doc_lengths = dl, do_plot = FALSE,
+                             verbose = FALSE)
+  expect_identical(got_default, got_moment)
+  expect_true("pval_chisq" %in% names(got_default))
+})
+
+test_that("without doc_lengths the default falls back to the chi-square, signalled", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+
+  # the fallback is a corrective action: signalled even with verbose = FALSE
+  expect_message(
+    got <- optop_select(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE),
+    "doc_lengths not supplied"
+  )
+  ref <- optop_select(fx$models, wp$wdfm, calibrate = "none",
+                      do_plot = FALSE, verbose = FALSE)
+  expect_identical(got, ref)
+  expect_identical(names(got), c("topic", "OpTop", "df", "pval", "excess"))
+  expect_true(all(is.na(got$excess)))
+
+  # an explicit calibrate = "none" opts out of the alert
+  expect_no_message(
+    optop_select(fx$models, wp$wdfm, calibrate = "none", do_plot = FALSE,
+                 verbose = FALSE)
+  )
+  # an explicit calibration request without lengths is an error, not a fallback
+  expect_error(
+    optop_select(fx$models, wp$wdfm, calibrate = "moment", do_plot = FALSE,
+                 verbose = FALSE),
+    "needs doc_lengths"
+  )
+})
+
+test_that("the excess ratio is the raw statistic over its exact null mean", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+  dl <- rowSums(fx$counts)
+
+  got <- optop_select(fx$models, wp$wdfm, calibrate = "none",
+                      doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
+  for (i in seq_along(fx$models)) {
+    env <- optop_envelope(fx$models[[i]], wp$wdfm)
+    mu <- unname(.optop_moment_null(env$probs, dl)$mu)
+    # equals the moment mean, and the closed form k (k - 1) / N
+    expect_equal(.optop_null_mean(lengths(env$probs), dl), mu,
+                 tolerance = 1e-12)
+    expect_equal(got$excess[i], env$stat[1, 2] / mu, tolerance = 1e-10)
+  }
+  # the excess does not depend on the calibration that produced the p-value
+  got_mm <- optop_select(fx$models, wp$wdfm, calibrate = "moment",
+                         doc_lengths = dl, do_plot = FALSE, verbose = FALSE)
+  expect_equal(got_mm$excess, got$excess, tolerance = 1e-12)
+})
+
+test_that("the excess ratio is near 1 under the fitted-model null", {
+  fx <- optop_test_fixture()
+  gen <- fx$models[[2]]
+  wdfm_null <- optop_self_generated(gen, fx$counts, seed = 7)
+  dl <- rowSums(fx$counts)
+
+  got <- suppressMessages(
+    optop_select(fx$models, wdfm_null, doc_lengths = dl, do_plot = FALSE,
+                 verbose = FALSE)
+  )
+  # the null mean is exact, so the ratio sits at 1 up to sampling noise;
+  # the bounds are loose for the 30-document fixture
+  expect_gt(got[got$topic == gen@k]$excess, 0.8)
+  expect_lt(got[got$topic == gen@k]$excess, 1.2)
+})
+
+test_that("the sharded corpus reports the same excess ratio", {
+  fx <- optop_test_fixture()
+  wp <- optop_wprop_fixture(fx)
+  dl <- stats::setNames(rowSums(fx$counts), rownames(fx$counts))
+  corp <- optop_corpus(list(wp$wdfm[1:10, ], wp$wdfm[11:30, ]))
+
+  ref <- optop_select(fx$models, wp$wdfm, doc_lengths = dl, do_plot = FALSE,
+                      verbose = FALSE)
+  got <- optop_select(fx$models, corp, doc_lengths = dl, do_plot = FALSE,
+                      verbose = FALSE)
+  expect_equal(got$excess, ref$excess, tolerance = 1e-10)
+  expect_equal(got$pval, ref$pval, tolerance = 1e-10)
 })

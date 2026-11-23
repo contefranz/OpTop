@@ -322,7 +322,8 @@ test_that("calibration runs on non-VEM engines", {
   got <- run_ot(gibbs, wp$wdfm, calibrate = "bootstrap", n_boot = 50,
                 doc_lengths = doc_lens, seed = 99)
   expect_identical(names(got),
-                   c("topic", "OpTop", "df", "pval", "pval_chisq"))
+                   c("topic", "OpTop", "df", "pval", "pval_chisq",
+                     "excess"))
   expect_true(all(got$pval >= 0 & got$pval <= 1))
 
   got_mm <- run_ot(gibbs, wp$wdfm, calibrate = "moment",

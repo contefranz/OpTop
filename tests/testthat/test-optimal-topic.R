@@ -11,7 +11,7 @@ run_optimal_topic <- function(...) {
 
 expect_matches_reference <- function(got, ref, info = NULL) {
   expect_s3_class(got, "data.table")
-  expect_identical(names(got), c("topic", "OpTop", "df", "pval"))
+  expect_identical(names(got), c("topic", "OpTop", "df", "pval", "excess"))
   expect_equal(got$topic, ref$topic, info = info)
   expect_equal(got$OpTop, ref$OpTop, tolerance = 1e-10, info = info)
   expect_equal(got$df, ref$df, info = info)
@@ -117,10 +117,11 @@ test_that("optop_select() is chatty by default and silent with verbose = FALSE",
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  expect_no_message(optop_select(fx$models, wp$wdfm, do_plot = FALSE,
-                                  verbose = FALSE))
+  dl <- rowSums(fx$counts)
+  expect_no_message(optop_select(fx$models, wp$wdfm, doc_lengths = dl,
+                                  do_plot = FALSE, verbose = FALSE))
   expect_message(
-    optop_select(fx$models, wp$wdfm, do_plot = FALSE),
+    optop_select(fx$models, wp$wdfm, doc_lengths = dl, do_plot = FALSE),
     "Optimal model has"
   )
 })
@@ -142,21 +143,32 @@ test_that("optimal_topic() delegates to optop_select() with a one-time note", {
   fx <- optop_test_fixture()
   wp <- optop_wprop_fixture(fx)
 
-  ref <- optop_select(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE)
+  dl <- rowSums(fx$counts)
+  ref <- optop_select(fx$models, wp$wdfm, doc_lengths = dl, do_plot = FALSE,
+                      verbose = FALSE)
 
   # clear the session flag so the note is observable in this test
   rm(list = ls(OpTop:::.optop_rename_env), envir = OpTop:::.optop_rename_env)
   expect_message(
-    got <- optimal_topic(fx$models, wp$wdfm, do_plot = FALSE,
-                         verbose = FALSE),
+    got <- optimal_topic(fx$models, wp$wdfm, doc_lengths = dl,
+                         do_plot = FALSE, verbose = FALSE),
     "renamed optop_select"
   )
+  # the alias keeps the default (moment) calibration
   expect_identical(got, ref)
 
   # the note fires once per session; later calls are silent
   expect_silent(
-    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE)
+    optimal_topic(fx$models, wp$wdfm, doc_lengths = dl, do_plot = FALSE,
+                  verbose = FALSE)
   )
+
+  # without doc_lengths the alias falls back exactly like optop_select()
+  ref_none <- suppressMessages(
+    optop_select(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE))
+  got_none <- suppressMessages(
+    optimal_topic(fx$models, wp$wdfm, do_plot = FALSE, verbose = FALSE))
+  expect_identical(got_none, ref_none)
 })
 
 test_that("the optop.cache_mb option bounds the cache without changing results", {

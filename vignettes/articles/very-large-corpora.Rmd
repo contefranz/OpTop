@@ -103,9 +103,12 @@ Results never depend on the budget; only wall time does.
 
 Every stage accepts the corpus where it accepts a matrix. Two details
 change relative to the in-memory workflow: `doc_lengths` must be a named
-vector when calibrating (row order across shards is not a reliable
-identity at this scale), and the counts corpus and the weighted corpus
-must shard the documents identically.
+vector (row order across shards is not a reliable identity at this scale),
+and the counts corpus and the weighted corpus must shard the documents
+identically. Since 0.21.0 the lengths are worth supplying in every call:
+they enable the default moment calibration and the `excess` column (the
+statistic over its exact null mean), which on corpora of this size is
+usually more informative than a p-value saturated at 0.
 
 ```{r pipeline}
 # Test 1 with bootstrap calibration

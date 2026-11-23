@@ -156,9 +156,12 @@ VEM_models <- lapply(
 ) 
 
 # 3) Choose the optimal K (selection: "sequential" adequacy scan by default,
-#    "min" for the paper's global-minimum rule; verbose = TRUE reports progress)
+#    "min" for the paper's global-minimum rule; verbose = TRUE reports progress).
+#    Document lengths enable the default moment-calibrated p-values and the
+#    excess ratio (the statistic over its exact null mean)
 res_opt   <- optop_select(topic_models = VEM_models, 
                           weighted_dfm = weighted_dfm,
+                          doc_lengths = quanteda::ntoken(dfm_counts),
                           q = 0.95, 
                           alpha = 0.05, 
                           selection = "sequential",
@@ -190,7 +193,8 @@ corp <- optop_corpus(shard_files, reader = function(p) qs2::qs_read(p))
 # grids beyond memory: loader functions, materialized one model at a time
 loaders <- lapply(fit_files, function(f) { force(f); function() qs2::qs_read(f) })
 
-res  <- optop_select(loaders, corp_weighted, n_threads = 20)
+res  <- optop_select(loaders, corp_weighted, doc_lengths = doc_lengths,  # named
+                     n_threads = 20)
 part <- optop_make_partition(loaders, corp, c = 1)
 ```
 
